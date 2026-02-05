@@ -1,0 +1,205 @@
+// libs/backend/prisma-client/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. MULTI-TENANCY CORE
+// ==========================================
+
+model Organization {
+  id            String   @id @default(uuid())
+  name          String   // e.g., "Madcom Digital"
+  subscription  String   @default("FREE") // "STARTER", "ENTERPRISE"
+  
+  brands        Brand[]
+  users         User[]
+  leads         Lead[]
+  clients       Client[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Brand {
+  id            String   @id @default(uuid())
+  name          String   // e.g., "The Pulp House"
+  domain        String?  @unique
+  
+  // Branding Assets
+  logoUrl       String?
+  colors        Json?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  leads          Lead[]
+  clients        Client[]
+  orders         Order[]
+  emailAliases   EmailAlias[] 
+
+  // 👇 FIX: Ye line missing thi, isay add karo
+  members        BrandAccess[] 
+
+  @@index([organizationId])
+}
+
+// ==========================================
+// 2. IAM & AGENT MANAGEMENT
+// ==========================================
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String   // Hashed
+  name          String
+  role          String   @default("AGENT") // "ADMIN", "MANAGER", "AGENT"
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Permissions & Access
+  accessScope   BrandAccess[]
+  emailConfig   UserEmailConfig? // Gmail Integration
+
+  assignedLeads Lead[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([organizationId, email])
+}
+
+model BrandAccess {
+  id        String @id @default(uuid())
+  userId    String
+  brandId   String
+  role      String // "VIEWER", "EDITOR", "ADMIN"
+
+  user      User   @relation(fields: [userId], references: [id])
+  brand     Brand  @relation(fields: [brandId], references: [id])
+
+  @@unique([userId, brandId]) // User can't have duplicate roles for same brand
+}
+
+// ==========================================
+// 3. EMAIL INTEGRATION (Gmail Aliases)
+// ==========================================
+
+model UserEmailConfig {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  
+  primaryEmail  String   // "mark@publishing.com"
+  accessToken   String   // Encrypted
+  refreshToken  String   // Encrypted
+  
+  aliases       EmailAlias[]
+}
+
+model EmailAlias {
+  id            String   @id @default(uuid())
+  email         String   // "mark@urbanquill.com"
+  displayName   String?  // "Mark - Urban Quill"
+  
+  configId      String
+  config        UserEmailConfig @relation(fields: [configId], references: [id])
+
+  linkedBrandId String?
+  linkedBrand   Brand?   @relation(fields: [linkedBrandId], references: [id])
+}
+
+// ==========================================
+// 4. BUSINESS FLOW (Sales Engine)
+// ==========================================
+
+model Lead {
+  id            String   @id @default(uuid())
+  title         String   // "Website Inquiry - John"
+  status        String   @default("NEW") // "NEW", "CONTACTED", "PROPOSAL", "CLOSED"
+  source        String?  // "PPC", "FB_ADS"
+  data          Json?    // Flexible Form Data
+
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id])
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  assignedToId  String?
+  assignedTo    User?    @relation(fields: [assignedToId], references: [id])
+
+  convertedClientId String? @unique // Link if converted
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([organizationId, brandId, status]) // Performance Index for Dashboard
+}
+
+model Client {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String   // Portal Access
+  companyName   String
+  phone         String?
+
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id])
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  orders        Order[]
+
+  createdAt     DateTime @default(now())
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  totalAmount   Decimal  @db.Decimal(10, 2)
+  status        String   @default("PENDING") // "ACTIVE", "COMPLETED", "CANCELLED"
+  currency      String   @default("USD")
+  
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id])
+
+  invoices      Invoice[]
+  
+  createdAt     DateTime @default(now())
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  amount        Decimal  @db.Decimal(10, 2)
+  dueDate       DateTime
+  status        String   @default("UNPAID") // "PAID", "OVERDUE"
+  pdfUrl        String?
+  
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id])
+}
+
+// ==========================================
+// 5. RELIABILITY (Transactional Outbox)
+// ==========================================
+
+model OutboxEvent {
+  id        String   @id @default(uuid())
+  eventType String   // "ORDER_CREATED", "LEAD_ASSIGNED"
+  payload   Json
+  status    String   @default("PENDING") // "PROCESSING", "COMPLETED", "FAILED"
+  createdAt DateTime @default(now())
+  
+  @@index([status, createdAt]) // Worker will poll PENDING events fast
+}

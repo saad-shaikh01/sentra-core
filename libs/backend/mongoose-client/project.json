@@ -1,0 +1,9 @@
+{
+  "name": "mongoose-client",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/backend/mongoose-client/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project mongoose-client --web",
+  "targets": {}
+}

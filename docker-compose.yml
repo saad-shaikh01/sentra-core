@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # 1. Core Database (PostgreSQL) - For Leads, Sales, Auth
+  postgres:
+    image: postgres:15-alpine
+    container_name: sentra_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: sentra_user
+      POSTGRES_PASSWORD: sentra_password
+      POSTGRES_DB: sentra_core_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sentra_network
+
+  # 2. Communication Database (MongoDB) - For Emails, Logs
+  mongo:
+    image: mongo:6.0
+    container_name: sentra_mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: sentra_mongo_user
+      MONGO_INITDB_ROOT_PASSWORD: sentra_mongo_password
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - sentra_network
+
+  # 3. Caching & Queue (Redis) - For Dashboard Speed
+  redis:
+    image: redis:alpine
+    container_name: sentra_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass sentra_redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - sentra_network
+
+  # 4. Message Broker (RabbitMQ) - For Email Jobs
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sentra_rabbitmq
+    ports:
+      - "5672:5672"   # App Port
+      - "15672:15672" # Dashboard Port (Login: guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: sentra_rabbit
+      RABBITMQ_DEFAULT_PASS: sentra_rabbit_pass
+    networks:
+      - sentra_network
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+
+networks:
+  sentra_network:
+    driver: bridge
