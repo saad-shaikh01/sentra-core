@@ -20,7 +20,12 @@
         "name": "next"
       }
     ],
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@sentra-core/types": ["../../../libs/shared/types/src/index.ts"]
+    }
   },
   "include": [
     "**/*.ts",

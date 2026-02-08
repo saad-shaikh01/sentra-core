@@ -1,11 +1,37 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaClientModule } from '@sentra-core/prisma-client'; // <-- Import this
+import { PrismaClientModule } from '@sentra-core/prisma-client';
+import { AuthModule, AccessTokenGuard, RolesGuard } from '../modules/auth';
+import { UsersModule } from '../modules/users';
+import { OrganizationModule } from '../modules/organization';
+import { InvitationModule } from '../modules/invitation';
 
 @Module({
-  imports: [PrismaClientModule], // <-- Add here
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    PrismaClientModule,
+    AuthModule,
+    UsersModule,
+    OrganizationModule,
+    InvitationModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: AccessTokenGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
 })
 export class AppModule {}

@@ -10,6 +10,26 @@ datasource db {
 }
 
 // ==========================================
+// 0. ENUMS
+// ==========================================
+
+enum UserRole {
+  OWNER
+  ADMIN
+  SALES_MANAGER
+  PROJECT_MANAGER
+  FRONTSELL_AGENT
+  UPSELL_AGENT
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+// ==========================================
 // 1. MULTI-TENANCY CORE
 // ==========================================
 
@@ -17,12 +37,13 @@ model Organization {
   id            String   @id @default(uuid())
   name          String   // e.g., "Madcom Digital"
   subscription  String   @default("FREE") // "STARTER", "ENTERPRISE"
-  
+
   brands        Brand[]
   users         User[]
   leads         Lead[]
   clients       Client[]
-  
+  invitations   Invitation[]
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -59,8 +80,15 @@ model User {
   email         String   @unique
   password      String   // Hashed
   name          String
-  role          String   @default("AGENT") // "ADMIN", "MANAGER", "AGENT"
-  
+  role          UserRole @default(FRONTSELL_AGENT)
+
+  // Profile Fields
+  avatarUrl     String?
+  jobTitle      String?
+  phone         String?
+  bio           String?
+  isActive      Boolean  @default(true) // For soft delete
+
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
@@ -69,7 +97,10 @@ model User {
   emailConfig   UserEmailConfig? // Gmail Integration
 
   assignedLeads Lead[]
-  
+
+  // Refresh Token (for JWT)
+  refreshToken  String?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -86,6 +117,26 @@ model BrandAccess {
   brand     Brand  @relation(fields: [brandId], references: [id])
 
   @@unique([userId, brandId]) // User can't have duplicate roles for same brand
+}
+
+model Invitation {
+  id            String           @id @default(uuid())
+  email         String
+  role          UserRole         @default(FRONTSELL_AGENT)
+  token         String           @unique // Unique token for invitation link
+  status        InvitationStatus @default(PENDING)
+  expiresAt     DateTime
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  invitedById   String // The user who sent the invitation
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([organizationId, email])
+  @@index([token])
 }
 
 // ==========================================

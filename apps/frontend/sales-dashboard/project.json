@@ -4,6 +4,45 @@
   "sourceRoot": "apps/frontend/sales-dashboard",
   "projectType": "application",
   "tags": ["scope:internal"],
-  "// targets": "to see all targets run: nx show project sales-dashboard --web",
-  "targets": {}
+  "targets": {
+    "build": {
+      "executor": "@nx/next:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/apps/frontend/sales-dashboard"
+      },
+      "configurations": {
+        "development": {
+          "outputPath": "dist/apps/frontend/sales-dashboard"
+        },
+        "production": {}
+      }
+    },
+    "serve": {
+      "executor": "@nx/next:server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "sales-dashboard:build",
+        "dev": true
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "sales-dashboard:build:development",
+          "dev": true
+        },
+        "production": {
+          "buildTarget": "sales-dashboard:build:production",
+          "dev": false
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["apps/frontend/sales-dashboard/**/*.{ts,tsx,js,jsx}"]
+      }
+    }
+  }
 }
