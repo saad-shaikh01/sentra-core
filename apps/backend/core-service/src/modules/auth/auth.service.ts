@@ -11,6 +11,8 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { MailClientService } from '@sentra-core/mail-client';
 import { UserRole, JwtPayload, IAuthTokens, ILoginResponse, ISignupResponse } from '@sentra-core/types';
+import { v4 as uuidv4 } from 'uuid';
+import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 
 @Injectable()
 export class AuthService {
@@ -186,7 +188,7 @@ export class AuthService {
       throw new BadRequestException('Reset token has expired');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 12);
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
 
     await this.prisma.user.update({
       where: { id: user.id },

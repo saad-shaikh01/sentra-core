@@ -34,6 +34,27 @@ This document tracks the tasks required to complete the Authentication flow and 
 
 ---
 
+## 🎨 UI/UX Enhancement (Premium Design System)
+
+### 🎫 Ticket UI-001: Design System Foundation (Tailwind & Global CSS)
+- [x] Define premium color palette in `tailwind.config.js` (Zinc/Slate + Indigo/Violet).
+- [x] Add Mesh Gradient and Noise texture utilities.
+- [x] Implement global glassmorphism helper classes in `global.css`.
+- [x] Setup Geist or Inter font for premium typography.
+
+### 🎫 Ticket UI-002: Premium Component Refactor
+- [x] Refactor `Button` with "Glow" and "Shine" variants.
+- [x] Refactor `Input` with animated focus states.
+- [x] Create `GlassCard` component with multi-layered depth (Bento grid style).
+- [x] Implement Framer Motion page transitions (AnimatePresence).
+
+### 🎫 Ticket UI-003: Modern Dashboard Layout Redesign
+- [x] Implement a sleek, collapsible Sidebar with Lucide icons.
+- [x] Create a "Glass" Topbar with breadcrumbs and user menu.
+- [x] Add a `CMD + K` Command Palette (basic structure).
+
+---
+
 ## 🎨 Frontend Tasks (Sales Dashboard)
 
 ### 🎫 Ticket F-001: Auth Completion (Forgot/Reset Password)

@@ -3,19 +3,24 @@ import { cn } from '@/lib/utils';
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement> & { hover?: boolean }
+>(({ className, hover = true, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      'rounded-xl text-card-foreground',
-      'bg-white/5 backdrop-blur-xl border border-white/10',
-      'shadow-xl shadow-black/10',
-      'transition-all duration-300',
+      'rounded-2xl text-card-foreground relative overflow-hidden',
+      'bg-white/[0.03] backdrop-blur-2xl border border-white/10',
+      'shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]',
+      'transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1)',
+      hover && 'hover:bg-white/[0.06] hover:border-white/20 hover:shadow-[0_12px_40px_0_rgba(0,0,0,0.4)] hover:-translate-y-1',
       className
     )}
     {...props}
-  />
+  >
+    {/* Subtle Inner Glow */}
+    <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent pointer-events-none" />
+    {props.children}
+  </div>
 ));
 Card.displayName = 'Card';
 

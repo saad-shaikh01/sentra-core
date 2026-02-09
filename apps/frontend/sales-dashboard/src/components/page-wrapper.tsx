@@ -10,21 +10,25 @@ interface PageWrapperProps {
 const pageVariants: Variants = {
   initial: {
     opacity: 0,
-    y: 20,
+    y: 12,
+    scale: 0.99,
   },
   animate: {
     opacity: 1,
     y: 0,
+    scale: 1,
     transition: {
-      duration: 0.4,
-      ease: [0.25, 0.46, 0.45, 0.94] as const,
+      duration: 0.6,
+      ease: [0.22, 1, 0.36, 1], // Custom Apple-style ease-out
     },
   },
   exit: {
     opacity: 0,
-    y: -20,
+    y: -12,
+    scale: 0.99,
     transition: {
-      duration: 0.3,
+      duration: 0.4,
+      ease: [0.22, 1, 0.36, 1],
     },
   },
 };

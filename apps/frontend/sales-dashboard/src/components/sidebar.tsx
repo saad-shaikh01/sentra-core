@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Users,
   FileText,
-  Settings,
   LogOut,
   UserCircle,
   Building2,
@@ -20,7 +19,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RoleGuard } from '@/components/role-guard';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
 import { UserRole } from '@sentra-core/types';
 
@@ -75,22 +73,25 @@ export function Sidebar() {
   return (
     <motion.div
       initial={false}
-      animate={{ width: sidebarOpen ? 256 : 80 }}
-      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="flex h-full flex-col bg-white/5 backdrop-blur-xl border-r border-white/10"
+      animate={{ width: sidebarOpen ? 280 : 88 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="flex h-full flex-col bg-black/40 backdrop-blur-3xl border-r border-white/10 z-50 relative"
     >
+      {/* Sidebar Background Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
+
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-white/10">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Zap className="h-5 w-5 text-primary" />
+      <div className="flex h-20 items-center justify-between px-6 border-b border-white/5">
+        <Link href="/dashboard" className="flex items-center gap-3 group">
+          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:bg-primary/20 transition-all duration-300">
+            <Zap className="h-5 w-5 text-primary animate-pulse-slow" />
           </div>
           {sidebarOpen && (
             <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-lg font-bold text-foreground"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              className="text-xl font-bold tracking-tight text-foreground"
             >
               Sentra
             </motion.span>
@@ -100,11 +101,11 @@ export function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={toggleSidebar}
-          className="h-8 w-8"
+          className="h-8 w-8 hover:bg-white/10"
         >
           <ChevronLeft
             className={cn(
-              'h-4 w-4 transition-transform duration-300',
+              'h-4 w-4 transition-transform duration-500',
               !sidebarOpen && 'rotate-180'
             )}
           />
@@ -112,8 +113,8 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-        <div className="space-y-1">
+      <nav className="flex-1 space-y-6 px-4 py-8 overflow-y-auto">
+        <div className="space-y-1.5">
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -121,21 +122,27 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                  'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 relative group',
                   isActive
-                    ? 'bg-primary/20 text-primary border border-primary/30'
+                    ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
                     : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
                 )}
               >
-                <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-primary')} />
+                <item.icon className={cn('h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110', isActive && 'text-primary')} />
                 {sidebarOpen && (
                   <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -5 }}
                   >
                     {item.name}
                   </motion.span>
+                )}
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-active"
+                    className="absolute left-0 w-1 h-6 bg-primary rounded-r-full"
+                  />
                 )}
               </Link>
             );
@@ -143,15 +150,15 @@ export function Sidebar() {
         </div>
 
         {/* Settings Section */}
-        <div className="pt-4">
+        <div className="pt-2">
           {sidebarOpen && (
-            <div className="px-3 py-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Settings
+            <div className="px-4 py-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">
+                System Settings
               </h3>
             </div>
           )}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {settingsNavigation.map((item) => {
               const isActive = pathname === item.href;
               const navItem = (
@@ -159,21 +166,27 @@ export function Sidebar() {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                    'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 group relative',
                     isActive
-                      ? 'bg-primary/20 text-primary border border-primary/30'
+                      ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
                       : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
                   )}
                 >
-                  <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-primary')} />
+                  <item.icon className={cn('h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110', isActive && 'text-primary')} />
                   {sidebarOpen && (
                     <motion.span
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0, x: -5 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -5 }}
                     >
                       {item.name}
                     </motion.span>
+                  )}
+                  {isActive && (
+                    <motion.div
+                      layoutId="sidebar-active"
+                      className="absolute left-0 w-1 h-6 bg-primary rounded-r-full"
+                    />
                   )}
                 </Link>
               );
@@ -192,34 +205,27 @@ export function Sidebar() {
         </div>
       </nav>
 
-      {/* Theme Toggle */}
-      <div className="px-3 py-2 border-t border-white/10">
-        <div className={cn('flex items-center', sidebarOpen ? 'justify-between' : 'justify-center')}>
-          {sidebarOpen && (
-            <span className="text-xs text-muted-foreground">Theme</span>
-          )}
-          <ThemeToggle />
-        </div>
-      </div>
-
       {/* User Profile */}
-      <div className="border-t border-white/10 p-4">
-        <div className={cn('flex items-center', sidebarOpen ? 'gap-3' : 'justify-center')}>
-          <Avatar className="h-10 w-10 ring-2 ring-primary/20">
-            <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className="bg-primary/20 text-primary">
-              {user ? getInitials(user.name) : 'U'}
-            </AvatarFallback>
-          </Avatar>
+      <div className="border-t border-white/5 p-6 bg-white/[0.02]">
+        <div className={cn('flex items-center', sidebarOpen ? 'gap-4' : 'justify-center')}>
+          <div className="relative group cursor-pointer">
+            <Avatar className="h-11 w-11 ring-2 ring-primary/10 group-hover:ring-primary/40 transition-all duration-300 shadow-lg">
+              <AvatarImage src={user?.avatarUrl} />
+              <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                {user ? getInitials(user.name) : 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-green-500 border-2 border-black rounded-full shadow-lg" />
+          </div>
           {sidebarOpen && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               className="flex-1 min-w-0"
             >
-              <p className="text-sm font-medium truncate">{user?.name}</p>
-              <Badge variant={getRoleBadgeVariant(user?.role || '')} className="text-xs mt-0.5">
+              <p className="text-sm font-bold truncate tracking-tight">{user?.name}</p>
+              <Badge variant={getRoleBadgeVariant(user?.role || '')} className="mt-1">
                 {formatRole(user?.role || '')}
               </Badge>
             </motion.div>
@@ -229,7 +235,7 @@ export function Sidebar() {
               variant="ghost"
               size="icon"
               onClick={() => logoutMutation.mutate()}
-              className="shrink-0 hover:bg-red-500/10 hover:text-red-400"
+              className="shrink-0 h-9 w-9 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all duration-300"
               title="Logout"
               disabled={logoutMutation.isPending}
             >

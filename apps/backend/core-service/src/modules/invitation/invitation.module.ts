@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MailClientModule } from '@sentra-core/mail-client';
 import { InvitationController, InvitationAuthController } from './invitation.controller';
 import { InvitationService } from './invitation.service';
 
@@ -16,6 +17,7 @@ import { InvitationService } from './invitation.service';
         },
       }),
     }),
+    MailClientModule,
   ],
   controllers: [InvitationController, InvitationAuthController],
   providers: [InvitationService],
