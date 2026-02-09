@@ -17,6 +17,7 @@
     "paths": {
       "@sentra-core/types": ["libs/shared/types/src/index.ts"],
       "@sentra-core/prisma-client": ["libs/backend/prisma-client/src/index.ts"],
+      "@sentra-core/mail-client": ["libs/backend/mail-client/src/index.ts"],
       "@sentra-core/mongoose-client": [
         "libs/backend/mongoose-client/src/index.ts"
       ]

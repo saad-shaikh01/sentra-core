@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaClientModule } from '@sentra-core/prisma-client';
+import { MailClientModule } from '@sentra-core/mail-client';
 import { AuthModule, AccessTokenGuard, RolesGuard } from '../modules/auth';
 import { UsersModule } from '../modules/users';
 import { OrganizationModule } from '../modules/organization';
@@ -16,6 +17,7 @@ import { InvitationModule } from '../modules/invitation';
       envFilePath: '.env',
     }),
     PrismaClientModule,
+    MailClientModule,
     AuthModule,
     UsersModule,
     OrganizationModule,

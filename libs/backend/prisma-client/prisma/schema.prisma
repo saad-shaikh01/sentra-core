@@ -99,7 +99,11 @@ model User {
   assignedLeads Lead[]
 
   // Refresh Token (for JWT)
-  refreshToken  String?
+  refreshToken      String?
+  
+  // Password Reset
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

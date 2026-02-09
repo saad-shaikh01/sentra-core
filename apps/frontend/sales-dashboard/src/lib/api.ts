@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://orange-fortnight-g95pqrq6vgvf9qrj-3001.app.github.dev/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:3001/api';
 
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;

@@ -9,9 +9,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '@sentra-core/prisma-client';
+import { MailClientService } from '@sentra-core/mail-client';
 import { UserRole, JwtPayload, IAuthTokens, ILoginResponse, ISignupResponse } from '@sentra-core/types';
-import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +18,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private mailService: MailClientService,
   ) {}
 
   async login(dto: LoginDto): Promise<ILoginResponse> {
@@ -104,6 +104,16 @@ export class AuthService {
     );
     await this.updateRefreshToken(result.user.id, tokens.refreshToken);
 
+    await this.mailService.sendMail({
+      to: result.user.email,
+      subject: 'Welcome to SentraCore',
+      template: 'WELCOME',
+      context: {
+        name: result.user.name,
+        organizationName: result.organization.name,
+      },
+    });
+
     return {
       ...tokens,
       user: {
@@ -135,17 +145,59 @@ export class AuthService {
     }
 
     const resetToken = uuidv4();
+    const resetPasswordExpires = new Date();
+    resetPasswordExpires.setHours(resetPasswordExpires.getHours() + 1); // 1 hour expiry
 
-    console.log(`[Password Reset] Token for ${dto.email}: ${resetToken}`);
-    console.log(`[Password Reset] Reset link: http://localhost:4200/auth/reset-password?token=${resetToken}`);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: resetToken,
+        resetPasswordExpires,
+      },
+    });
+
+    const resetLink = `${this.configService.get<string>(
+      'FRONTEND_URL',
+    ) || 'http://localhost:4200'}/auth/reset-password?token=${resetToken}`;
+
+    await this.mailService.sendMail({
+      to: dto.email,
+      subject: 'Password Reset Request',
+      template: 'PASSWORD_RESET',
+      context: {
+        name: user.name,
+        resetLink,
+      },
+    });
 
     return { message: 'If an account exists, a reset link has been sent.' };
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    console.log(`[Password Reset] Token received: ${dto.token}`);
+    const user = await this.prisma.user.findUnique({
+      where: { resetPasswordToken: dto.token },
+    });
 
-    throw new BadRequestException('Password reset not yet fully implemented');
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    if (user.resetPasswordExpires && new Date() > user.resetPasswordExpires) {
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      },
+    });
+
+    return { message: 'Password has been reset successfully' };
   }
 
   async refreshTokens(userId: string, refreshToken: string): Promise<IAuthTokens> {

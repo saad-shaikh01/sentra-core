@@ -6,6 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
+import { MailClientService } from '@sentra-core/mail-client';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -25,6 +26,7 @@ export class InvitationService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private mailService: MailClientService,
   ) {}
 
   async createInvitation(
@@ -74,13 +76,24 @@ export class InvitationService {
       },
     });
 
-    console.log('='.repeat(60));
-    console.log('[INVITATION CREATED]');
-    console.log(`Email: ${dto.email}`);
-    console.log(`Role: ${dto.role}`);
-    console.log(`Token: ${token}`);
-    console.log(`Invitation Link: http://localhost:4200/auth/accept-invite?token=${token}`);
-    console.log('='.repeat(60));
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: currentUser.orgId },
+    });
+
+    const inviteLink = `${this.configService.get<string>(
+      'FRONTEND_URL',
+    ) || 'http://localhost:4200'}/auth/accept-invite?token=${token}`;
+
+    await this.mailService.sendMail({
+      to: dto.email,
+      subject: `You're Invited to ${organization.name}`,
+      template: 'INVITATION',
+      context: {
+        organizationName: organization.name,
+        role: dto.role,
+        inviteLink,
+      },
+    });
 
     return {
       id: invitation.id,
