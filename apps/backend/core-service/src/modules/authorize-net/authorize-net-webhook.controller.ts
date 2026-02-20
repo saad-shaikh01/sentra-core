@@ -7,6 +7,7 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '../auth/decorators';
 import { PrismaService } from '@sentra-core/prisma-client';
@@ -14,6 +15,7 @@ import { Request } from 'express';
 import * as crypto from 'crypto';
 import { WebhookPayload } from './authorize-net.types';
 
+@SkipThrottle()
 @Controller('webhooks')
 export class AuthorizeNetWebhookController {
   private readonly logger = new Logger(AuthorizeNetWebhookController.name);

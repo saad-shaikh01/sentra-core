@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { Public } from './decorators';
@@ -19,6 +20,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto): Promise<ILoginResponse> {
     return this.authService.login(dto);
@@ -26,6 +28,7 @@ export class AuthController {
 
   @Public()
   @Post('signup')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   signup(@Body() dto: SignupDto): Promise<ISignupResponse> {
     return this.authService.signup(dto);
   }

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { ISale, IPaginatedResponse, SaleStatus, TransactionType, TransactionStatus } from '@sentra-core/types';
-import { buildPaginationResponse } from '../../common';
+import { buildPaginationResponse, CacheService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
 import { CreateSaleDto, UpdateSaleDto, QuerySalesDto, ChargeSaleDto, CreateSubscriptionDto } from './dto';
 
@@ -15,6 +15,7 @@ export class SalesService {
   constructor(
     private prisma: PrismaService,
     private authorizeNet: AuthorizeNetService,
+    private cache: CacheService,
   ) {}
 
   async create(orgId: string, dto: CreateSaleDto): Promise<ISale> {
@@ -34,10 +35,18 @@ export class SalesService {
       },
     });
 
+    await this.cache.delByPrefix(`sales:${orgId}:`);
+
     return this.mapToISale(sale);
   }
 
   async findAll(orgId: string, query: QuerySalesDto): Promise<IPaginatedResponse<ISale>> {
+    const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
+    const cacheKey = `sales:${orgId}:list:${queryHash}`;
+
+    const cached = await this.cache.get<IPaginatedResponse<ISale>>(cacheKey);
+    if (cached) return cached;
+
     const { page, limit, status, clientId, brandId, dateFrom, dateTo } = query;
     const where: any = { organizationId: orgId };
     if (status) where.status = status;
@@ -60,16 +69,25 @@ export class SalesService {
       this.prisma.sale.count({ where }),
     ]);
 
-    return buildPaginationResponse(sales.map(s => this.mapToISale(s)), total, page, limit);
+    const result = buildPaginationResponse(sales.map(s => this.mapToISale(s)), total, page, limit);
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async findOne(id: string, orgId: string) {
+    const cacheKey = `sales:${orgId}:${id}`;
+
+    const cached = await this.cache.get(cacheKey);
+    if (cached) return cached;
+
     const sale = await this.prisma.sale.findUnique({
       where: { id },
       include: { client: true, invoices: true, transactions: true },
     });
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
+
+    await this.cache.set(cacheKey, sale);
     return sale;
   }
 
@@ -88,6 +106,8 @@ export class SalesService {
       },
     });
 
+    await this.cache.delByPrefix(`sales:${orgId}:`);
+
     return this.mapToISale(updated);
   }
 
@@ -101,6 +121,9 @@ export class SalesService {
 
     await this.prisma.paymentTransaction.deleteMany({ where: { saleId: id } });
     await this.prisma.sale.delete({ where: { id } });
+
+    await this.cache.delByPrefix(`sales:${orgId}:`);
+
     return { message: 'Sale deleted successfully' };
   }
 
@@ -138,6 +161,9 @@ export class SalesService {
       throw new BadRequestException(`Payment failed: ${result.message}`);
     }
 
+    // Invalidate sale detail cache since transactions are included
+    await this.cache.del(`sales:${orgId}:${id}`);
+
     return { transaction, authorizeNetResponse: result };
   }
 
@@ -172,6 +198,8 @@ export class SalesService {
       data: { subscriptionId: result.subscriptionId },
     });
 
+    await this.cache.delByPrefix(`sales:${orgId}:`);
+
     return { subscriptionId: result.subscriptionId };
   }
 
@@ -188,6 +216,8 @@ export class SalesService {
       where: { id },
       data: { subscriptionId: null },
     });
+
+    await this.cache.delByPrefix(`sales:${orgId}:`);
 
     return { message: 'Subscription cancelled successfully' };
   }

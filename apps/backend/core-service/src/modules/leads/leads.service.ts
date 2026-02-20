@@ -14,7 +14,7 @@ import {
   ILeadActivity,
   IPaginatedResponse,
 } from '@sentra-core/types';
-import { buildPaginationResponse } from '../../common';
+import { buildPaginationResponse, CacheService } from '../../common';
 import {
   CreateLeadDto,
   UpdateLeadDto,
@@ -27,7 +27,10 @@ import {
 
 @Injectable()
 export class LeadsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async create(
     orgId: string,
@@ -55,6 +58,8 @@ export class LeadsService {
       },
     });
 
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+
     return {
       id: lead.id,
       title: lead.title,
@@ -74,6 +79,12 @@ export class LeadsService {
     orgId: string,
     query: QueryLeadsDto,
   ): Promise<IPaginatedResponse<ILead>> {
+    const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
+    const cacheKey = `leads:${orgId}:list:${queryHash}`;
+
+    const cached = await this.cache.get<IPaginatedResponse<ILead>>(cacheKey);
+    if (cached) return cached;
+
     const { page, limit, status, source, assignedToId, brandId, dateFrom, dateTo, search } = query;
 
     const where: any = { organizationId: orgId };
@@ -132,10 +143,17 @@ export class LeadsService {
       updatedAt: lead.updatedAt,
     }));
 
-    return buildPaginationResponse(data, total, page, limit);
+    const result = buildPaginationResponse(data, total, page, limit);
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async findOne(id: string, orgId: string): Promise<ILead & { activities: ILeadActivity[]; assignedTo?: any }> {
+    const cacheKey = `leads:${orgId}:${id}`;
+
+    const cached = await this.cache.get<ILead & { activities: ILeadActivity[]; assignedTo?: any }>(cacheKey);
+    if (cached) return cached;
+
     const lead = await this.prisma.lead.findUnique({
       where: { id },
       include: {
@@ -155,7 +173,7 @@ export class LeadsService {
       throw new ForbiddenException('Lead belongs to another organization');
     }
 
-    return {
+    const result = {
       id: lead.id,
       title: lead.title,
       status: lead.status as LeadStatus,
@@ -183,6 +201,9 @@ export class LeadsService {
           }
         : undefined,
     };
+
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async update(
@@ -209,6 +230,8 @@ export class LeadsService {
         data: (dto.data as any) ?? undefined,
       },
     });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return {
       id: updated.id,
@@ -238,6 +261,8 @@ export class LeadsService {
 
     await this.prisma.leadActivity.deleteMany({ where: { leadId: id } });
     await this.prisma.lead.delete({ where: { id } });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return { message: 'Lead deleted successfully' };
   }
@@ -280,6 +305,8 @@ export class LeadsService {
         userId,
       },
     });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return {
       id: updated.id,
@@ -340,6 +367,8 @@ export class LeadsService {
       },
     });
 
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+
     return {
       id: updated.id,
       title: updated.title,
@@ -379,6 +408,9 @@ export class LeadsService {
         userId,
       },
     });
+
+    // Invalidate the detail cache since activities are embedded in findOne
+    await this.cache.del(`leads:${orgId}:${id}`);
 
     return {
       id: activity.id,
@@ -444,6 +476,9 @@ export class LeadsService {
 
       return updated;
     });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+    await this.cache.delByPrefix(`clients:${orgId}:`);
 
     return {
       id: result.id,

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus } from '@sentra-core/types';
-import { buildPaginationResponse } from '../../common';
+import { buildPaginationResponse, CacheService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
 import { InvoicePdfService } from './pdf/invoice-pdf.service';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
@@ -17,6 +17,7 @@ export class InvoicesService {
     private prisma: PrismaService,
     private authorizeNet: AuthorizeNetService,
     private pdfService: InvoicePdfService,
+    private cache: CacheService,
   ) {}
 
   private async generateInvoiceNumber(): Promise<string> {
@@ -51,10 +52,18 @@ export class InvoicesService {
       },
     });
 
+    await this.cache.delByPrefix(`invoices:${orgId}:`);
+
     return this.mapToIInvoice(invoice);
   }
 
   async findAll(orgId: string, query: QueryInvoicesDto): Promise<IPaginatedResponse<IInvoice>> {
+    const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
+    const cacheKey = `invoices:${orgId}:list:${queryHash}`;
+
+    const cached = await this.cache.get<IPaginatedResponse<IInvoice>>(cacheKey);
+    if (cached) return cached;
+
     const { page, limit, status, saleId, dueBefore, dueAfter } = query;
 
     // We need to join through sale to filter by org
@@ -78,10 +87,17 @@ export class InvoicesService {
       this.prisma.invoice.count({ where }),
     ]);
 
-    return buildPaginationResponse(invoices.map(i => this.mapToIInvoice(i)), total, page, limit);
+    const result = buildPaginationResponse(invoices.map(i => this.mapToIInvoice(i)), total, page, limit);
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async findOne(id: string, orgId: string) {
+    const cacheKey = `invoices:${orgId}:${id}`;
+
+    const cached = await this.cache.get(cacheKey);
+    if (cached) return cached;
+
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -91,6 +107,8 @@ export class InvoicesService {
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.sale.organizationId !== orgId) throw new ForbiddenException('Invoice belongs to another organization');
+
+    await this.cache.set(cacheKey, invoice);
     return invoice;
   }
 
@@ -112,6 +130,8 @@ export class InvoicesService {
       },
     });
 
+    await this.cache.delByPrefix(`invoices:${orgId}:`);
+
     return this.mapToIInvoice(updated);
   }
 
@@ -125,6 +145,9 @@ export class InvoicesService {
 
     await this.prisma.paymentTransaction.deleteMany({ where: { invoiceId: id } });
     await this.prisma.invoice.delete({ where: { id } });
+
+    await this.cache.delByPrefix(`invoices:${orgId}:`);
+
     return { message: 'Invoice deleted successfully' };
   }
 
@@ -206,6 +229,8 @@ export class InvoicesService {
     } else {
       throw new BadRequestException(`Payment failed: ${result.message}`);
     }
+
+    await this.cache.delByPrefix(`invoices:${orgId}:`);
 
     return { transaction, paid: true };
   }

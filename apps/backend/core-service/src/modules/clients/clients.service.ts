@@ -8,11 +8,14 @@ import { PrismaService } from '@sentra-core/prisma-client';
 import { IClient, IPaginatedResponse } from '@sentra-core/types';
 import * as bcrypt from 'bcryptjs';
 import { CreateClientDto, UpdateClientDto, QueryClientsDto, UpdateCredentialsDto } from './dto';
-import { buildPaginationResponse } from '../../common';
+import { buildPaginationResponse, CacheService } from '../../common';
 
 @Injectable()
 export class ClientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async create(orgId: string, dto: CreateClientDto): Promise<IClient> {
     const existingClient = await this.prisma.client.findFirst({
@@ -42,6 +45,8 @@ export class ClientsService {
       },
     });
 
+    await this.cache.delByPrefix(`clients:${orgId}:`);
+
     return {
       id: client.id,
       email: client.email,
@@ -61,6 +66,12 @@ export class ClientsService {
     orgId: string,
     query: QueryClientsDto,
   ): Promise<IPaginatedResponse<IClient>> {
+    const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
+    const cacheKey = `clients:${orgId}:list:${queryHash}`;
+
+    const cached = await this.cache.get<IPaginatedResponse<IClient>>(cacheKey);
+    if (cached) return cached;
+
     const { page = 1, limit = 20, search } = query;
     const skip = (page - 1) * limit;
 
@@ -98,10 +109,17 @@ export class ClientsService {
       updatedAt: client.updatedAt,
     }));
 
-    return buildPaginationResponse(data, total, page, limit);
+    const result = buildPaginationResponse(data, total, page, limit);
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async findOne(id: string, orgId: string): Promise<IClient & { sales: any[] }> {
+    const cacheKey = `clients:${orgId}:${id}`;
+
+    const cached = await this.cache.get<IClient & { sales: any[] }>(cacheKey);
+    if (cached) return cached;
+
     const client = await this.prisma.client.findFirst({
       where: { id, organizationId: orgId },
       include: { sales: true },
@@ -111,7 +129,7 @@ export class ClientsService {
       throw new NotFoundException('Client not found');
     }
 
-    return {
+    const result = {
       id: client.id,
       email: client.email,
       companyName: client.companyName,
@@ -125,6 +143,9 @@ export class ClientsService {
       updatedAt: client.updatedAt,
       sales: client.sales,
     };
+
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async update(id: string, orgId: string, dto: UpdateClientDto): Promise<IClient> {
@@ -162,6 +183,8 @@ export class ClientsService {
       },
     });
 
+    await this.cache.delByPrefix(`clients:${orgId}:`);
+
     return {
       id: updated.id,
       email: updated.email,
@@ -194,6 +217,8 @@ export class ClientsService {
     }
 
     await this.prisma.client.delete({ where: { id } });
+
+    await this.cache.delByPrefix(`clients:${orgId}:`);
 
     return { message: 'Client deleted successfully' };
   }

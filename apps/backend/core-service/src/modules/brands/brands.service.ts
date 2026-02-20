@@ -5,12 +5,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { IBrand, IPaginatedResponse } from '@sentra-core/types';
-import { buildPaginationResponse } from '../../common';
+import { buildPaginationResponse, CacheService } from '../../common';
 import { CreateBrandDto, UpdateBrandDto, QueryBrandsDto } from './dto';
 
 @Injectable()
 export class BrandsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async create(orgId: string, dto: CreateBrandDto): Promise<IBrand> {
     const brand = await this.prisma.brand.create({
@@ -22,6 +25,8 @@ export class BrandsService {
         organizationId: orgId,
       },
     });
+
+    await this.cache.delByPrefix(`brands:${orgId}:`);
 
     return {
       id: brand.id,
@@ -37,6 +42,12 @@ export class BrandsService {
     orgId: string,
     query: QueryBrandsDto,
   ): Promise<IPaginatedResponse<IBrand>> {
+    const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
+    const cacheKey = `brands:${orgId}:list:${queryHash}`;
+
+    const cached = await this.cache.get<IPaginatedResponse<IBrand>>(cacheKey);
+    if (cached) return cached;
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -71,10 +82,17 @@ export class BrandsService {
       organizationId: brand.organizationId,
     }));
 
-    return buildPaginationResponse(data, total, page, limit);
+    const result = buildPaginationResponse(data, total, page, limit);
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async findOne(id: string, orgId: string): Promise<IBrand> {
+    const cacheKey = `brands:${orgId}:${id}`;
+
+    const cached = await this.cache.get<IBrand>(cacheKey);
+    if (cached) return cached;
+
     const brand = await this.prisma.brand.findFirst({
       where: {
         id,
@@ -86,7 +104,7 @@ export class BrandsService {
       throw new NotFoundException('Brand not found');
     }
 
-    return {
+    const result: IBrand = {
       id: brand.id,
       name: brand.name,
       domain: brand.domain ?? undefined,
@@ -94,6 +112,9 @@ export class BrandsService {
       colors: (brand.colors as Record<string, string>) ?? undefined,
       organizationId: brand.organizationId,
     };
+
+    await this.cache.set(cacheKey, result);
+    return result;
   }
 
   async update(
@@ -121,6 +142,8 @@ export class BrandsService {
         ...(dto.colors !== undefined && { colors: dto.colors }),
       },
     });
+
+    await this.cache.delByPrefix(`brands:${orgId}:`);
 
     return {
       id: updated.id,
@@ -180,6 +203,8 @@ export class BrandsService {
     await this.prisma.brand.delete({
       where: { id },
     });
+
+    await this.cache.delByPrefix(`brands:${orgId}:`);
 
     return { message: 'Brand deleted successfully' };
   }
