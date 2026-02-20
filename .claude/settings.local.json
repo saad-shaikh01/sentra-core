@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx nx serve:*)"
+      "Bash(npx nx serve:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npm install:*)",
+      "Bash(npx nx build:*)"
     ]
   }
 }

@@ -29,6 +29,47 @@ enum InvitationStatus {
   CANCELLED
 }
 
+enum LeadStatus {
+  NEW
+  CONTACTED
+  PROPOSAL
+  CLOSED
+}
+
+enum SaleStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
+enum LeadActivityType {
+  STATUS_CHANGE
+  NOTE
+  ASSIGNMENT_CHANGE
+  CONVERSION
+  CREATED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum TransactionType {
+  ONE_TIME
+  RECURRING
+  REFUND
+}
+
 // ==========================================
 // 1. MULTI-TENANCY CORE
 // ==========================================
@@ -42,6 +83,7 @@ model Organization {
   users         User[]
   leads         Lead[]
   clients       Client[]
+  sales         Sale[]
   invitations   Invitation[]
 
   createdAt     DateTime @default(now())
@@ -52,7 +94,7 @@ model Brand {
   id            String   @id @default(uuid())
   name          String   // e.g., "The Pulp House"
   domain        String?  @unique
-  
+
   // Branding Assets
   logoUrl       String?
   colors        Json?
@@ -62,11 +104,10 @@ model Brand {
 
   leads          Lead[]
   clients        Client[]
-  orders         Order[]
-  emailAliases   EmailAlias[] 
+  sales          Sale[]
+  emailAliases   EmailAlias[]
 
-  // 👇 FIX: Ye line missing thi, isay add karo
-  members        BrandAccess[] 
+  members        BrandAccess[]
 
   @@index([organizationId])
 }
@@ -97,10 +138,11 @@ model User {
   emailConfig   UserEmailConfig? // Gmail Integration
 
   assignedLeads Lead[]
+  leadActivities LeadActivity[]
 
   // Refresh Token (for JWT)
   refreshToken      String?
-  
+
   // Password Reset
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
@@ -151,11 +193,11 @@ model UserEmailConfig {
   id            String   @id @default(uuid())
   userId        String   @unique
   user          User     @relation(fields: [userId], references: [id])
-  
+
   primaryEmail  String   // "mark@publishing.com"
   accessToken   String   // Encrypted
   refreshToken  String   // Encrypted
-  
+
   aliases       EmailAlias[]
 }
 
@@ -163,7 +205,7 @@ model EmailAlias {
   id            String   @id @default(uuid())
   email         String   // "mark@urbanquill.com"
   displayName   String?  // "Mark - Urban Quill"
-  
+
   configId      String
   config        UserEmailConfig @relation(fields: [configId], references: [id])
 
@@ -176,35 +218,56 @@ model EmailAlias {
 // ==========================================
 
 model Lead {
-  id            String   @id @default(uuid())
-  title         String   // "Website Inquiry - John"
-  status        String   @default("NEW") // "NEW", "CONTACTED", "PROPOSAL", "CLOSED"
-  source        String?  // "PPC", "FB_ADS"
-  data          Json?    // Flexible Form Data
+  id            String     @id @default(uuid())
+  title         String     // "Website Inquiry - John"
+  status        LeadStatus @default(NEW)
+  source        String?    // "PPC", "FB_ADS"
+  data          Json?      // Flexible Form Data
 
   brandId       String
-  brand         Brand    @relation(fields: [brandId], references: [id])
+  brand         Brand      @relation(fields: [brandId], references: [id])
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
-  
+
   assignedToId  String?
-  assignedTo    User?    @relation(fields: [assignedToId], references: [id])
+  assignedTo    User?      @relation(fields: [assignedToId], references: [id])
 
   convertedClientId String? @unique // Link if converted
-  
+
+  activities    LeadActivity[]
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([organizationId, brandId, status]) // Performance Index for Dashboard
 }
 
+model LeadActivity {
+  id        String           @id @default(uuid())
+  type      LeadActivityType
+  data      Json             // Stores context based on type
+
+  leadId    String
+  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  userId    String           // Who performed the action
+  user      User             @relation(fields: [userId], references: [id])
+
+  createdAt DateTime         @default(now())
+
+  @@index([leadId, createdAt])
+}
+
 model Client {
   id            String   @id @default(uuid())
-  email         String   @unique
-  password      String   // Portal Access
+  email         String
+  password      String   // Portal Access (hashed)
   companyName   String
+  contactName   String?
   phone         String?
+  address       String?
+  notes         String?
 
   brandId       String
   brand         Brand    @relation(fields: [brandId], references: [id])
@@ -212,37 +275,86 @@ model Client {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  orders        Order[]
+  sales         Sale[]
 
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([email, organizationId])
 }
 
-model Order {
-  id            String   @id @default(uuid())
-  totalAmount   Decimal  @db.Decimal(10, 2)
-  status        String   @default("PENDING") // "ACTIVE", "COMPLETED", "CANCELLED"
-  currency      String   @default("USD")
-  
+model Sale {
+  id            String     @id @default(uuid())
+  totalAmount   Decimal    @db.Decimal(10, 2)
+  status        SaleStatus @default(PENDING)
+  currency      String     @default("USD")
+  description   String?
+
+  // Authorize.net fields
+  customerProfileId String?
+  paymentProfileId  String?
+  subscriptionId    String?
+
   clientId      String
   client        Client   @relation(fields: [clientId], references: [id])
-  
+
   brandId       String
   brand         Brand    @relation(fields: [brandId], references: [id])
 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   invoices      Invoice[]
-  
+  transactions  PaymentTransaction[]
+
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([organizationId, brandId, status])
+  @@index([clientId])
+  @@index([subscriptionId])
 }
 
 model Invoice {
-  id            String   @id @default(uuid())
-  amount        Decimal  @db.Decimal(10, 2)
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique
+  amount        Decimal       @db.Decimal(10, 2)
   dueDate       DateTime
-  status        String   @default("UNPAID") // "PAID", "OVERDUE"
+  status        InvoiceStatus @default(UNPAID)
   pdfUrl        String?
-  
-  orderId       String
-  order         Order    @relation(fields: [orderId], references: [id])
+  notes         String?
+
+  saleId        String
+  sale          Sale          @relation(fields: [saleId], references: [id])
+
+  transactions  PaymentTransaction[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([saleId])
+  @@index([status, dueDate])
+}
+
+model PaymentTransaction {
+  id              String            @id @default(uuid())
+  transactionId   String?           // Authorize.net reference
+  type            TransactionType
+  amount          Decimal           @db.Decimal(10, 2)
+  status          TransactionStatus @default(PENDING)
+  responseCode    String?
+  responseMessage String?
+
+  saleId          String
+  sale            Sale              @relation(fields: [saleId], references: [id])
+
+  invoiceId       String?
+  invoice         Invoice?          @relation(fields: [invoiceId], references: [id])
+
+  createdAt       DateTime          @default(now())
+
+  @@index([saleId])
+  @@index([transactionId])
 }
 
 // ==========================================
@@ -255,6 +367,6 @@ model OutboxEvent {
   payload   Json
   status    String   @default("PENDING") // "PROCESSING", "COMPLETED", "FAILED"
   createdAt DateTime @default(now())
-  
+
   @@index([status, createdAt]) // Worker will poll PENDING events fast
 }

@@ -23,6 +23,58 @@ export enum InvitationStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum LeadStatus {
+  NEW = 'NEW',
+  CONTACTED = 'CONTACTED',
+  PROPOSAL = 'PROPOSAL',
+  CLOSED = 'CLOSED',
+}
+
+export enum SaleStatus {
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum InvoiceStatus {
+  UNPAID = 'UNPAID',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+}
+
+export enum LeadActivityType {
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  NOTE = 'NOTE',
+  ASSIGNMENT_CHANGE = 'ASSIGNMENT_CHANGE',
+  CONVERSION = 'CONVERSION',
+  CREATED = 'CREATED',
+}
+
+export enum TransactionStatus {
+  PENDING = 'PENDING',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum TransactionType {
+  ONE_TIME = 'ONE_TIME',
+  RECURRING = 'RECURRING',
+  REFUND = 'REFUND',
+}
+
+// ==========================================
+// LEAD STATUS TRANSITIONS
+// ==========================================
+
+export const LEAD_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
+  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.CLOSED],
+  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.CLOSED],
+  [LeadStatus.PROPOSAL]: [LeadStatus.CLOSED, LeadStatus.CONTACTED],
+  [LeadStatus.CLOSED]: [],
+};
+
 // ==========================================
 // ROLE HIERARCHY (Higher index = higher privilege)
 // ==========================================
@@ -55,6 +107,20 @@ export interface JwtPayload {
   role: UserRole;
   iat?: number;
   exp?: number;
+}
+
+// ==========================================
+// PAGINATION
+// ==========================================
+
+export interface IPaginatedResponse<T> {
+  data: T[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 // ==========================================
@@ -141,6 +207,119 @@ export interface ILoginResponse extends IAuthTokens {
 export interface ISignupResponse extends IAuthTokens {
   user: IUserProfile;
   organization: IOrganization;
+}
+
+// ==========================================
+// BRAND INTERFACES
+// ==========================================
+
+export interface IBrand {
+  id: string;
+  name: string;
+  domain?: string;
+  logoUrl?: string;
+  colors?: Record<string, string>;
+  organizationId: string;
+  createdAt?: Date;
+}
+
+// ==========================================
+// LEAD INTERFACES
+// ==========================================
+
+export interface ILead {
+  id: string;
+  title: string;
+  status: LeadStatus;
+  source?: string;
+  data?: Record<string, unknown>;
+  brandId: string;
+  organizationId: string;
+  assignedToId?: string;
+  convertedClientId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ILeadActivity {
+  id: string;
+  type: LeadActivityType;
+  data: Record<string, unknown>;
+  leadId: string;
+  userId: string;
+  createdAt: Date;
+}
+
+// ==========================================
+// CLIENT INTERFACES
+// ==========================================
+
+export interface IClient {
+  id: string;
+  email: string;
+  companyName: string;
+  contactName?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  brandId: string;
+  organizationId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ==========================================
+// SALE INTERFACES
+// ==========================================
+
+export interface ISale {
+  id: string;
+  totalAmount: number;
+  status: SaleStatus;
+  currency: string;
+  description?: string;
+  clientId: string;
+  brandId: string;
+  organizationId: string;
+  customerProfileId?: string;
+  paymentProfileId?: string;
+  subscriptionId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ==========================================
+// INVOICE INTERFACES
+// ==========================================
+
+export interface IInvoice {
+  id: string;
+  invoiceNumber: string;
+  amount: number;
+  dueDate: Date;
+  status: InvoiceStatus;
+  pdfUrl?: string;
+  notes?: string;
+  saleId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ==========================================
+// PAYMENT TRANSACTION INTERFACES
+// ==========================================
+
+export interface IPaymentTransaction {
+  id: string;
+  transactionId?: string;
+  type: TransactionType;
+  amount: number;
+  status: TransactionStatus;
+  responseCode?: string;
+  responseMessage?: string;
+  saleId: string;
+  invoiceId?: string;
+  createdAt: Date;
 }
 
 // ==========================================
