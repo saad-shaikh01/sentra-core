@@ -12,6 +12,8 @@ import {
   Building2,
   ChevronLeft,
   Zap,
+  Layers,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -24,8 +26,11 @@ import { UserRole } from '@sentra-core/types';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Leads', href: '/dashboard/leads', icon: Users },
-  { name: 'Orders', href: '/dashboard/orders', icon: FileText },
+  { name: 'Brands',    href: '/dashboard/brands',   icon: Layers },
+  { name: 'Leads',     href: '/dashboard/leads',    icon: Users },
+  { name: 'Clients',   href: '/dashboard/clients',  icon: Building2 },
+  { name: 'Sales',     href: '/dashboard/sales',    icon: DollarSign },
+  { name: 'Invoices',  href: '/dashboard/invoices', icon: FileText },
 ];
 
 const settingsNavigation = [
@@ -116,7 +121,9 @@ export function Sidebar() {
       <nav className="flex-1 space-y-6 px-4 py-8 overflow-y-auto">
         <div className="space-y-1.5">
           {navigation.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = item.href === '/dashboard'
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link
                 key={item.name}

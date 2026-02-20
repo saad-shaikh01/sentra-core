@@ -60,6 +60,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.2.2",
     "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.0.0",

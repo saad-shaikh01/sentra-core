@@ -5,7 +5,9 @@
       "Bash(npx prisma migrate:*)",
       "Bash(npx prisma generate:*)",
       "Bash(npm install:*)",
-      "Bash(npx nx build:*)"
+      "Bash(npx nx build:*)",
+      "Bash(echo:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

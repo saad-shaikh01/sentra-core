@@ -1,5 +1,5 @@
 # Sentra Core System - Current Status Report
-**Last Updated:** February 05, 2026
+**Last Updated:** February 20, 2026
 **Architecture:** Microservices (Nx Monorepo)
 
 ## 1. Project Overview
@@ -14,7 +14,7 @@
 | **Frontend Framework** | Next.js | 4200 / 4201 | Dashboard & Portal |
 | **Primary DB** | PostgreSQL | 5432 | Transactional Data (Leads, Orders) |
 | **Secondary DB** | MongoDB | 27017 | Unstructured Data (Emails, Logs) |
-| **Cache / Queue** | Redis | 6379 | Caching & Job Queue |
+| **Cache / Queue** | Redis | 6379 | Response Caching (active) & Job Queue (planned) |
 | **Message Broker** | RabbitMQ | 5672 / 15672 | Event Bus |
 
 ## 3. Microservices Breakdown
@@ -28,7 +28,9 @@
 * **Port:** `3001` (Defined in `.env` as `PORT_CORE`)
 * **Role:** Main Business Logic. Handles Organizations, Brands, Users, Leads, Clients, Finance.
 * **Database:** PostgreSQL (via Prisma).
-* **Status:** **ACTIVE**. Database connected. Server running.
+* **Cache:** Redis (`cache-manager-redis-yet`). Falls back to in-memory if Redis is unavailable.
+* **Rate Limiting:** `@nestjs/throttler` — global 100 req/60s, tighter limits on auth and payment endpoints.
+* **Status:** **ACTIVE**. Database connected. Caching + Rate Limiting operational.
 
 ### C. Communication Service (`apps/backend/comm-service`)
 * **Port:** `3002` (Defined in `.env` as `PORT_COMM`)

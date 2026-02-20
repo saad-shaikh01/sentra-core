@@ -213,6 +213,167 @@ class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // Brand endpoints
+  async getBrands(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/brands${qs}`);
+  }
+
+  async getBrand(id: string) {
+    return this.fetch<any>(`/brands/${id}`);
+  }
+
+  async createBrand(dto: Record<string, unknown>) {
+    return this.fetch<any>('/brands', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateBrand(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deleteBrand(id: string) {
+    return this.fetch<{ message: string }>(`/brands/${id}`, { method: 'DELETE' });
+  }
+
+  // Lead endpoints
+  async getLeads(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/leads${qs}`);
+  }
+
+  async getLead(id: string) {
+    return this.fetch<any>(`/leads/${id}`);
+  }
+
+  async createLead(dto: Record<string, unknown>) {
+    return this.fetch<any>('/leads', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateLead(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deleteLead(id: string) {
+    return this.fetch<{ message: string }>(`/leads/${id}`, { method: 'DELETE' });
+  }
+
+  async changeLeadStatus(id: string, status: string) {
+    return this.fetch<any>(`/leads/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  }
+
+  async assignLead(id: string, assignedToId: string) {
+    return this.fetch<any>(`/leads/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assignedToId }) });
+  }
+
+  async addLeadNote(id: string, content: string) {
+    return this.fetch<any>(`/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) });
+  }
+
+  async convertLead(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/leads/${id}/convert`, { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async getLeadActivities(id: string) {
+    return this.fetch<any[]>(`/leads/${id}/activities`);
+  }
+
+  // Client endpoints
+  async getClients(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/clients${qs}`);
+  }
+
+  async getClient(id: string) {
+    return this.fetch<any>(`/clients/${id}`);
+  }
+
+  async createClient(dto: Record<string, unknown>) {
+    return this.fetch<any>('/clients', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateClient(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deleteClient(id: string) {
+    return this.fetch<{ message: string }>(`/clients/${id}`, { method: 'DELETE' });
+  }
+
+  // Sale endpoints
+  async getSales(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/sales${qs}`);
+  }
+
+  async getSale(id: string) {
+    return this.fetch<any>(`/sales/${id}`);
+  }
+
+  async createSale(dto: Record<string, unknown>) {
+    return this.fetch<any>('/sales', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateSale(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/sales/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deleteSale(id: string) {
+    return this.fetch<{ message: string }>(`/sales/${id}`, { method: 'DELETE' });
+  }
+
+  async chargeSale(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/sales/${id}/charge`, { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async createSubscription(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/sales/${id}/subscribe`, { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async cancelSubscription(id: string) {
+    return this.fetch<any>(`/sales/${id}/subscription`, { method: 'DELETE' });
+  }
+
+  // Invoice endpoints
+  async getInvoices(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/invoices${qs}`);
+  }
+
+  async getInvoice(id: string) {
+    return this.fetch<any>(`/invoices/${id}`);
+  }
+
+  async createInvoice(dto: Record<string, unknown>) {
+    return this.fetch<any>('/invoices', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateInvoice(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deleteInvoice(id: string) {
+    return this.fetch<{ message: string }>(`/invoices/${id}`, { method: 'DELETE' });
+  }
+
+  async payInvoice(id: string) {
+    return this.fetch<any>(`/invoices/${id}/pay`, { method: 'POST' });
+  }
+
+  async downloadInvoicePdf(id: string) {
+    const url = `${this.baseUrl}/invoices/${id}/pdf`;
+    const accessToken = this.getAccessToken();
+    const response = await fetch(url, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
+    if (!response.ok) throw new Error('Failed to download PDF');
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `invoice-${id}.pdf`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);

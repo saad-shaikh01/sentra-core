@@ -1,7 +1,9 @@
-# Backend Status - Auth, RBAC & Organization System
+# Backend Status - Auth, RBAC, Organization & Performance
 
-**Last Updated:** February 08, 2026
+**Last Updated:** February 20, 2026
 **Phase:** 1 (Database & Backend Logic) - COMPLETE
+**Phase:** 2 (CRUD Modules) - COMPLETE
+**Phase:** 3 (Performance: Caching + Rate Limiting) - COMPLETE
 
 ---
 
@@ -145,6 +147,70 @@ The Authentication, Role-Based Access Control (RBAC), and Organization Managemen
 
 ---
 
+---
+
+### 7. Redis Caching ✅
+
+**Location:** `apps/backend/core-service/src/common/cache/`
+
+#### Architecture
+
+| File | Purpose |
+|------|---------|
+| `cache.module.ts` | Global `@nestjs/cache-manager` module backed by Redis (`cache-manager-redis-yet`). Falls back to in-memory when `REDIS_URL` is absent. |
+| `cache.service.ts` | Injectable wrapper: `get`, `set`, `del`, `delByPrefix`, `hashQuery`. |
+| `cache/index.ts` | Barrel export. |
+
+#### Cache Key Strategy
+
+```
+{entity}:{orgId}:list:{queryHash}    → findAll (paginated list)
+{entity}:{orgId}:{id}                → findOne (detail)
+```
+
+`queryHash` = base64url of `JSON.stringify(queryParams)` — unique per filter combination.
+
+#### Services Cached
+
+| Service | findAll | findOne | Invalidation triggers |
+|---------|---------|---------|----------------------|
+| BrandsService | ✅ | ✅ | create, update, remove |
+| LeadsService | ✅ | ✅ | create, update, remove, changeStatus, assign, addNote, convert |
+| ClientsService | ✅ | ✅ | create, update, remove |
+| SalesService | ✅ | ✅ | create, update, remove, subscribe, cancelSubscription, charge |
+| InvoicesService | ✅ | ✅ | create, update, remove, pay |
+
+**Invalidation rule:** Any write operation calls `delByPrefix('{entity}:{orgId}:')` which uses Redis `SCAN + DEL` to wipe all cached pages + detail entries for that org in one shot.
+
+**Default TTL:** 300 seconds (configurable via `CACHE_TTL` env var).
+
+---
+
+### 8. Rate Limiting (Throttler) ✅
+
+**Implementation:** `@nestjs/throttler` registered globally in `AppModule` as an `APP_GUARD`.
+
+#### Global Default
+
+```
+100 requests / 60 seconds per IP
+```
+
+#### Endpoint-Level Overrides
+
+| Endpoint | Limit | Reason |
+|----------|-------|--------|
+| `POST /api/auth/login` | 5 / 60s | Brute-force protection |
+| `POST /api/auth/signup` | 5 / 60s | Abuse protection |
+| `POST /api/sales/:id/charge` | 10 / 60s | Payment protection |
+| `POST /api/sales/:id/subscribe` | 10 / 60s | Payment protection |
+| `POST /api/invoices/:id/pay` | 10 / 60s | Payment protection |
+| `POST /api/webhooks/authorize-net` | **Skipped** | External webhook, no rate limit |
+
+Exceeding a limit returns HTTP **429 Too Many Requests**.
+
+---
+
 ## Configuration
 
 ### Environment Variables (.env)
@@ -167,6 +233,14 @@ SMTP_HOST="smtp.gmail.com"
 SMTP_USER="your-email@gmail.com"
 SMTP_PASS="your-app-password"
 FRONTEND_URL="http://localhost:4200"
+
+# Redis Caching
+REDIS_URL="redis://localhost:6379"
+CACHE_TTL=300
+
+# Rate Limiting
+THROTTLE_TTL=60000
+THROTTLE_LIMIT=100
 ```
 
 ---
@@ -179,19 +253,23 @@ FRONTEND_URL="http://localhost:4200"
     "@nestjs/passport": "^11.x",
     "@nestjs/jwt": "^11.x",
     "@nestjs/config": "^4.x",
+    "@nestjs/cache-manager": "^3.x",
+    "@nestjs/throttler": "^6.x",
+    "cache-manager": "^7.x",
+    "cache-manager-redis-yet": "^5.x",
     "passport": "^0.7.x",
     "passport-jwt": "^4.x",
-    "bcryptjs": "^2.x",
+    "bcryptjs": "^3.x",
     "class-validator": "^0.14.x",
     "class-transformer": "^0.5.x",
-    "uuid": "^11.x",
-    "nodemailer": "^6.x"
+    "uuid": "^9.x",
+    "nodemailer": "^8.x"
   },
   "devDependencies": {
     "@types/passport-jwt": "^4.x",
     "@types/bcryptjs": "^2.x",
     "@types/uuid": "^10.x",
-    "@types/nodemailer": "^6.x"
+    "@types/nodemailer": "^7.x"
   }
 }
 ```

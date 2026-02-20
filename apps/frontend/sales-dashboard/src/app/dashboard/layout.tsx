@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/protected-route';
 import { Sidebar } from '@/components/sidebar';
 import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
+import { ConfirmModal, Toaster } from '@/components/shared';
 
 export default function DashboardLayout({
   children,
@@ -22,6 +23,8 @@ export default function DashboardLayout({
             </main>
           </div>
         </div>
+        <ConfirmModal />
+        <Toaster />
       </SpotlightBackground>
     </ProtectedRoute>
   );
