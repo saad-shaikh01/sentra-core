@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {},
+  "prisma": {
+    "seed": "ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/seed.ts"
+  },
   "private": true,
   "devDependencies": {
     "@eslint/js": "^9.8.0",

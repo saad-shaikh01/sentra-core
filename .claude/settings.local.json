@@ -7,7 +7,9 @@
       "Bash(npm install:*)",
       "Bash(npx nx build:*)",
       "Bash(echo:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker stop:*)"
     ]
   }
 }
