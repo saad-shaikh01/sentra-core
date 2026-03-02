@@ -9,7 +9,8 @@
       "Bash(echo:*)",
       "Bash(npx tsc:*)",
       "Bash(docker ps:*)",
-      "Bash(docker stop:*)"
+      "Bash(docker stop:*)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -9,6 +9,7 @@
  * - Config is global so all modules can access env vars without re-importing ConfigModule.
  * - ThrottlerModule protects against write-heavy endpoint abuse.
  * - SentraCacheModule (local) provides Redis-backed or in-memory caching for read paths.
+ * - PmEventsModule is global — PmEventsService is available to all domain modules.
  */
 
 import { Module } from '@nestjs/common';
@@ -22,6 +23,11 @@ import { HealthModule } from '../modules/health/health.module';
 import { PmCacheModule } from '../common/cache/pm-cache.module';
 import { TemplatesModule } from '../modules/templates/templates.module';
 import { EngagementsProjectsModule } from '../modules/engagements-projects/engagements-projects.module';
+import { PmEventsModule } from '../modules/events/pm-events.module';
+import { StagesTasksModule } from '../modules/stages-tasks/stages-tasks.module';
+import { QcApprovalsModule } from '../modules/qc-approvals/qc-approvals.module';
+import { ThreadsModule } from '../modules/threads/threads.module';
+import { FilesModule } from '../modules/files/files.module';
 
 @Module({
   imports: [
@@ -51,10 +57,17 @@ import { EngagementsProjectsModule } from '../modules/engagements-projects/engag
     // Local Redis/in-memory cache — pm-specific key namespacing enforced in services
     PmCacheModule,
 
+    // Global PM domain events (PM-BE-018) — must be before domain modules
+    PmEventsModule,
+
     // Domain modules
     HealthModule,
-    TemplatesModule,
-    EngagementsProjectsModule,
+    TemplatesModule,                // PM-BE-004/005/006
+    EngagementsProjectsModule,      // PM-BE-007/008/009
+    StagesTasksModule,              // PM-BE-010/011/012
+    QcApprovalsModule,              // PM-BE-013/014/015
+    ThreadsModule,                  // PM-BE-016
+    FilesModule,                    // PM-BE-017
   ],
   controllers: [AppController],
   providers: [
