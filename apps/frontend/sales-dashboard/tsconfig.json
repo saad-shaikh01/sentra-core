@@ -23,7 +23,21 @@
     "types": ["jest", "node"],
     "baseUrl": ".",
     "paths": {
+      "@/components/ui": ["./component-shims/ui/index.ts"],
+      "@/components/ui/*": [
+        "./component-shims/ui/*",
+        "./src/components/ui/*"
+      ],
+      "@/components/shared": ["./component-shims/shared/index.ts"],
+      "@/components/shared/*": [
+        "./component-shims/shared/*",
+        "./src/components/shared/*"
+      ],
       "@/*": ["./src/*"],
+      "@sentra-core/frontend-ui": ["../../../libs/frontend/ui/src/index.ts"],
+      "@sentra-core/frontend-data-display": [
+        "../../../libs/frontend/ui/src/data-display.ts"
+      ],
       "@sentra-core/types": ["../../../libs/shared/types/src/index.ts"]
     }
   },
