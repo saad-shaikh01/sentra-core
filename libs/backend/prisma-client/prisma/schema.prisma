@@ -70,44 +70,294 @@ enum TransactionType {
   REFUND
 }
 
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum PmProjectOwnerType {
+  CLIENT
+  INTERNAL_BRAND
+}
+
+enum PmEngagementStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum PmServiceType {
+  PUBLISHING
+  MARKETING
+  WEB_DEVELOPMENT
+  DESIGN
+  GENERAL
+}
+
+enum PmProjectType {
+  EXTERNAL
+  INTERNAL
+}
+
+enum PmProjectStatus {
+  DRAFT
+  ACTIVE
+  BLOCKED
+  WAITING_APPROVAL
+  REVISION_REQUIRED
+  COMPLETED
+  CANCELLED
+}
+
+enum PmProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PmHealthStatus {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  BLOCKED
+}
+
+enum PmDepartmentCode {
+  DESIGN
+  EDITING
+  MARKETING
+  DEVELOPMENT
+  QC
+  OPERATIONS
+}
+
+enum PmClientReviewMode {
+  NONE
+  OPTIONAL
+  REQUIRED
+}
+
+enum PmStageStatus {
+  PENDING
+  READY
+  ACTIVE
+  IN_REVIEW
+  BLOCKED
+  COMPLETED
+  SKIPPED
+}
+
+enum PmTaskStatus {
+  PENDING
+  READY
+  IN_PROGRESS
+  SUBMITTED
+  IN_QC
+  REVISION_REQUIRED
+  COMPLETED
+  BLOCKED
+  CANCELLED
+}
+
+enum PmTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PmDependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+}
+
+enum PmChecklistType {
+  SELF_QC
+  QC_REVIEW
+}
+
+enum PmAssignmentType {
+  MANUAL
+  CLAIM
+  REASSIGN
+  AUTO
+}
+
+enum PmSubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum PmReviewDecision {
+  APPROVED
+  REJECTED
+}
+
+enum PmRevisionSourceType {
+  INTERNAL
+  CLIENT
+  APPROVER
+}
+
+enum PmRevisionStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum PmDeliverableType {
+  CLIENT
+  INTERNAL
+}
+
+enum PmApprovalTargetType {
+  CLIENT
+  INTERNAL_APPROVER
+}
+
+enum PmApprovalRequestStatus {
+  PENDING
+  SENT
+  VIEWED
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum PmApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum PmThreadScopeType {
+  PROJECT
+  STAGE
+  TASK
+  APPROVAL
+}
+
+enum PmThreadVisibility {
+  INTERNAL
+  EXTERNAL
+}
+
+enum PmMessageType {
+  COMMENT
+  STATUS_NOTE
+  APPROVAL_NOTE
+  SYSTEM
+}
+
+enum PmFileAssetType {
+  REFERENCE
+  WORKING
+  SUBMISSION
+  REVIEW_FEEDBACK
+  FINAL_DELIVERABLE
+  APPROVED_VERSION
+}
+
+enum PmFileScopeType {
+  PROJECT
+  STAGE
+  TASK
+  SUBMISSION
+  DELIVERABLE
+  MESSAGE
+}
+
+enum PmFileLinkType {
+  PRIMARY
+  REFERENCE
+  ATTACHMENT
+  PUBLISHED
+  APPROVED
+}
+
+enum PmFileActionType {
+  PREVIEW
+  DOWNLOAD
+  SHARE
+}
+
+enum PmNotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+enum PmEscalationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PmEscalationStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum PmPerformancePeriodType {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
 // ==========================================
 // 1. MULTI-TENANCY CORE
 // ==========================================
 
 model Organization {
-  id            String   @id @default(uuid())
-  name          String   // e.g., "Madcom Digital"
-  subscription  String   @default("FREE") // "STARTER", "ENTERPRISE"
+  id           String   @id @default(uuid())
+  name         String // e.g., "Madcom Digital"
+  subscription String   @default("FREE") // "STARTER", "ENTERPRISE"
+  planType     PlanType @default(FREE)
 
-  brands        Brand[]
-  users         User[]
-  leads         Lead[]
-  clients       Client[]
-  sales         Sale[]
-  invitations   Invitation[]
+  brands      Brand[]
+  users       User[]
+  leads       Lead[]
+  clients     Client[]
+  sales       Sale[]
+  invitations Invitation[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Brand {
-  id            String   @id @default(uuid())
-  name          String   // e.g., "The Pulp House"
-  domain        String?  @unique
+  id                 String  @id @default(uuid())
+  name               String // e.g., "The Pulp House"
+  domain             String? @unique
+  portalDomain       String? @unique
+  portalSubdomain    String? @unique
+  customPortalDomain String? @unique
 
   // Branding Assets
-  logoUrl       String?
-  colors        Json?
+  logoUrl     String?
+  colors      Json?
+  themeConfig Json?
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  leads          Lead[]
-  clients        Client[]
-  sales          Sale[]
-  emailAliases   EmailAlias[]
+  leads        Lead[]
+  clients      Client[]
+  sales        Sale[]
+  emailAliases EmailAlias[]
 
-  members        BrandAccess[]
+  members BrandAccess[]
 
   @@index([organizationId])
 }
@@ -117,69 +367,69 @@ model Brand {
 // ==========================================
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  password      String   // Hashed
-  name          String
-  role          UserRole @default(FRONTSELL_AGENT)
+  id       String   @id @default(uuid())
+  email    String   @unique
+  password String // Hashed
+  name     String
+  role     UserRole @default(FRONTSELL_AGENT)
 
   // Profile Fields
-  avatarUrl     String?
-  jobTitle      String?
-  phone         String?
-  bio           String?
-  isActive      Boolean  @default(true) // For soft delete
+  avatarUrl String?
+  jobTitle  String?
+  phone     String?
+  bio       String?
+  isActive  Boolean @default(true) // For soft delete
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   // Permissions & Access
-  accessScope   BrandAccess[]
-  emailConfig   UserEmailConfig? // Gmail Integration
+  accessScope BrandAccess[]
+  emailConfig UserEmailConfig? // Gmail Integration
 
-  assignedLeads Lead[]
+  assignedLeads  Lead[]
   leadActivities LeadActivity[]
 
   // Refresh Token (for JWT)
-  refreshToken      String?
+  refreshToken String?
 
   // Password Reset
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, email])
 }
 
 model BrandAccess {
-  id        String @id @default(uuid())
-  userId    String
-  brandId   String
-  role      String // "VIEWER", "EDITOR", "ADMIN"
+  id      String @id @default(uuid())
+  userId  String
+  brandId String
+  role    String // "VIEWER", "EDITOR", "ADMIN"
 
-  user      User   @relation(fields: [userId], references: [id])
-  brand     Brand  @relation(fields: [brandId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  brand Brand @relation(fields: [brandId], references: [id])
 
   @@unique([userId, brandId]) // User can't have duplicate roles for same brand
 }
 
 model Invitation {
-  id            String           @id @default(uuid())
-  email         String
-  role          UserRole         @default(FRONTSELL_AGENT)
-  token         String           @unique // Unique token for invitation link
-  status        InvitationStatus @default(PENDING)
-  expiresAt     DateTime
+  id        String           @id @default(uuid())
+  email     String
+  role      UserRole         @default(FRONTSELL_AGENT)
+  token     String           @unique // Unique token for invitation link
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  invitedById   String // The user who sent the invitation
+  invitedById String // The user who sent the invitation
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, email])
   @@index([token])
@@ -190,27 +440,27 @@ model Invitation {
 // ==========================================
 
 model UserEmailConfig {
-  id            String   @id @default(uuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
-  primaryEmail  String   // "mark@publishing.com"
-  accessToken   String   // Encrypted
-  refreshToken  String   // Encrypted
+  primaryEmail String // "mark@publishing.com"
+  accessToken  String // Encrypted
+  refreshToken String // Encrypted
 
-  aliases       EmailAlias[]
+  aliases EmailAlias[]
 }
 
 model EmailAlias {
-  id            String   @id @default(uuid())
-  email         String   // "mark@urbanquill.com"
-  displayName   String?  // "Mark - Urban Quill"
+  id          String  @id @default(uuid())
+  email       String // "mark@urbanquill.com"
+  displayName String? // "Mark - Urban Quill"
 
-  configId      String
-  config        UserEmailConfig @relation(fields: [configId], references: [id])
+  configId String
+  config   UserEmailConfig @relation(fields: [configId], references: [id])
 
   linkedBrandId String?
-  linkedBrand   Brand?   @relation(fields: [linkedBrandId], references: [id])
+  linkedBrand   Brand?  @relation(fields: [linkedBrandId], references: [id])
 }
 
 // ==========================================
@@ -218,97 +468,97 @@ model EmailAlias {
 // ==========================================
 
 model Lead {
-  id            String     @id @default(uuid())
-  title         String     // "Website Inquiry - John"
-  status        LeadStatus @default(NEW)
-  source        String?    // "PPC", "FB_ADS"
-  data          Json?      // Flexible Form Data
+  id     String     @id @default(uuid())
+  title  String // "Website Inquiry - John"
+  status LeadStatus @default(NEW)
+  source String? // "PPC", "FB_ADS"
+  data   Json? // Flexible Form Data
 
-  brandId       String
-  brand         Brand      @relation(fields: [brandId], references: [id])
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id])
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  assignedToId  String?
-  assignedTo    User?      @relation(fields: [assignedToId], references: [id])
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
 
   convertedClientId String? @unique // Link if converted
 
-  activities    LeadActivity[]
+  activities LeadActivity[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, brandId, status]) // Performance Index for Dashboard
 }
 
 model LeadActivity {
-  id        String           @id @default(uuid())
-  type      LeadActivityType
-  data      Json             // Stores context based on type
+  id   String           @id @default(uuid())
+  type LeadActivityType
+  data Json // Stores context based on type
 
-  leadId    String
-  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  userId    String           // Who performed the action
-  user      User             @relation(fields: [userId], references: [id])
+  userId String // Who performed the action
+  user   User   @relation(fields: [userId], references: [id])
 
-  createdAt DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([leadId, createdAt])
 }
 
 model Client {
-  id            String   @id @default(uuid())
-  email         String
-  password      String   // Portal Access (hashed)
-  companyName   String
-  contactName   String?
-  phone         String?
-  address       String?
-  notes         String?
+  id          String  @id @default(uuid())
+  email       String
+  password    String // Portal Access (hashed)
+  companyName String
+  contactName String?
+  phone       String?
+  address     String?
+  notes       String?
 
-  brandId       String
-  brand         Brand    @relation(fields: [brandId], references: [id])
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id])
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  sales         Sale[]
+  sales Sale[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([email, organizationId])
 }
 
 model Sale {
-  id            String     @id @default(uuid())
-  totalAmount   Decimal    @db.Decimal(10, 2)
-  status        SaleStatus @default(PENDING)
-  currency      String     @default("USD")
-  description   String?
+  id          String     @id @default(uuid())
+  totalAmount Decimal    @db.Decimal(10, 2)
+  status      SaleStatus @default(PENDING)
+  currency    String     @default("USD")
+  description String?
 
   // Authorize.net fields
   customerProfileId String?
   paymentProfileId  String?
   subscriptionId    String?
 
-  clientId      String
-  client        Client   @relation(fields: [clientId], references: [id])
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
 
-  brandId       String
-  brand         Brand    @relation(fields: [brandId], references: [id])
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id])
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  invoices      Invoice[]
-  transactions  PaymentTransaction[]
+  invoices     Invoice[]
+  transactions PaymentTransaction[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, brandId, status])
   @@index([clientId])
@@ -324,13 +574,13 @@ model Invoice {
   pdfUrl        String?
   notes         String?
 
-  saleId        String
-  sale          Sale          @relation(fields: [saleId], references: [id])
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id])
 
-  transactions  PaymentTransaction[]
+  transactions PaymentTransaction[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([saleId])
   @@index([status, dueDate])
@@ -338,20 +588,20 @@ model Invoice {
 
 model PaymentTransaction {
   id              String            @id @default(uuid())
-  transactionId   String?           // Authorize.net reference
+  transactionId   String? // Authorize.net reference
   type            TransactionType
   amount          Decimal           @db.Decimal(10, 2)
   status          TransactionStatus @default(PENDING)
   responseCode    String?
   responseMessage String?
 
-  saleId          String
-  sale            Sale              @relation(fields: [saleId], references: [id])
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id])
 
-  invoiceId       String?
-  invoice         Invoice?          @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
 
-  createdAt       DateTime          @default(now())
+  createdAt DateTime @default(now())
 
   @@index([saleId])
   @@index([transactionId])
@@ -363,10 +613,709 @@ model PaymentTransaction {
 
 model OutboxEvent {
   id        String   @id @default(uuid())
-  eventType String   // "ORDER_CREATED", "LEAD_ASSIGNED"
+  eventType String // "ORDER_CREATED", "LEAD_ASSIGNED"
   payload   Json
   status    String   @default("PENDING") // "PROCESSING", "COMPLETED", "FAILED"
   createdAt DateTime @default(now())
 
   @@index([status, createdAt]) // Worker will poll PENDING events fast
+}
+
+// ==========================================
+// 6. PROJECT MANAGEMENT DOMAIN
+// ==========================================
+
+model PmServiceTemplate {
+  id             String        @id @default(uuid())
+  organizationId String
+  brandId        String?
+  name           String
+  serviceType    PmServiceType
+  description    String?
+  isActive       Boolean       @default(true)
+  isDefault      Boolean       @default(false)
+  version        Int           @default(1)
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  stages   PmTemplateStage[]
+  projects PmProject[]
+
+  @@index([organizationId, isActive, serviceType])
+  @@index([brandId])
+}
+
+model PmTemplateStage {
+  id                    String             @id @default(uuid())
+  templateId            String
+  name                  String
+  description           String?
+  departmentCode        PmDepartmentCode
+  sortOrder             Int
+  defaultSlaHours       Int?
+  clientReviewMode      PmClientReviewMode @default(NONE)
+  requiresStageApproval Boolean            @default(false)
+  requiresQcByDefault   Boolean            @default(false)
+  isOptional            Boolean            @default(false)
+  allowsParallel        Boolean            @default(false)
+
+  template      PmServiceTemplate           @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tasks         PmTemplateTask[]
+  checklists    PmTemplateChecklist[]
+  projectStages PmProjectStage[]
+  dependencies  PmTemplateStageDependency[] @relation("PmTemplateStageDependencies")
+  dependsOn     PmTemplateStageDependency[] @relation("PmTemplateStageDependencyTargets")
+
+  @@unique([templateId, name])
+  @@index([templateId, sortOrder])
+}
+
+model PmTemplateStageDependency {
+  id                       String           @id @default(uuid())
+  templateStageId          String
+  dependsOnTemplateStageId String
+  dependencyType           PmDependencyType @default(FINISH_TO_START)
+
+  templateStage          PmTemplateStage @relation("PmTemplateStageDependencies", fields: [templateStageId], references: [id], onDelete: Cascade)
+  dependsOnTemplateStage PmTemplateStage @relation("PmTemplateStageDependencyTargets", fields: [dependsOnTemplateStageId], references: [id], onDelete: Cascade)
+
+  @@unique([templateStageId, dependsOnTemplateStageId])
+  @@index([templateStageId])
+}
+
+model PmTemplateTask {
+  id                  String    @id @default(uuid())
+  templateStageId     String
+  name                String
+  description         String?
+  sortOrder           Int
+  defaultAssigneeRole UserRole?
+  requiresQc          Boolean   @default(false)
+  isRequired          Boolean   @default(true)
+  estimatedHours      Int?
+
+  templateStage PmTemplateStage       @relation(fields: [templateStageId], references: [id], onDelete: Cascade)
+  checklists    PmTemplateChecklist[]
+  tasks         PmTask[]
+
+  @@unique([templateStageId, name])
+  @@index([templateStageId, sortOrder])
+}
+
+model PmTemplateChecklist {
+  id              String          @id @default(uuid())
+  templateStageId String?
+  templateTaskId  String?
+  checklistType   PmChecklistType
+  label           String
+  sortOrder       Int
+  isRequired      Boolean         @default(true)
+
+  templateStage   PmTemplateStage?   @relation(fields: [templateStageId], references: [id], onDelete: Cascade)
+  templateTask    PmTemplateTask?    @relation(fields: [templateTaskId], references: [id], onDelete: Cascade)
+  selfQcResponses PmSelfQcResponse[]
+
+  @@index([templateStageId, checklistType])
+  @@index([templateTaskId, checklistType])
+}
+
+model PmEngagement {
+  id             String             @id @default(uuid())
+  organizationId String
+  ownerType      PmProjectOwnerType
+  clientId       String?
+  ownerBrandId   String?
+  primaryBrandId String?
+  name           String
+  description    String?
+  status         PmEngagementStatus @default(DRAFT)
+  priority       PmProjectPriority  @default(MEDIUM)
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  projects PmProject[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([clientId])
+  @@index([ownerBrandId])
+}
+
+model PmProject {
+  id             String            @id @default(uuid())
+  organizationId String
+  engagementId   String
+  brandId        String
+  clientId       String?
+  templateId     String?
+  projectType    PmProjectType
+  serviceType    PmServiceType
+  name           String
+  description    String?
+  status         PmProjectStatus   @default(DRAFT)
+  priority       PmProjectPriority @default(MEDIUM)
+  healthStatus   PmHealthStatus    @default(ON_TRACK)
+  deliveryDueAt  DateTime?
+  publishedAt    DateTime?
+  closedAt       DateTime?
+  createdById    String
+  updatedById    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  engagement          PmEngagement             @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  template            PmServiceTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  stages              PmProjectStage[]
+  stageDependencies   PmStageDependency[]
+  tasks               PmTask[]
+  revisionRequests    PmRevisionRequest[]
+  deliverablePackages PmDeliverablePackage[]
+  approvalRequests    PmApprovalRequest[]
+  closureRecords      PmProjectClosureRecord[]
+  threads             PmConversationThread[]
+  fileAssets          PmFileAsset[]
+  notifications       PmNotification[]
+  activityLogs        PmActivityLog[]
+  escalationEvents    PmEscalationEvent[]
+  performanceEvents   PmPerformanceEvent[]
+
+  @@index([organizationId, brandId, status, deliveryDueAt])
+  @@index([engagementId])
+  @@index([templateId])
+}
+
+model PmProjectStage {
+  id                    String             @id @default(uuid())
+  organizationId        String
+  projectId             String
+  templateStageId       String?
+  name                  String
+  description           String?
+  departmentCode        PmDepartmentCode
+  status                PmStageStatus      @default(PENDING)
+  sortOrder             Int
+  ownerLeadId           String?
+  clientReviewMode      PmClientReviewMode @default(NONE)
+  requiresStageApproval Boolean            @default(false)
+  requiresQcByDefault   Boolean            @default(false)
+  isOptional            Boolean            @default(false)
+  isBlocked             Boolean            @default(false)
+  startedAt             DateTime?
+  dueAt                 DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  project          PmProject           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateStage    PmTemplateStage?    @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
+  tasks            PmTask[]
+  dependencies     PmStageDependency[] @relation("PmProjectStageDependencies")
+  dependsOn        PmStageDependency[] @relation("PmProjectStageDependencyTargets")
+  bypassRecords    PmBypassRecord[]
+  escalationEvents PmEscalationEvent[]
+
+  @@unique([projectId, name])
+  @@index([projectId, sortOrder, status])
+  @@index([ownerLeadId, status])
+}
+
+model PmStageDependency {
+  id                      String           @id @default(uuid())
+  projectId               String
+  projectStageId          String
+  dependsOnProjectStageId String
+  dependencyType          PmDependencyType @default(FINISH_TO_START)
+
+  project               PmProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectStage          PmProjectStage @relation("PmProjectStageDependencies", fields: [projectStageId], references: [id], onDelete: Cascade)
+  dependsOnProjectStage PmProjectStage @relation("PmProjectStageDependencyTargets", fields: [dependsOnProjectStageId], references: [id], onDelete: Cascade)
+
+  @@unique([projectStageId, dependsOnProjectStageId])
+  @@index([projectId])
+}
+
+model PmTask {
+  id             String         @id @default(uuid())
+  organizationId String
+  projectId      String
+  projectStageId String
+  templateTaskId String?
+  name           String
+  description    String?
+  status         PmTaskStatus   @default(PENDING)
+  priority       PmTaskPriority @default(MEDIUM)
+  sortOrder      Int
+  ownerLeadId    String?
+  assigneeId     String?
+  requiresQc     Boolean        @default(false)
+  isRequired     Boolean        @default(true)
+  isBlocked      Boolean        @default(false)
+  startedAt      DateTime?
+  dueAt          DateTime?
+  submittedAt    DateTime?
+  completedAt    DateTime?
+  createdById    String
+  updatedById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  project           PmProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectStage      PmProjectStage       @relation(fields: [projectStageId], references: [id], onDelete: Cascade)
+  templateTask      PmTemplateTask?      @relation(fields: [templateTaskId], references: [id], onDelete: SetNull)
+  assignments       PmTaskAssignment[]
+  worklogs          PmTaskWorklog[]
+  submissions       PmTaskSubmission[]
+  bypassRecords     PmBypassRecord[]
+  revisionRequests  PmRevisionRequest[]
+  escalationEvents  PmEscalationEvent[]
+  performanceEvents PmPerformanceEvent[]
+  pmQcReviews       PmQcReview[]
+
+  @@index([organizationId, assigneeId, status, dueAt])
+  @@index([projectStageId, sortOrder, status])
+  @@index([projectId, status])
+}
+
+model PmTaskAssignment {
+  id             String           @id @default(uuid())
+  taskId         String
+  assignedById   String
+  assignedToId   String
+  assignmentType PmAssignmentType @default(MANUAL)
+  startedAt      DateTime         @default(now())
+  endedAt        DateTime?
+  isCurrent      Boolean          @default(true)
+  notes          String?
+
+  task PmTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, isCurrent])
+  @@index([assignedToId, isCurrent])
+}
+
+model PmTaskWorklog {
+  id              String    @id @default(uuid())
+  taskId          String
+  userId          String
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationMinutes Int?
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  task PmTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, startedAt])
+  @@index([userId, startedAt])
+}
+
+model PmTaskSubmission {
+  id               String             @id @default(uuid())
+  taskId           String
+  submittedById    String
+  submissionNumber Int
+  status           PmSubmissionStatus @default(SUBMITTED)
+  notes            String?
+  submittedAt      DateTime           @default(now())
+
+  task             PmTask              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  selfQcResponses  PmSelfQcResponse[]
+  qcReviews        PmQcReview[]
+  deliverableItems PmDeliverableItem[]
+
+  @@unique([taskId, submissionNumber])
+  @@index([taskId, submissionNumber])
+}
+
+model PmSelfQcResponse {
+  id                  String  @id @default(uuid())
+  taskSubmissionId    String
+  templateChecklistId String?
+  labelSnapshot       String
+  isChecked           Boolean @default(false)
+  responseText        String?
+
+  taskSubmission    PmTaskSubmission     @relation(fields: [taskSubmissionId], references: [id], onDelete: Cascade)
+  templateChecklist PmTemplateChecklist? @relation(fields: [templateChecklistId], references: [id], onDelete: SetNull)
+
+  @@index([taskSubmissionId])
+}
+
+model PmQcReview {
+  id               String           @id @default(uuid())
+  taskId           String
+  taskSubmissionId String
+  reviewerId       String
+  decision         PmReviewDecision
+  reviewNumber     Int
+  feedback         String?
+  reviewedAt       DateTime         @default(now())
+
+  task           PmTask           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskSubmission PmTaskSubmission @relation(fields: [taskSubmissionId], references: [id], onDelete: Cascade)
+
+  @@unique([taskSubmissionId, reviewNumber])
+  @@index([taskId, reviewedAt])
+}
+
+model PmBypassRecord {
+  id             String   @id @default(uuid())
+  taskId         String?
+  projectStageId String?
+  actedById      String
+  reason         String
+  redFlag        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  task         PmTask?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  projectStage PmProjectStage? @relation(fields: [projectStageId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([projectStageId])
+}
+
+model PmRevisionRequest {
+  id           String               @id @default(uuid())
+  projectId    String
+  taskId       String?
+  sourceType   PmRevisionSourceType
+  sourceUserId String?
+  requestType  String
+  status       PmRevisionStatus     @default(OPEN)
+  notes        String?
+  createdAt    DateTime             @default(now())
+  resolvedAt   DateTime?
+
+  project PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    PmTask?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status, createdAt])
+  @@index([taskId])
+}
+
+model PmDeliverablePackage {
+  id           String            @id @default(uuid())
+  projectId    String
+  name         String
+  description  String?
+  deliveryType PmDeliverableType
+  createdById  String
+  createdAt    DateTime          @default(now())
+
+  project          PmProject           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items            PmDeliverableItem[]
+  approvalRequests PmApprovalRequest[]
+
+  @@index([projectId, createdAt])
+}
+
+model PmDeliverableItem {
+  id                   String  @id @default(uuid())
+  deliverablePackageId String
+  taskSubmissionId     String?
+  fileAssetId          String?
+  fileVersionId        String?
+  sortOrder            Int     @default(0)
+  label                String?
+
+  deliverablePackage PmDeliverablePackage @relation(fields: [deliverablePackageId], references: [id], onDelete: Cascade)
+  taskSubmission     PmTaskSubmission?    @relation(fields: [taskSubmissionId], references: [id], onDelete: SetNull)
+  fileAsset          PmFileAsset?         @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
+  fileVersion        PmFileVersion?       @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+
+  @@index([deliverablePackageId, sortOrder])
+}
+
+model PmApprovalRequest {
+  id                   String                  @id @default(uuid())
+  projectId            String
+  deliverablePackageId String
+  approvalTargetType   PmApprovalTargetType
+  approvalTargetUserId String?
+  approvalTargetEmail  String?
+  status               PmApprovalRequestStatus @default(PENDING)
+  sentById             String
+  sentAt               DateTime?
+  dueAt                DateTime?
+
+  project            PmProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverablePackage PmDeliverablePackage @relation(fields: [deliverablePackageId], references: [id], onDelete: Cascade)
+  snapshots          PmApprovalSnapshot[]
+
+  @@index([projectId, status, sentAt])
+  @@index([deliverablePackageId])
+}
+
+model PmApprovalSnapshot {
+  id                String             @id @default(uuid())
+  approvalRequestId String
+  decision          PmApprovalDecision
+  actedByUserId     String?
+  actorIp           String?
+  notes             String?
+  actedAt           DateTime           @default(now())
+
+  approvalRequest PmApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+
+  @@index([approvalRequestId, actedAt])
+}
+
+model PmProjectClosureRecord {
+  id            String   @id @default(uuid())
+  projectId     String
+  closedById    String
+  closureReason String
+  notes         String?
+  closedAt      DateTime @default(now())
+
+  project PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, closedAt])
+}
+
+model PmConversationThread {
+  id             String             @id @default(uuid())
+  organizationId String
+  projectId      String
+  scopeType      PmThreadScopeType
+  scopeId        String
+  visibility     PmThreadVisibility @default(INTERNAL)
+  createdById    String
+  createdAt      DateTime           @default(now())
+
+  project      PmProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages     PmMessage[]
+  participants PmThreadParticipant[]
+
+  @@unique([projectId, scopeType, scopeId])
+  @@index([projectId, scopeType])
+}
+
+model PmMessage {
+  id              String        @id @default(uuid())
+  threadId        String
+  authorId        String
+  parentMessageId String?
+  messageType     PmMessageType @default(COMMENT)
+  body            String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  thread        PmConversationThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  parentMessage PmMessage?            @relation("PmMessageReplies", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  replies       PmMessage[]           @relation("PmMessageReplies")
+  mentions      PmMessageMention[]
+  attachments   PmMessageAttachment[]
+
+  @@index([threadId, createdAt])
+  @@index([parentMessageId])
+}
+
+model PmMessageMention {
+  id              String   @id @default(uuid())
+  messageId       String
+  mentionedUserId String
+  createdAt       DateTime @default(now())
+
+  message PmMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, mentionedUserId])
+  @@index([mentionedUserId, createdAt])
+}
+
+model PmMessageAttachment {
+  id             String         @id @default(uuid())
+  messageId      String
+  fileAssetId    String
+  fileVersionId  String?
+  attachmentType PmFileLinkType @default(ATTACHMENT)
+
+  message     PmMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileAsset   PmFileAsset    @relation(fields: [fileAssetId], references: [id], onDelete: Cascade)
+  fileVersion PmFileVersion? @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+
+  @@index([messageId])
+  @@index([fileAssetId])
+}
+
+model PmThreadParticipant {
+  id                String    @id @default(uuid())
+  threadId          String
+  userId            String
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  isMuted           Boolean   @default(false)
+
+  thread PmConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([userId, lastReadAt])
+}
+
+model PmFileAsset {
+  id             String          @id @default(uuid())
+  organizationId String
+  projectId      String
+  assetType      PmFileAssetType
+  name           String
+  mimeType       String?
+  createdById    String
+  createdAt      DateTime        @default(now())
+
+  project            PmProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions           PmFileVersion[]
+  links              PmFileLink[]
+  accessLogs         PmFileAccessLog[]
+  messageAttachments PmMessageAttachment[]
+  deliverableItems   PmDeliverableItem[]
+
+  @@index([organizationId, createdAt])
+  @@index([projectId, assetType, createdAt])
+}
+
+model PmFileVersion {
+  id               String   @id @default(uuid())
+  fileAssetId      String
+  versionNumber    Int
+  storageKey       String   @unique
+  originalFilename String
+  sizeBytes        Int?
+  checksum         String?
+  uploadedById     String
+  uploadedAt       DateTime @default(now())
+  isLatest         Boolean  @default(true)
+  isApproved       Boolean  @default(false)
+  isPublished      Boolean  @default(false)
+
+  fileAsset          PmFileAsset           @relation(fields: [fileAssetId], references: [id], onDelete: Cascade)
+  links              PmFileLink[]
+  accessLogs         PmFileAccessLog[]
+  messageAttachments PmMessageAttachment[]
+  deliverableItems   PmDeliverableItem[]
+
+  @@unique([fileAssetId, versionNumber])
+  @@index([fileAssetId, versionNumber])
+}
+
+model PmFileLink {
+  id            String          @id @default(uuid())
+  fileAssetId   String
+  fileVersionId String?
+  scopeType     PmFileScopeType
+  scopeId       String
+  linkType      PmFileLinkType  @default(REFERENCE)
+  createdById   String
+  createdAt     DateTime        @default(now())
+
+  fileAsset   PmFileAsset    @relation(fields: [fileAssetId], references: [id], onDelete: Cascade)
+  fileVersion PmFileVersion? @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+
+  @@index([scopeType, scopeId])
+  @@index([fileAssetId])
+  @@index([fileVersionId])
+}
+
+model PmFileAccessLog {
+  id            String           @id @default(uuid())
+  fileAssetId   String
+  fileVersionId String?
+  userId        String
+  actionType    PmFileActionType
+  createdAt     DateTime         @default(now())
+
+  fileAsset   PmFileAsset    @relation(fields: [fileAssetId], references: [id], onDelete: Cascade)
+  fileVersion PmFileVersion? @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+
+  @@index([fileAssetId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model PmNotification {
+  id             String               @id @default(uuid())
+  organizationId String
+  projectId      String?
+  userId         String
+  eventType      String
+  scopeType      String
+  scopeId        String
+  status         PmNotificationStatus @default(UNREAD)
+  payload        Json?
+  createdAt      DateTime             @default(now())
+  readAt         DateTime?
+
+  project PmProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model PmActivityLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  projectId      String
+  scopeType      String
+  scopeId        String
+  actorUserId    String?
+  eventType      String
+  payloadJson    Json?
+  createdAt      DateTime @default(now())
+
+  project PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model PmEscalationEvent {
+  id             String               @id @default(uuid())
+  organizationId String
+  projectId      String
+  taskId         String?
+  projectStageId String?
+  eventType      String
+  severity       PmEscalationSeverity @default(MEDIUM)
+  status         PmEscalationStatus   @default(OPEN)
+  payloadJson    Json?
+  createdAt      DateTime             @default(now())
+  resolvedAt     DateTime?
+
+  project      PmProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task         PmTask?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  projectStage PmProjectStage? @relation(fields: [projectStageId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status, createdAt])
+  @@index([taskId])
+  @@index([projectStageId])
+}
+
+model PmPerformanceEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  projectId      String
+  taskId         String?
+  eventType      String
+  scoreDelta     Int
+  createdAt      DateTime @default(now())
+
+  project PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    PmTask?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+}
+
+model PmScoreSnapshot {
+  id             String                  @id @default(uuid())
+  organizationId String
+  userId         String
+  periodType     PmPerformancePeriodType
+  periodStart    DateTime
+  periodEnd      DateTime
+  scoreValue     Int
+  createdAt      DateTime                @default(now())
+
+  @@index([userId, periodStart, periodEnd])
+  @@index([organizationId, createdAt])
 }
