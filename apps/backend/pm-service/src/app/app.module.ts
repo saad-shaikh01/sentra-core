@@ -20,6 +20,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthModule } from '../modules/health/health.module';
 import { PmCacheModule } from '../common/cache/pm-cache.module';
+import { TemplatesModule } from '../modules/templates/templates.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { PmCacheModule } from '../common/cache/pm-cache.module';
 
     // Domain modules
     HealthModule,
+    TemplatesModule,
   ],
   controllers: [AppController],
   providers: [
