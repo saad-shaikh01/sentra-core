@@ -21,6 +21,7 @@ import { AppService } from './app.service';
 import { HealthModule } from '../modules/health/health.module';
 import { PmCacheModule } from '../common/cache/pm-cache.module';
 import { TemplatesModule } from '../modules/templates/templates.module';
+import { EngagementsProjectsModule } from '../modules/engagements-projects/engagements-projects.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { TemplatesModule } from '../modules/templates/templates.module';
     // Domain modules
     HealthModule,
     TemplatesModule,
+    EngagementsProjectsModule,
   ],
   controllers: [AppController],
   providers: [
