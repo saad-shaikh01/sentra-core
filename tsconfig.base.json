@@ -15,6 +15,10 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
+      "@sentra-core/frontend-ui": ["libs/frontend/ui/src/index.ts"],
+      "@sentra-core/frontend-data-display": [
+        "libs/frontend/ui/src/data-display.ts"
+      ],
       "@sentra-core/types": ["libs/shared/types/src/index.ts"],
       "@sentra-core/prisma-client": ["libs/backend/prisma-client/src/index.ts"],
       "@sentra-core/mail-client": ["libs/backend/mail-client/src/index.ts"],
