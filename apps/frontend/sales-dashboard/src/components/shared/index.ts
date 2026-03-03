@@ -10,3 +10,5 @@ export { FormModal } from './form-modal';
 export { ConfirmModal } from './confirm-modal';
 export { DetailSheet } from './detail-sheet';
 export { Toaster } from './toaster';
+export * from './files';
+export * from './threads';

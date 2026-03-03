@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Inbox } from 'lucide-react';
 import { cn } from '../utils';
 
-export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title: React.ReactNode;
   description?: React.ReactNode;
   action?: React.ReactNode;

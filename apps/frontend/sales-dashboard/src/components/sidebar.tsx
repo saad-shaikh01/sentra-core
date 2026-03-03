@@ -14,6 +14,11 @@ import {
   Zap,
   Layers,
   DollarSign,
+  Briefcase,
+  CheckSquare,
+  ListTodo,
+  FileBox,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -25,12 +30,17 @@ import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
 import { UserRole } from '@sentra-core/types';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Brands',    href: '/dashboard/brands',   icon: Layers },
-  { name: 'Leads',     href: '/dashboard/leads',    icon: Users },
-  { name: 'Clients',   href: '/dashboard/clients',  icon: Building2 },
-  { name: 'Sales',     href: '/dashboard/sales',    icon: DollarSign },
-  { name: 'Invoices',  href: '/dashboard/invoices', icon: FileText },
+  { name: 'Dashboard',   href: '/dashboard',             icon: LayoutDashboard },
+  { name: 'My Tasks',    href: '/dashboard/my-tasks',    icon: CheckSquare },
+  { name: 'QC Reviews',  href: '/dashboard/qc-reviews',  icon: ClipboardCheck },
+  { name: 'Stage Queue', href: '/dashboard/stage-queue', icon: ListTodo },
+  { name: 'Projects',    href: '/dashboard/projects',    icon: Briefcase },
+  { name: 'Templates',   href: '/dashboard/templates',   icon: FileBox },
+  { name: 'Brands',      href: '/dashboard/brands',      icon: Layers },
+  { name: 'Leads',       href: '/dashboard/leads',       icon: Users },
+  { name: 'Clients',     href: '/dashboard/clients',     icon: Building2 },
+  { name: 'Sales',       href: '/dashboard/sales',       icon: DollarSign },
+  { name: 'Invoices',    href: '/dashboard/invoices',    icon: FileText },
 ];
 
 const settingsNavigation = [

@@ -374,6 +374,78 @@ class ApiClient {
     a.click();
     URL.revokeObjectURL(a.href);
   }
+
+  // PM endpoints
+  async getProjects(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/projects${qs}`);
+  }
+
+  async getProject(id: string) {
+    return this.fetch<any>(`/pm/projects/${id}`);
+  }
+
+  async createProject(dto: Record<string, unknown>) {
+    return this.fetch<any>('/pm/projects', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateProject(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/pm/projects/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async getEngagements(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/engagements${qs}`);
+  }
+
+  async getEngagementsList(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/engagements${qs}`);
+  }
+
+  async getTemplates(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/templates${qs}`);
+  }
+
+  async getStages(projectId: string, params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/projects/${projectId}/stages${qs}`);
+  }
+
+  async getAllStages(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/stages${qs}`);
+  }
+
+  async getTasksByStage(stageId: string, params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/stages/${stageId}/tasks${qs}`);
+  }
+
+  async getTasks(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/tasks${qs}`);
+  }
+
+  async getMyTasks(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/my-tasks${qs}`);
+  }
+
+  // QC Approvals
+  async getSubmissions(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/pm/submissions${qs}`); // Assume we need a list endpoint for reviewers
+  }
+
+  async getSubmission(id: string) {
+    return this.fetch<any>(`/pm/submissions/${id}`);
+  }
+
+  async submitReview(submissionId: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/pm/submissions/${submissionId}/reviews`, { method: 'POST', body: JSON.stringify(dto) });
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);

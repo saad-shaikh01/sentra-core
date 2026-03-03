@@ -167,7 +167,18 @@ export class SubmissionsService {
     const submission = await this.prisma.pmTaskSubmission.findFirst({
       where: { id: submissionId },
       include: {
-        task: { select: { organizationId: true, projectId: true, projectStageId: true } },
+        task: {
+          select: {
+            organizationId: true,
+            projectId: true,
+            projectStageId: true,
+            name: true,
+            assigneeId: true,
+            status: true,
+            project: { select: { name: true, serviceType: true } },
+            projectStage: { select: { name: true, departmentCode: true } },
+          },
+        },
         selfQcResponses: true,
         qcReviews: {
           orderBy: { reviewNumber: 'desc' },
@@ -188,5 +199,39 @@ export class SubmissionsService {
     }
 
     return submission;
+  }
+
+  // -------------------------------------------------------------------------
+  // List review queue (tenant-scoped)
+  // -------------------------------------------------------------------------
+
+  async listQueue(organizationId: string, page = 1, limit = 20) {
+    const { skip, take } = toPrismaPagination(page, limit);
+
+    const where = {
+      status: { in: ['SUBMITTED', 'UNDER_REVIEW'] },
+      task: { organizationId },
+    };
+
+    const [submissions, total] = await this.prisma.$transaction([
+      this.prisma.pmTaskSubmission.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { submittedAt: 'asc' }, // Oldest first
+        include: {
+          task: {
+            select: {
+              name: true,
+              project: { select: { name: true, serviceType: true } },
+              projectStage: { select: { name: true, departmentCode: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.pmTaskSubmission.count({ where }),
+    ]);
+
+    return buildPmPaginationResponse(submissions as any, total, page, limit);
   }
 }

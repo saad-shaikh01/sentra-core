@@ -186,12 +186,13 @@ function ResetPasswordContent() {
 export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
-      <SpotlightBackground />
-      <div className="w-full max-w-md p-4 relative z-10">
-        <Suspense fallback={<div className="text-white text-center">Loading...</div>}>
-          <ResetPasswordContent />
-        </Suspense>
-      </div>
+      <SpotlightBackground>
+        <div className="w-full max-w-md p-4 relative z-10">
+          <Suspense fallback={<div className="text-white text-center">Loading...</div>}>
+            <ResetPasswordContent />
+          </Suspense>
+        </div>
+      </SpotlightBackground>
     </div>
   );
 }

@@ -106,6 +106,19 @@ export class QcApprovalsController {
     return wrapSingle(submission);
   }
 
+  @Get('submissions/queue/all')
+  async listReviewQueue(
+    @GetOrgContext() ctx: OrgContext,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.submissionsService.listQueue(
+      ctx.organizationId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
+  }
+
   // =========================================================================
   // QC Reviews (PM-BE-014)
   // =========================================================================

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
-import { toast } from 'sonner'; // Assuming sonner is used, or I'll use simple alert/console if not installed
+import { toast } from '@/hooks/use-toast';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -56,11 +56,10 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
-      <SpotlightBackground />
-      
-      <div className="w-full max-w-md p-4 relative z-10">
-        <Card className="border-white/10 bg-black/40 backdrop-blur-xl shadow-2xl">
-          <CardHeader className="space-y-1">
+      <SpotlightBackground>
+        <div className="w-full max-w-md p-4 relative z-10">
+          <Card className="border-white/10 bg-black/40 backdrop-blur-xl shadow-2xl">
+            <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight text-white">
               Forgot password?
             </CardTitle>
@@ -129,8 +128,9 @@ export default function ForgotPasswordPage() {
               Back to login
             </Link>
           </CardFooter>
-        </Card>
-      </div>
-    </div>
-  );
-}
+                  </Card>
+                </div>
+              </SpotlightBackground>
+            </div>
+          );
+        }

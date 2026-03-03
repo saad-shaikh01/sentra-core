@@ -24,11 +24,11 @@ export function Pagination({
   className,
 }: PaginationProps) {
   const hasKnownTotal = typeof total === 'number';
-  const totalPages = hasKnownTotal ? Math.ceil(total / limit) : undefined;
+  const totalPages = hasKnownTotal && total !== undefined ? Math.ceil(total / limit) : undefined;
   const canGoPrevious = page > 1;
   const canGoNext = totalPages ? page < totalPages : Boolean(hasNextPage);
 
-  if (hasKnownTotal && totalPages <= 1) {
+  if (hasKnownTotal && totalPages !== undefined && totalPages <= 1) {
     return null;
   }
 

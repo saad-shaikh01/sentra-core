@@ -55,6 +55,20 @@ export class StagesController {
     );
   }
 
+  @Get('stages')
+  async listAll(
+    @GetOrgContext() ctx: OrgContext,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.stagesService.listAll(
+      ctx.organizationId,
+      ctx.userId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
+  }
+
   // ── stage detail ──────────────────────────────────────────────────────────
 
   @Get('stages/:id')

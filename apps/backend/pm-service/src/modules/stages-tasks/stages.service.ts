@@ -83,6 +83,36 @@ export class StagesService {
   }
 
   // -------------------------------------------------------------------------
+  // List all stages across projects (paginated) for Stage Queue
+  // -------------------------------------------------------------------------
+
+  async listAll(
+    organizationId: string,
+    userId: string, // currently unused for filtering, but good for future role checks
+    page = 1,
+    limit = 20,
+  ) {
+    const { skip, take } = toPrismaPagination(page, limit);
+
+    const [stages, total] = await this.prisma.$transaction([
+      this.prisma.pmProjectStage.findMany({
+        where: { organizationId },
+        skip,
+        take,
+        orderBy: { dueAt: 'asc' }, // Order by closest due date first
+        select: {
+          ...STAGE_SELECT,
+          project: { select: { id: true, name: true, serviceType: true } },
+          _count: { select: { tasks: true } },
+        },
+      }),
+      this.prisma.pmProjectStage.count({ where: { organizationId } }),
+    ]);
+
+    return buildPmPaginationResponse(stages as unknown as Record<string, unknown>[], total, page, limit);
+  }
+
+  // -------------------------------------------------------------------------
   // Detail
   // -------------------------------------------------------------------------
 
