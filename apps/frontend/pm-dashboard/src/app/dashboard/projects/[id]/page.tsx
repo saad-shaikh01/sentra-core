@@ -9,30 +9,60 @@ import {
   Settings, 
   History,
   Activity,
-  User,
+  User as UserIcon,
   Clock,
   MessageSquare,
-  FileIcon
+  FileIcon,
+  ShieldCheck,
+  Send
 } from 'lucide-react';
 import Link from 'next/link';
 import { StageCard } from './_components/stage-card';
 import { ThreadPane } from '@/components/shared/threads/thread-pane';
 import { FileList, FileUploader } from '@/components/shared/files';
 import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const { data: projectRes, isLoading, isError } = useProject(id);
   const { data: stagesData, isLoading: stagesLoading } = useProjectStages(id);
 
   const project = projectRes?.data;
-  const [activeTab, setActiveTab] = useState<'threads' | 'files'>('threads');
+  const [activeTab, setActiveTab] = useState<'threads' | 'files' | 'approvals'>('threads');
 
-  if (isLoading) return <div>Loading...</div>;
-  if (isError || !project) return <div>Error loading project.</div>;
+  const { data: approvalsRes } = useQuery({
+    queryKey: ['project-approvals', id],
+    queryFn: () => api.fetch<any>(`/projects/${id}/approval-requests`, { service: 'pm' }),
+    enabled: !!id && activeTab === 'approvals',
+  });
+
+  const approvals = approvalsRes?.data ?? [];
+
+  const requestApprovalMutation = useMutation({
+    mutationFn: () => api.fetch(`/projects/${id}/approval-requests`, { 
+      method: 'POST', 
+      body: JSON.stringify({ 
+        title: `Final Review for ${project.name}`,
+        requiredRoles: ['CLIENT_ADMIN']
+      }),
+      service: 'pm' 
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-approvals', id] });
+      toast.success('Approval request sent to client');
+    },
+    onError: (e: Error) => toast.error('Failed to send request', e.message),
+  });
+
+  if (isLoading) return <div className="p-10 text-center">Loading project detail...</div>;
+  if (isError || !project) return <div className="p-10 text-center text-red-400">Error loading project.</div>;
 
   return (
     <div className="space-y-8 pb-20">
@@ -60,7 +90,7 @@ export default function ProjectDetailPage() {
               <span>Due: {project.deliveryDueAt ? new Date(project.deliveryDueAt).toLocaleDateString() : '—'}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <User className="h-4 w-4 text-blue-400/60" />
+              <UserIcon className="h-4 w-4 text-blue-400/60" />
               <span>Health: </span>
               <StatusBadge status={project.healthStatus} />
             </div>
@@ -74,8 +104,13 @@ export default function ProjectDetailPage() {
           <Button variant="outline" size="sm" className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed" disabled>
             <Settings className="h-4 w-4 mr-2" /> Project Settings
           </Button>
-          <Button size="sm" className="shadow-lg shadow-primary/20 opacity-50 cursor-not-allowed" disabled>
-            Publish Work
+          <Button 
+            size="sm" 
+            className="shadow-lg shadow-primary/20" 
+            onClick={() => requestApprovalMutation.mutate()}
+            disabled={requestApprovalMutation.isPending || project.status === 'COMPLETED'}
+          >
+            <Send className="h-4 w-4 mr-2" /> {requestApprovalMutation.isPending ? 'Sending...' : 'Request Client Approval'}
           </Button>
         </div>
       </div>
@@ -108,38 +143,60 @@ export default function ProjectDetailPage() {
 
         <div className="space-y-6">
           <div className="flex items-center gap-2 border-b border-white/10 pb-px">
-            <button
-              onClick={() => setActiveTab('threads')}
-              className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 ${
-                activeTab === 'threads' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> Discussion
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('files')}
-              className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 ${
-                activeTab === 'files' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <FileIcon className="h-4 w-4" /> Files & Assets
-              </div>
-            </button>
+            {['threads', 'files', 'approvals'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`pb-3 px-4 text-sm font-medium transition-all border-b-2 capitalize ${
+                  activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {tab === 'threads' && <MessageSquare className="h-4 w-4" />}
+                  {tab === 'files' && <FileIcon className="h-4 w-4" />}
+                  {tab === 'approvals' && <ShieldCheck className="h-4 w-4" />}
+                  {tab}
+                </div>
+              </button>
+            ))}
           </div>
 
-          <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-            {activeTab === 'threads' ? (
+          <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden shadow-xl min-h-[400px]">
+            {activeTab === 'threads' && (
               <ThreadPane projectId={id} scopeType="PROJECT" scopeId={id} className="border-none rounded-none" />
-            ) : (
+            )}
+            
+            {activeTab === 'files' && (
               <div className="p-6 space-y-6">
                 <FileUploader projectId={id} scopeType="PROJECT" scopeId={id} />
                 <div>
                   <h3 className="text-sm font-bold text-muted-foreground mb-3 uppercase tracking-wider">Project Files</h3>
                   <FileList scopeType="PROJECT" scopeId={id} />
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'approvals' && (
+              <div className="p-6 space-y-4">
+                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Client Approval Log</h3>
+                {approvals.length > 0 ? (
+                  <div className="space-y-3">
+                    {approvals.map((app: any) => (
+                      <div key={app.id} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold">{app.title}</span>
+                          <StatusBadge status={app.status} />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">Requested {new Date(app.createdAt).toLocaleDateString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-12 text-center text-muted-foreground">
+                    <ShieldCheck className="h-8 w-8 mx-auto mb-3 opacity-20" />
+                    <p className="text-sm">No external approvals requested yet.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>

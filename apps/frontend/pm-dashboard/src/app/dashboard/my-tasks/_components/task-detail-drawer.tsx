@@ -15,9 +15,21 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Clock, CheckCircle2, MessageSquare, AlertTriangle, User } from 'lucide-react';
+import { 
+  Clock, 
+  CheckCircle2, 
+  MessageSquare, 
+  AlertTriangle, 
+  User as UserIcon,
+  Play,
+  Lock,
+  Unlock,
+  UserPlus,
+  History
+} from 'lucide-react';
 import { pmKeys } from '@/hooks/use-pm-data';
 import { toast } from '@/hooks/use-toast';
+import { useMembers } from '@/hooks/use-organization';
 
 interface TaskDetailDrawerProps {
   taskId: string | null;
@@ -33,6 +45,59 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
 
   const task = taskRes?.data;
   const queryClient = useQueryClient();
+  const { data: members } = useMembers();
+  const [worklogNote, setWorklogNote] = useState('');
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+    queryClient.invalidateQueries({ queryKey: pmKeys.myTasks });
+  };
+
+  const claimTaskMutation = useMutation({
+    mutationFn: () => api.fetch(`/tasks/${taskId}/claim`, { method: 'POST', service: 'pm' }),
+    onSuccess: () => { invalidate(); toast.success('Task claimed'); },
+    onError: (e: Error) => toast.error('Failed to claim task', e.message),
+  });
+
+  const assignTaskMutation = useMutation({
+    mutationFn: (assigneeId: string) => api.fetch(`/tasks/${taskId}/assign`, { 
+      method: 'POST', 
+      body: JSON.stringify({ assigneeId }),
+      service: 'pm' 
+    }),
+    onSuccess: () => { invalidate(); toast.success('Task assigned'); },
+    onError: (e: Error) => toast.error('Failed to assign task', e.message),
+  });
+
+  const blockTaskMutation = useMutation({
+    mutationFn: (reason: string) => api.fetch(`/tasks/${taskId}/block`, { 
+      method: 'POST', 
+      body: JSON.stringify({ reason }),
+      service: 'pm' 
+    }),
+    onSuccess: () => { invalidate(); toast.success('Task blocked'); },
+    onError: (e: Error) => toast.error('Failed to block task', e.message),
+  });
+
+  const unblockTaskMutation = useMutation({
+    mutationFn: () => api.fetch(`/tasks/${taskId}/unblock`, { method: 'POST', service: 'pm' }),
+    onSuccess: () => { invalidate(); toast.success('Task unblocked'); },
+    onError: (e: Error) => toast.error('Failed to unblock task', e.message),
+  });
+
+  const addWorklogMutation = useMutation({
+    mutationFn: (note: string) => api.fetch(`/tasks/${taskId}/worklogs`, { 
+      method: 'POST', 
+      body: JSON.stringify({ note, minutesSpent: 0 }), // simplified for now
+      service: 'pm' 
+    }),
+    onSuccess: () => { 
+      invalidate(); 
+      setWorklogNote('');
+      toast.success('Activity logged'); 
+    },
+    onError: (e: Error) => toast.error('Failed to log activity', e.message),
+  });
 
   const startTaskMutation = useMutation({
     mutationFn: () => api.fetch(`/tasks/${taskId}`, { 
@@ -40,11 +105,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
       body: JSON.stringify({ status: 'IN_PROGRESS' }),
       service: 'pm' 
     }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
-      queryClient.invalidateQueries({ queryKey: pmKeys.myTasks });
-      toast.success('Task started');
-    },
+    onSuccess: () => { invalidate(); toast.success('Task started'); },
     onError: (e: Error) => toast.error('Failed to start task', e.message),
   });
 
@@ -54,13 +115,11 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
       body: JSON.stringify({ notes: 'Submitted from dashboard' }),
       service: 'pm' 
     }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
-      queryClient.invalidateQueries({ queryKey: pmKeys.myTasks });
-      toast.success('Task submitted for review');
-    },
+    onSuccess: () => { invalidate(); toast.success('Task submitted for review'); },
     onError: (e: Error) => toast.error('Failed to submit task', e.message),
   });
+
+  const memberMap = Object.fromEntries((members ?? []).map((m: any) => [m.id, m.name]));
 
   return (
     <Dialog open={!!taskId} onOpenChange={(open) => !open && onClose()}>
@@ -87,10 +146,13 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
               {task.isBlocked && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
                   <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-bold text-red-400">This task is blocked</p>
-                    <p className="text-xs text-red-400/80">Needs unblocking by lead to proceed.</p>
+                    <p className="text-xs text-red-400/80">{task.blockReason || 'Needs unblocking to proceed.'}</p>
                   </div>
+                  <Button size="sm" variant="ghost" className="text-red-400 hover:bg-red-500/10" onClick={() => unblockTaskMutation.mutate()}>
+                    Unblock
+                  </Button>
                 </div>
               )}
 
@@ -100,7 +162,11 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                   Due: <span className="font-medium text-foreground">{task.dueAt ? new Date(task.dueAt).toLocaleDateString() : 'None'}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <User className="h-3.5 w-3.5" />
+                  <UserIcon className="h-3.5 w-3.5" />
+                  Assignee: <span className="font-medium text-foreground">{task.assigneeId ? (memberMap[task.assigneeId] ?? 'Unknown') : 'Unassigned'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <History className="h-3.5 w-3.5" />
                   Priority: <span className="font-medium text-foreground">{task.priority}</span>
                 </div>
               </div>
@@ -116,18 +182,23 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Quick Actions */}
               <div className="space-y-3">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Actions</h3>
                 <div className="flex flex-wrap gap-3">
-                  {task.status === 'READY' && (
+                  {!task.assigneeId && (
+                    <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => claimTaskMutation.mutate()} disabled={claimTaskMutation.isPending}>
+                      <UserPlus className="h-4 w-4 mr-2" /> Claim Task
+                    </Button>
+                  )}
+                  {task.status === 'READY' && task.assigneeId && (
                     <Button 
                       size="sm" 
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={() => startTaskMutation.mutate()}
                       disabled={startTaskMutation.isPending}
                     >
-                      {startTaskMutation.isPending ? 'Starting...' : 'Start Work'}
+                      <Play className="h-4 w-4 mr-2" /> Start Work
                     </Button>
                   )}
                   {task.status === 'IN_PROGRESS' && (
@@ -137,12 +208,49 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                       onClick={() => submitTaskMutation.mutate()}
                       disabled={submitTaskMutation.isPending}
                     >
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      {submitTaskMutation.isPending ? 'Submitting...' : 'Submit for Review'}
+                      <CheckCircle2 className="h-4 w-4 mr-2" /> Submit for Review
+                    </Button>
+                  )}
+                  {!task.isBlocked && (
+                    <Button variant="outline" size="sm" className="border-red-500/20 text-red-400 hover:bg-red-500/10" onClick={() => blockTaskMutation.mutate('Manual block')}>
+                      <Lock className="h-4 w-4 mr-2" /> Block
                     </Button>
                   )}
                   <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10">
                     <MessageSquare className="h-4 w-4 mr-2" /> Discuss
+                  </Button>
+                </div>
+              </div>
+
+              {/* Assignment (Lead Only style) */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Assignee</h3>
+                <Select value={task.assigneeId || 'none'} onValueChange={(v) => assignTaskMutation.mutate(v === 'none' ? '' : v)}>
+                  <SelectTrigger className="bg-white/5 border-white/10">
+                    <SelectValue placeholder="Select member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {members?.map((m: any) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Log Activity */}
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Log Activity</h3>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Quick activity log..." 
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 text-sm"
+                    value={worklogNote}
+                    onChange={(e) => setWorklogNote(e.target.value)}
+                  />
+                  <Button size="sm" variant="secondary" onClick={() => addWorklogMutation.mutate(worklogNote)} disabled={!worklogNote || addWorklogMutation.isPending}>
+                    Log
                   </Button>
                 </div>
               </div>
