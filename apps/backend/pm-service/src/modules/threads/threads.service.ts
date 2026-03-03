@@ -25,6 +25,7 @@ import {
   buildPmPaginationResponse,
   toPrismaPagination,
 } from '../../common/helpers/pagination.helper';
+import { PmThreadScopeType } from '../../common/enums/pm.enums';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
@@ -47,6 +48,9 @@ export class ThreadsService {
       select: { id: true },
     });
     if (!project) throw new NotFoundException('Project not found');
+
+    // Validate scopeId is consistent with scopeType
+    await this.assertScopeValid(organizationId, dto.projectId, dto.scopeType, dto.scopeId);
 
     // Prevent duplicate threads on the same scope (unique: [projectId, scopeType, scopeId])
     const existing = await this.prisma.pmConversationThread.findFirst({
@@ -264,6 +268,70 @@ export class ThreadsService {
       where: { id: messageId },
       data: { body: dto.body },
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Scope validation — ensures scopeId exists and belongs to the project/org
+  // -------------------------------------------------------------------------
+
+  private async assertScopeValid(
+    organizationId: string,
+    projectId: string,
+    scopeType: PmThreadScopeType,
+    scopeId: string,
+  ) {
+    switch (scopeType) {
+      case PmThreadScopeType.PROJECT:
+        // scopeId must equal the projectId itself
+        if (scopeId !== projectId) {
+          throw new BadRequestException(
+            'For PROJECT scope, scopeId must match the projectId',
+          );
+        }
+        break;
+
+      case PmThreadScopeType.STAGE: {
+        const stage = await this.prisma.pmProjectStage.findFirst({
+          where: { id: scopeId, projectId, organizationId },
+          select: { id: true },
+        });
+        if (!stage) {
+          throw new BadRequestException(
+            'Scope stage not found in this project',
+          );
+        }
+        break;
+      }
+
+      case PmThreadScopeType.TASK: {
+        const task = await this.prisma.pmTask.findFirst({
+          where: { id: scopeId, projectId, organizationId },
+          select: { id: true },
+        });
+        if (!task) {
+          throw new BadRequestException(
+            'Scope task not found in this project',
+          );
+        }
+        break;
+      }
+
+      case PmThreadScopeType.APPROVAL: {
+        const approval = await this.prisma.pmApprovalRequest.findFirst({
+          where: { id: scopeId, projectId },
+          include: { project: { select: { organizationId: true } } },
+        });
+        if (!approval || approval.project.organizationId !== organizationId) {
+          throw new BadRequestException(
+            'Scope approval request not found in this project',
+          );
+        }
+        break;
+      }
+
+      default:
+        throw new BadRequestException(`Unknown scopeType: ${scopeType}`);
+    }
   }
 
   // -------------------------------------------------------------------------

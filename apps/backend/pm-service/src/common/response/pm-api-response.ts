@@ -35,7 +35,8 @@
 
 /**
  * Standard single-resource response wrapper.
- * Use for GET :id and POST/PATCH responses.
+ * Use for GET :id, POST/PATCH, and non-paginated list responses (e.g. scope-based file lists).
+ * Always returns { data: T } — never a raw object or array directly.
  */
 export interface PmSingleResponse<T> {
   data: T;

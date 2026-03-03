@@ -32,6 +32,7 @@ import { StagesService } from './stages.service';
 import { UpdateStageDto } from './dto/update-stage.dto';
 import { StageLeadDto } from './dto/stage-lead.dto';
 import { BlockStageDto } from './dto/block-stage.dto';
+import { QueryStagesDto } from './dto/query-stages.dto';
 
 @UseGuards(OrgContextGuard)
 @Controller()
@@ -58,14 +59,15 @@ export class StagesController {
   @Get('stages')
   async listAll(
     @GetOrgContext() ctx: OrgContext,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: QueryStagesDto,
   ) {
     return this.stagesService.listAll(
       ctx.organizationId,
       ctx.userId,
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 20,
+      query.page ?? 1,
+      query.limit ?? 20,
+      query.status,
+      query.departmentCode,
     );
   }
 

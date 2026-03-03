@@ -17,10 +17,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { PmEventsService } from '../events/pm-events.service';
 import { PerformanceService } from '../performance/performance.service';
+import {
+  buildPmPaginationResponse,
+  toPrismaPagination,
+} from '../../common/helpers/pagination.helper';
 import { CreateQcReviewDto } from './dto/create-qc-review.dto';
 import { CreateBypassDto } from './dto/create-bypass.dto';
 
@@ -65,6 +70,12 @@ export class QcReviewsService {
     if (submission.status !== 'SUBMITTED' && submission.status !== 'UNDER_REVIEW') {
       throw new BadRequestException(
         'Submission must be in SUBMITTED or UNDER_REVIEW status to be reviewed',
+      );
+    }
+    // No self-approval: the task assignee must not review their own submission
+    if (submission.task.assigneeId && reviewerId === submission.task.assigneeId) {
+      throw new ForbiddenException(
+        'Task assignees cannot review their own submissions',
       );
     }
     if (dto.decision === 'REJECTED' && !dto.feedback) {
@@ -225,21 +236,37 @@ export class QcReviewsService {
   // List bypass records for audit
   // -------------------------------------------------------------------------
 
-  async listBypassRecords(organizationId: string, projectId: string) {
+  async listBypassRecords(
+    organizationId: string,
+    projectId: string,
+    page = 1,
+    limit = 20,
+  ) {
     const project = await this.prisma.pmProject.findFirst({
       where: { id: projectId, organizationId },
       select: { id: true },
     });
     if (!project) throw new NotFoundException('Project not found');
 
-    return this.prisma.pmBypassRecord.findMany({
-      where: {
-        OR: [
-          { task: { projectId } },
-          { projectStage: { projectId } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { skip, take } = toPrismaPagination(page, limit);
+
+    const where = {
+      OR: [
+        { task: { projectId } },
+        { projectStage: { projectId } },
+      ],
+    };
+
+    const [bypasses, total] = await this.prisma.$transaction([
+      this.prisma.pmBypassRecord.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.pmBypassRecord.count({ where }),
+    ]);
+
+    return buildPmPaginationResponse(bypasses, total, page, limit);
   }
 }

@@ -138,9 +138,13 @@ export class ProjectsService {
   ): Promise<PmPaginatedResponse<ProjectSummary>> {
     const {
       page = 1, limit = 20,
+      name,
+      search,
       engagementId, status, brandId, clientId,
       projectType, serviceType, healthStatus, priority,
     } = query;
+    // `name` takes precedence; `search` is the backward-compatible alias.
+    const nameFilter = name ?? search;
     const { skip, take } = toPrismaPagination(page, limit);
 
     const cacheKey = this.cache.buildKey(
@@ -148,7 +152,7 @@ export class ProjectsService {
       this.CACHE_RESOURCE,
       'list',
       this.cache.hashQuery({
-        page, limit, engagementId, status, brandId, clientId,
+        page, limit, nameFilter, engagementId, status, brandId, clientId,
         projectType, serviceType, healthStatus, priority,
       }),
     );
@@ -158,6 +162,7 @@ export class ProjectsService {
 
     const where = {
       organizationId,
+      ...(nameFilter !== undefined && { name: { contains: nameFilter, mode: 'insensitive' as const } }),
       ...(engagementId !== undefined && { engagementId }),
       ...(status !== undefined && { status }),
       ...(brandId !== undefined && { brandId }),

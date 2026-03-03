@@ -159,12 +159,15 @@ export class QcApprovalsController {
   async listBypasses(
     @GetOrgContext() ctx: OrgContext,
     @Param('projectId') projectId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    const bypasses = await this.qcReviewsService.listBypassRecords(
+    return this.qcReviewsService.listBypassRecords(
       ctx.organizationId,
       projectId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
     );
-    return wrapSingle(bypasses);
   }
 
   // =========================================================================

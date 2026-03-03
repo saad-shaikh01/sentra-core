@@ -1,4 +1,4 @@
-import { IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsOptional, IsEnum, IsUUID, IsString, MaxLength } from 'class-validator';
 import { PmPaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import {
   PmProjectStatus,
@@ -9,6 +9,21 @@ import {
 } from '../../../common/enums/pm.enums';
 
 export class QueryProjectsDto extends PmPaginationQueryDto {
+  /** Preferred name search param. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  name?: string;
+
+  /**
+   * Backward-compatible alias for `name`.
+   * When both are present, `name` takes precedence.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
   @IsOptional()
   @IsUUID('4')
   engagementId?: string;

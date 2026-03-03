@@ -141,15 +141,23 @@ export class StagesService {
 
   async listAll(
     organizationId: string,
-    userId: string, // currently unused for filtering, but good for future role checks
+    userId: string, // reserved for future role-based filtering
     page = 1,
     limit = 20,
+    status?: string,
+    departmentCode?: string,
   ) {
     const { skip, take } = toPrismaPagination(page, limit);
 
+    const where = {
+      organizationId,
+      ...(status !== undefined && { status }),
+      ...(departmentCode !== undefined && { departmentCode }),
+    };
+
     const [stages, total] = await this.prisma.$transaction([
       this.prisma.pmProjectStage.findMany({
-        where: { organizationId },
+        where,
         skip,
         take,
         orderBy: { dueAt: 'asc' }, // Order by closest due date first
@@ -159,7 +167,7 @@ export class StagesService {
           _count: { select: { tasks: true } },
         },
       }),
-      this.prisma.pmProjectStage.count({ where: { organizationId } }),
+      this.prisma.pmProjectStage.count({ where }),
     ]);
 
     return buildPmPaginationResponse(stages as unknown as Record<string, unknown>[], total, page, limit);

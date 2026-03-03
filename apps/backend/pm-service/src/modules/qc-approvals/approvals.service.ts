@@ -254,10 +254,24 @@ export class ApprovalsService {
   // Approval Decision (immutable snapshot)
   // =========================================================================
 
+  /**
+   * Record an approval decision from an internal org user.
+   *
+   * actedByUserId is optional to support future external (client-portal) actors
+   * who authenticate via a secure token rather than org JWT.
+   *
+   * FUTURE: When client-portal token-based approval is added, introduce a
+   * separate public endpoint (e.g. POST /public/approval-requests/:token/decide)
+   * that authenticates via a signed short-lived token, extracts the
+   * approvalRequestId from the token payload, and calls applyApprovalDecision()
+   * directly — bypassing OrgContextGuard.  The approvalRequestId lookup already
+   * validates org scope via project.organizationId, so no OrgContextGuard is
+   * needed for external actors.
+   */
   async decideApproval(
     organizationId: string,
     approvalRequestId: string,
-    actedByUserId: string,
+    actedByUserId: string | null,
     dto: DecideApprovalDto,
     actorIp?: string,
   ) {
@@ -273,11 +287,41 @@ export class ApprovalsService {
       throw new BadRequestException('Approval request is already decided');
     }
 
+    return this.applyApprovalDecision(request, actedByUserId, dto, actorIp);
+  }
+
+  /**
+   * Core decision logic — decoupled from OrgContextGuard so it can be called
+   * from both internal (org-user) and future external (client-portal token) paths.
+   *
+   * @param request  - Pre-loaded and org-validated PmApprovalRequest with project.
+   * @param actedByUserId - Org user ID, or null for external actors.
+   * @param dto      - Decision payload.
+   * @param actorIp  - Actor IP for the audit snapshot.
+   */
+  private async applyApprovalDecision(
+    request: {
+      id: string;
+      deliverablePackageId: string;
+      project: { id: string; organizationId: string };
+    },
+    actedByUserId: string | null,
+    dto: DecideApprovalDto,
+    actorIp?: string,
+  ) {
+    const organizationId = request.project.organizationId;
+
     return this.prisma.$transaction(async (tx) => {
-      // Create immutable snapshot
+      // Create immutable snapshot.
+      // TODO(traceability): deliverablePackageId is available on the approval
+      // request (request.deliverablePackageId) but is not denormalised into the
+      // snapshot.  When the schema is ready, add a deliverablePackageId column to
+      // PmApprovalSnapshot so each snapshot row is independently traceable to the
+      // exact deliverable without a join.  Safe to add as a nullable column in a
+      // future migration without altering this transaction.
       const snapshot = await tx.pmApprovalSnapshot.create({
         data: {
-          approvalRequestId,
+          approvalRequestId: request.id,
           decision: dto.decision,
           actedByUserId: actedByUserId ?? null,
           actorIp: actorIp ?? null,
@@ -288,7 +332,7 @@ export class ApprovalsService {
 
       // Update approval request status
       await tx.pmApprovalRequest.update({
-        where: { id: approvalRequestId },
+        where: { id: request.id },
         data: { status: dto.decision === 'APPROVED' ? 'APPROVED' : 'REJECTED' },
       });
 
@@ -302,7 +346,7 @@ export class ApprovalsService {
       // Emit pm.approval_decided event (after transaction commits)
       this.events.emitApprovalDecided(organizationId, {
         projectId: request.project.id,
-        approvalRequestId,
+        approvalRequestId: request.id,
         approvalSnapshotId: snapshot.id,
         decision: dto.decision,
         actedByUserId: actedByUserId ?? null,
