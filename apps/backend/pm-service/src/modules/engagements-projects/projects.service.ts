@@ -22,6 +22,7 @@ import {
 } from '../../common/helpers/pagination.helper';
 import { PmCacheService } from '../../common/cache/pm-cache.service';
 import { ProjectGeneratorService } from './project-generator.service';
+import { PmEventsService } from '../events/pm-events.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
@@ -61,6 +62,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly cache: PmCacheService,
     private readonly generator: ProjectGeneratorService,
+    private readonly events: PmEventsService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -111,6 +113,16 @@ export class ProjectsService {
 
       return created;
     });
+
+    // Emit pm.project_created event (PM-BE-018)
+    this.events.emitProjectCreated(organizationId, {
+      engagementId: project.engagementId,
+      projectId: project.id,
+      projectType: project.projectType,
+      serviceType: project.serviceType,
+      ownerLeadIds: [], // Leads are assigned at stage level, initially empty
+      createdById: userId,
+    }, project.brandId);
 
     await this.cache.invalidateOrgResource(organizationId, this.CACHE_RESOURCE);
     return project;

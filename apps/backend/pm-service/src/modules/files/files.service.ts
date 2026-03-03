@@ -28,26 +28,38 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@sentra-core/prisma-client';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { CreateFileAssetDto } from './dto/create-file-asset.dto';
 import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { LinkFileDto } from './dto/link-file.dto';
 
 @Injectable()
 export class FilesService {
-  private readonly storageBucket: string;
+  private readonly s3Client: S3Client;
+  private readonly bucket: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.storageBucket = this.config.get<string>('STORAGE_BUCKET', 'pm-assets');
+    this.bucket = this.config.get<string>('WASABI_BUCKET', 'sentra-pm-assets');
+    
+    this.s3Client = new S3Client({
+      endpoint: this.config.get<string>('WASABI_ENDPOINT', 'https://s3.wasabisys.com'),
+      region: this.config.get<string>('WASABI_REGION', 'us-east-1'),
+      credentials: {
+        accessKeyId: this.config.get<string>('WASABI_ACCESS_KEY', ''),
+        secretAccessKey: this.config.get<string>('WASABI_SECRET_KEY', ''),
+      },
+      forcePathStyle: true, // Required for Wasabi
+    });
   }
 
   // -------------------------------------------------------------------------
   // Request upload token
-  // Backend creates the FileAsset record and returns a storage key the
-  // client should use when uploading to object storage.
-  // In production this would return a presigned PUT URL from the S3 client.
+  // Backend creates the FileAsset record and returns a presigned PUT URL
+  // for direct-to-S3 upload.
   // -------------------------------------------------------------------------
 
   async requestUploadToken(
@@ -73,15 +85,23 @@ export class FilesService {
       },
     });
 
-    // Generate a deterministic storage key hint for the client to use
-    // Format: org/{orgId}/projects/{projectId}/assets/{assetId}/{timestamp}
-    const storageKeyHint = `org/${organizationId}/projects/${dto.projectId}/assets/${fileAsset.id}/${Date.now()}`;
+    // Generate a deterministic storage key
+    const storageKey = `org/${organizationId}/projects/${dto.projectId}/assets/${fileAsset.id}/${Date.now()}_${dto.name}`;
+
+    // Generate presigned PUT URL (valid for 15 minutes)
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: storageKey,
+      ContentType: dto.mimeType,
+    });
+
+    const uploadUrl = await getSignedUrl(this.s3Client, command, { expiresIn: 900 });
 
     return {
       fileAssetId: fileAsset.id,
-      storageKeyHint,
-      bucket: this.storageBucket,
-      // In production: presignedPutUrl from S3 client
+      storageKey,
+      uploadUrl,
+      bucket: this.bucket,
     };
   }
 
@@ -151,7 +171,6 @@ export class FilesService {
             id: true,
             versionNumber: true,
             originalFilename: true,
-            mimeType: true,
             sizeBytes: true,
             isLatest: true,
             isApproved: true,
@@ -207,7 +226,7 @@ export class FilesService {
 
   // -------------------------------------------------------------------------
   // Get signed URL for file access
-  // Logs the access attempt. In production: generate S3 presigned GET URL.
+  // Logs the access attempt and returns a presigned GET URL.
   // -------------------------------------------------------------------------
 
   async getSignedUrl(
@@ -244,19 +263,20 @@ export class FilesService {
       },
     });
 
-    // In production: return S3 presigned URL (15-minute TTL)
-    // const signedUrl = await s3.getSignedUrlPromise('getObject', {
-    //   Bucket: this.storageBucket,
-    //   Key: version.storageKey,
-    //   Expires: 900,
-    // });
+    // Generate presigned GET URL (valid for 15 minutes)
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: version.storageKey,
+    });
+
+    const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn: 900 });
 
     return {
       fileAssetId,
       fileVersionId: version.id,
       storageKey: version.storageKey,
+      signedUrl,
       expiresInSeconds: 900,
-      // signedUrl, — populated once S3 client is wired
     };
   }
 
@@ -269,8 +289,6 @@ export class FilesService {
     scopeType: string,
     scopeId: string,
   ) {
-    // Validate scope indirectly by checking the file links — no explicit org check
-    // needed here since fileAsset is org-scoped
     const links = await this.prisma.pmFileLink.findMany({
       where: {
         scopeType: scopeType as never,

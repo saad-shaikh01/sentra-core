@@ -4,8 +4,6 @@
  * Wiring rules:
  * - PrismaClientModule is registered globally and provides PrismaService to all modules.
  *   PM service only reads/writes pm_* prefixed tables via PrismaService.
- *   Tables owned by core-service (Organization, User, Brand, Client, etc.) are referenced
- *   by ID only — never written to from this service.
  * - Config is global so all modules can access env vars without re-importing ConfigModule.
  * - ThrottlerModule protects against write-heavy endpoint abuse.
  * - SentraCacheModule (local) provides Redis-backed or in-memory caching for read paths.
@@ -24,6 +22,8 @@ import { PmCacheModule } from '../common/cache/pm-cache.module';
 import { TemplatesModule } from '../modules/templates/templates.module';
 import { EngagementsProjectsModule } from '../modules/engagements-projects/engagements-projects.module';
 import { PmEventsModule } from '../modules/events/pm-events.module';
+import { PerformanceModule } from '../modules/performance/performance.module';
+import { SlaMonitorModule } from '../modules/sla-monitor/sla-monitor.module';
 import { StagesTasksModule } from '../modules/stages-tasks/stages-tasks.module';
 import { QcApprovalsModule } from '../modules/qc-approvals/qc-approvals.module';
 import { ThreadsModule } from '../modules/threads/threads.module';
@@ -57,8 +57,14 @@ import { FilesModule } from '../modules/files/files.module';
     // Local Redis/in-memory cache — pm-specific key namespacing enforced in services
     PmCacheModule,
 
-    // Global PM domain events (PM-BE-018) — must be before domain modules
+    // Global PM domain events (PM-BE-018)
     PmEventsModule,
+
+    // Global performance scoring system
+    PerformanceModule,
+
+    // Background SLA monitoring
+    SlaMonitorModule,
 
     // Domain modules
     HealthModule,

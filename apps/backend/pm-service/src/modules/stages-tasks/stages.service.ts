@@ -20,65 +20,13 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { PmCacheService } from '../../common/cache/pm-cache.service';
+import { PerformanceService } from '../performance/performance.service';
 import {
   buildPmPaginationResponse,
   toPrismaPagination,
 } from '../../common/helpers/pagination.helper';
-import { UpdateStageDto } from './dto/update-stage.dto';
-import { StageLeadDto } from './dto/stage-lead.dto';
-import { BlockStageDto } from './dto/block-stage.dto';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type StageSelect = {
-  id: true;
-  organizationId: true;
-  projectId: true;
-  templateStageId: true;
-  name: true;
-  description: true;
-  departmentCode: true;
-  status: true;
-  sortOrder: true;
-  ownerLeadId: true;
-  clientReviewMode: true;
-  requiresStageApproval: true;
-  requiresQcByDefault: true;
-  isOptional: true;
-  isBlocked: true;
-  startedAt: true;
-  dueAt: true;
-  completedAt: true;
-  createdAt: true;
-  updatedAt: true;
-};
-
-const STAGE_SELECT: StageSelect = {
-  id: true,
-  organizationId: true,
-  projectId: true,
-  templateStageId: true,
-  name: true,
-  description: true,
-  departmentCode: true,
-  status: true,
-  sortOrder: true,
-  ownerLeadId: true,
-  clientReviewMode: true,
-  requiresStageApproval: true,
-  requiresQcByDefault: true,
-  isOptional: true,
-  isBlocked: true,
-  startedAt: true,
-  dueAt: true,
-  completedAt: true,
-  createdAt: true,
-  updatedAt: true,
-};
-
-// ---------------------------------------------------------------------------
+// ... (existing imports)
 
 @Injectable()
 export class StagesService {
@@ -87,6 +35,7 @@ export class StagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: PmCacheService,
+    private readonly performance: PerformanceService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -351,10 +300,34 @@ export class StagesService {
       );
     }
 
+    const completedAt = new Date();
     const updated = await this.prisma.pmProjectStage.update({
       where: { id: stageId },
-      data: { status: 'COMPLETED', completedAt: new Date() },
+      data: { status: 'COMPLETED', completedAt },
     });
+
+    // Performance: Lead delta
+    if (stage.ownerLeadId) {
+      let scoreDelta = 50; // Base completion score
+      let eventType = 'STAGE_COMPLETE_ON_TIME';
+
+      // SLA Check
+      if (stage.dueAt && completedAt > stage.dueAt) {
+        const diffMs = completedAt.getTime() - stage.dueAt.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const penalty = diffDays * 10;
+        scoreDelta -= penalty;
+        eventType = 'STAGE_COMPLETE_DELAYED';
+      }
+
+      await this.performance.logEvent({
+        organizationId,
+        userId: stage.ownerLeadId,
+        projectId: stage.projectId,
+        eventType,
+        scoreDelta,
+      });
+    }
 
     await this.invalidateStage(organizationId, stageId);
     return updated;
@@ -381,6 +354,8 @@ export class StagesService {
         isBlocked: true,
         isOptional: true,
         projectId: true,
+        ownerLeadId: true,
+        dueAt: true,
       },
     });
     if (!stage) throw new NotFoundException('Stage not found');

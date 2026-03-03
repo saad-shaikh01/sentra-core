@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { PmEventsService } from '../events/pm-events.service';
+import { PerformanceService } from '../performance/performance.service';
 import { CreateQcReviewDto } from './dto/create-qc-review.dto';
 import { CreateBypassDto } from './dto/create-bypass.dto';
 
@@ -28,6 +29,7 @@ export class QcReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: PmEventsService,
+    private readonly performance: PerformanceService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -51,6 +53,7 @@ export class QcReviewsService {
             projectId: true,
             projectStageId: true,
             status: true,
+            assigneeId: true,
           },
         },
       },
@@ -107,6 +110,29 @@ export class QcReviewsService {
         data: taskData,
       });
 
+      // Performance: Artist delta
+      if (submission.task.assigneeId) {
+        if (dto.decision === 'APPROVED') {
+          await this.performance.logEvent({
+            organizationId,
+            userId: submission.task.assigneeId,
+            projectId: submission.task.projectId,
+            taskId: submission.task.id,
+            eventType: 'QC_PASS',
+            scoreDelta: 10,
+          });
+        } else {
+          await this.performance.logEvent({
+            organizationId,
+            userId: submission.task.assigneeId,
+            projectId: submission.task.projectId,
+            taskId: submission.task.id,
+            eventType: 'QC_REJECT',
+            scoreDelta: -5,
+          });
+        }
+      }
+
       // Escalation hook point: check rejection count for the task
       if (dto.decision === 'REJECTED') {
         const rejectionCount = await tx.pmQcReview.count({
@@ -126,6 +152,18 @@ export class QcReviewsService {
               payloadJson: { rejectionCount, submissionId, reviewId: review.id },
             },
           });
+
+          // Penalize more for repeated failure
+          if (submission.task.assigneeId) {
+            await this.performance.logEvent({
+              organizationId,
+              userId: submission.task.assigneeId,
+              projectId: submission.task.projectId,
+              taskId: submission.task.id,
+              eventType: 'REPEATED_FAILURE',
+              scoreDelta: -20,
+            });
+          }
         }
       }
 
