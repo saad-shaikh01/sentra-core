@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { FormModal } from '@/components/shared';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,11 @@ export function ProjectFormModal({ open, onOpenChange, project }: ProjectFormMod
   const serviceType = watch('serviceType');
   const priority = watch('priority');
 
+  const selectedTemplate = useMemo(() => 
+    templatesData?.data?.find((t: any) => t.id === templateId),
+    [templatesData, templateId]
+  );
+
   useEffect(() => {
     if (open) {
       reset({
@@ -78,19 +83,23 @@ export function ProjectFormModal({ open, onOpenChange, project }: ProjectFormMod
       engagementId: values.engagementId,
       brandId: values.brandId,
       clientId: values.clientId || null,
-      templateId: values.templateId || null,
+      templateId: values.templateId === 'none' ? null : values.templateId,
       projectType: values.projectType,
       serviceType: values.serviceType,
       priority: values.priority,
       deliveryDueAt: values.deliveryDueAt ? new Date(values.deliveryDueAt).toISOString() : null,
     };
 
-    if (isEdit && project) {
-      await updateProject.mutateAsync({ id: project.id, ...dto });
-    } else {
-      await createProject.mutateAsync(dto);
+    try {
+      if (isEdit && project) {
+        await updateProject.mutateAsync({ id: project.id, ...dto });
+      } else {
+        await createProject.mutateAsync(dto);
+      }
+      onOpenChange(false);
+    } catch (e) {
+      // toast is handled by hook
     }
-    onOpenChange(false);
   };
 
   return (
@@ -101,6 +110,7 @@ export function ProjectFormModal({ open, onOpenChange, project }: ProjectFormMod
       error={error}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
+        {/* ... existing fields ... */}
         <div className="space-y-1.5">
           <Label>Project Name *</Label>
           <Input placeholder="Enter project name" {...register('name', { required: 'Required' })} />
@@ -179,6 +189,17 @@ export function ProjectFormModal({ open, onOpenChange, project }: ProjectFormMod
             </Select>
           </div>
         </div>
+
+        {selectedTemplate && (
+          <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-primary/60">Template Summary</p>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">{selectedTemplate.name}</span>
+              <span className="font-bold text-primary">{selectedTemplate._count?.stages ?? 0} Stages</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground italic">Stages and starter tasks will be generated automatically.</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1.5">

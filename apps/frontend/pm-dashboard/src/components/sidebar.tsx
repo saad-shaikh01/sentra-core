@@ -34,6 +34,7 @@ const navigation = [
   { name: 'My Tasks',    href: '/dashboard/my-tasks',    icon: CheckSquare },
   { name: 'QC Reviews',  href: '/dashboard/qc-reviews',  icon: ClipboardCheck },
   { name: 'Stage Queue', href: '/dashboard/stage-queue', icon: ListTodo },
+  { name: 'Engagements', href: '/dashboard/engagements', icon: Layers },
   { name: 'Projects',    href: '/dashboard/projects',    icon: Briefcase },
   { name: 'Templates',   href: '/dashboard/templates',   icon: FileBox },
 ];

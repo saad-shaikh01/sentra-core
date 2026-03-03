@@ -16,8 +16,11 @@ import {
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
-import { useTasksByStage } from '@/hooks/use-projects';
+import { useTasksByStage, projectsKeys } from '@/hooks/use-projects';
 import { useMembers } from '@/hooks/use-organization';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 interface StageCardProps {
   stage: any;
@@ -26,8 +29,19 @@ interface StageCardProps {
 
 export function StageCard({ stage, projectId }: StageCardProps) {
   const [isExpanded, setIsExpanded] = useState(stage.status === 'ACTIVE');
-  const { data: tasksData, isLoading: tasksLoading } = useTasksByStage(isExpanded ? stage.id : '');
+  const queryClient = useQueryClient();
+  const { data: tasksRes, isLoading: tasksLoading } = useTasksByStage(isExpanded ? stage.id : '');
+  const tasks = tasksRes?.data ?? [];
   const { data: members } = useMembers();
+
+  const createTaskMutation = useMutation({
+    mutationFn: (dto: any) => api.fetch(`/stages/${stage.id}/tasks?projectId=${projectId}`, { method: 'POST', body: JSON.stringify(dto), service: 'pm' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectsKeys.tasks(stage.id) });
+      toast.success('Task added');
+    },
+    onError: (e: Error) => toast.error('Failed to add task', e.message),
+  });
 
   const getDepartmentColor = (code: string) => {
     const colors: Record<string, string> = {
@@ -113,12 +127,12 @@ export function StageCard({ stage, projectId }: StageCardProps) {
                     <div key={i} className="h-12 w-full rounded-xl bg-white/5 animate-pulse" />
                   ))}
                 </div>
-              ) : tasksData?.data?.length > 0 ? (
+              ) : tasks.length > 0 ? (
                 <div className="space-y-2">
-                  {tasksData.data.map((task: any) => (
+                  {tasks.map((task: any) => (
                     <div 
                       key={task.id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all group/task"
+                      className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all group/task cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <div className={cn(
@@ -150,14 +164,27 @@ export function StageCard({ stage, projectId }: StageCardProps) {
                     </div>
                   ))}
                   
-                  <Button variant="ghost" size="sm" className="w-full mt-2 border border-dashed border-white/10 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full mt-2 border border-dashed border-white/10 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all"
+                    onClick={() => createTaskMutation.mutate({ name: 'New Ad-hoc Task', priority: 'MEDIUM', sortOrder: tasks.length })}
+                    disabled={createTaskMutation.isPending}
+                  >
                     <Plus className="h-3.5 w-3.5 mr-2" /> Add Ad-hoc Task
                   </Button>
                 </div>
               ) : (
                 <div className="py-8 text-center border border-dashed border-white/10 rounded-xl">
                   <p className="text-sm text-muted-foreground">No tasks in this stage yet.</p>
-                  <Button variant="link" size="sm" className="mt-1">Create one now</Button>
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    className="mt-1"
+                    onClick={() => createTaskMutation.mutate({ name: 'First Task', priority: 'MEDIUM', sortOrder: 0 })}
+                  >
+                    Create one now
+                  </Button>
                 </div>
               )}
             </div>

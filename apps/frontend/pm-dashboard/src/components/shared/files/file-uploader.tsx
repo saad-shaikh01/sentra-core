@@ -48,7 +48,7 @@ export function FileUploader({
 
       try {
         // 1. Request Upload Token (creates FileAsset and returns presigned URL)
-        const tokenData = await api.fetch<any>('/files/upload-token', {
+        const tokenRes = await api.fetch<any>('/files/upload-token', {
           method: 'POST',
           body: JSON.stringify({
             projectId,
@@ -58,6 +58,7 @@ export function FileUploader({
           }),
           service: 'pm',
         });
+        const tokenData = tokenRes.data;
 
         setUploadingFiles((prev) =>
           prev.map((f) => (f.name === file.name ? { ...f, progress: 40 } : f))
@@ -77,7 +78,7 @@ export function FileUploader({
         );
 
         // 3. Complete Upload (creates FileVersion)
-        const versionData = await api.fetch<any>('/files/complete-upload', {
+        const versionRes = await api.fetch<any>('/files/complete-upload', {
           method: 'POST',
           body: JSON.stringify({
             fileAssetId: tokenData.fileAssetId,
@@ -87,6 +88,7 @@ export function FileUploader({
           }),
           service: 'pm',
         });
+        const versionData = versionRes.data;
 
         // 4. Link File to Scope
         await api.fetch<any>(`/files/${tokenData.fileAssetId}/link`, {
@@ -103,6 +105,7 @@ export function FileUploader({
         setUploadingFiles((prev) => prev.filter((f) => f.name !== file.name));
         toast.success(`Uploaded ${file.name}`);
         
+        queryClient.invalidateQueries({ queryKey: ['files', 'links', scopeType, scopeId] });
         if (onUploadComplete) onUploadComplete();
         
       } catch (error: any) {

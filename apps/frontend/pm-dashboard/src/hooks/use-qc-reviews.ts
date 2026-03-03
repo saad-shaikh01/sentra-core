@@ -34,9 +34,9 @@ export function useSubmitReview() {
   return useMutation({
     mutationFn: ({ submissionId, ...dto }: { submissionId: string } & Record<string, unknown>) =>
       api.submitReview(submissionId, dto),
-    onSuccess: (data, { submissionId }) => {
+    onSuccess: (_, { submissionId }) => {
       queryClient.invalidateQueries({ queryKey: qcKeys.all });
-      toast.success(data.decision === 'APPROVED' ? 'Submission Approved' : 'Submission Rejected');
+      // Toast is handled by the component to avoid duplicates
     },
     onError: (e: Error) => toast.error('Review failed', e.message),
   });

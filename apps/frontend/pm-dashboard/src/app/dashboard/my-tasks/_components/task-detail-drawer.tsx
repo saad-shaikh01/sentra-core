@@ -13,10 +13,11 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Clock, CheckCircle2, MessageSquare, AlertTriangle, User } from 'lucide-react';
 import { pmKeys } from '@/hooks/use-pm-data';
+import { toast } from '@/hooks/use-toast';
 
 interface TaskDetailDrawerProps {
   taskId: string | null;
@@ -24,10 +25,41 @@ interface TaskDetailDrawerProps {
 }
 
 export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
-  const { data: task, isLoading } = useQuery({
+  const { data: taskRes, isLoading } = useQuery({
     queryKey: ['task', taskId],
-    queryFn: () => api.fetch<any>(`/pm/tasks/${taskId}`),
+    queryFn: () => api.fetch<any>(`/tasks/${taskId}`, { service: 'pm' }),
     enabled: !!taskId,
+  });
+
+  const task = taskRes?.data;
+  const queryClient = useQueryClient();
+
+  const startTaskMutation = useMutation({
+    mutationFn: () => api.fetch(`/tasks/${taskId}`, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ status: 'IN_PROGRESS' }),
+      service: 'pm' 
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      queryClient.invalidateQueries({ queryKey: pmKeys.myTasks });
+      toast.success('Task started');
+    },
+    onError: (e: Error) => toast.error('Failed to start task', e.message),
+  });
+
+  const submitTaskMutation = useMutation({
+    mutationFn: () => api.fetch(`/tasks/${taskId}/submissions`, { 
+      method: 'POST', 
+      body: JSON.stringify({ notes: 'Submitted from dashboard' }),
+      service: 'pm' 
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+      queryClient.invalidateQueries({ queryKey: pmKeys.myTasks });
+      toast.success('Task submitted for review');
+    },
+    onError: (e: Error) => toast.error('Failed to submit task', e.message),
   });
 
   return (
@@ -89,14 +121,24 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Actions</h3>
                 <div className="flex flex-wrap gap-3">
                   {task.status === 'READY' && (
-                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                      Start Work
+                    <Button 
+                      size="sm" 
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      onClick={() => startTaskMutation.mutate()}
+                      disabled={startTaskMutation.isPending}
+                    >
+                      {startTaskMutation.isPending ? 'Starting...' : 'Start Work'}
                     </Button>
                   )}
                   {task.status === 'IN_PROGRESS' && (
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                    <Button 
+                      size="sm" 
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => submitTaskMutation.mutate()}
+                      disabled={submitTaskMutation.isPending}
+                    >
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Submit for Review
+                      {submitTaskMutation.isPending ? 'Submitting...' : 'Submit for Review'}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10">

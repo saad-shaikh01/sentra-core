@@ -27,19 +27,21 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   const memberMap = Object.fromEntries((members ?? []).map((m: any) => [m.id, m.name]));
 
   // 1. Fetch thread by scope
-  const { data: thread, isLoading: loadingThread } = useQuery({
+  const { data: threadRes, isLoading: loadingThread } = useQuery({
     queryKey: ['thread', 'scope', scopeType, scopeId],
     queryFn: () => api.fetch<any>(`/threads/scope/lookup?scopeType=${scopeType}&scopeId=${scopeId}`, { service: 'pm' }),
     enabled: !!scopeId,
-    retry: false, // Don't retry if it returns 404 (we'll create it on first message)
+    retry: false,
   });
+
+  const thread = threadRes?.data;
 
   // 2. Fetch messages if thread exists
   const { data: messagesData, isLoading: loadingMessages } = useQuery({
     queryKey: ['thread', thread?.id, 'messages'],
     queryFn: () => api.fetch<any>(`/threads/${thread.id}/messages`, { service: 'pm' }),
     enabled: !!thread?.id,
-    refetchInterval: 10000, // Poll every 10s for new messages
+    refetchInterval: 10000,
   });
 
   // Scroll to bottom when messages load
@@ -53,7 +55,7 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
       method: 'POST',
       body: JSON.stringify({ projectId, scopeType, scopeId, visibility: 'INTERNAL' }),
       service: 'pm',
-    }),
+    }).then(res => res.data),
   });
 
   // 4. Send message mutation
@@ -65,7 +67,7 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
       if (!targetThreadId) {
         const newThread = await createThread.mutateAsync();
         targetThreadId = newThread.id;
-        queryClient.setQueryData(['thread', 'scope', scopeType, scopeId], newThread);
+        queryClient.setQueryData(['thread', 'scope', scopeType, scopeId], { data: newThread });
       }
 
       return api.fetch<any>(`/threads/${targetThreadId}/messages`, {

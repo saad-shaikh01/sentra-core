@@ -13,9 +13,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { pmKeys } from '@/hooks/use-pm-data';
 import { toast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 export default function TemplatesPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [params, setParams] = useQueryStates({
     page: parseAsInteger.withDefault(1),
     limit: parseAsInteger.withDefault(20),
@@ -37,7 +39,7 @@ export default function TemplatesPage() {
   const [editTemplate, setEditTemplate] = useState<TemplateItem | null>(null);
 
   const archiveMutation = useMutation({
-    mutationFn: (id: string) => api.fetch(`/pm/templates/${id}/archive`, { method: 'POST' }),
+    mutationFn: (id: string) => api.fetch(`/templates/${id}/archive`, { method: 'POST', service: 'pm' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pmKeys.templates });
       toast.success('Template archived');
@@ -46,7 +48,7 @@ export default function TemplatesPage() {
   });
 
   const duplicateMutation = useMutation({
-    mutationFn: (id: string) => api.fetch(`/pm/templates/${id}/duplicate`, { method: 'POST' }),
+    mutationFn: (id: string) => api.fetch(`/templates/${id}/duplicate`, { method: 'POST', service: 'pm' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pmKeys.templates });
       toast.success('Template duplicated');
@@ -106,6 +108,7 @@ export default function TemplatesPage() {
           templates={templates}
           isLoading={isLoading}
           isError={isError}
+          onRowClick={(t) => router.push(`/dashboard/templates/${t.id}`)}
           onEdit={(t) => { setEditTemplate(t); setModalOpen(true); }}
           onDuplicate={(t) => duplicateMutation.mutate(t.id)}
           onArchive={(t) => archiveMutation.mutate(t.id)}

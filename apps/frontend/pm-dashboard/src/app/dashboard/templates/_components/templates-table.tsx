@@ -21,12 +21,13 @@ interface TemplatesTableProps {
   templates: TemplateItem[];
   isLoading: boolean;
   isError?: boolean;
+  onRowClick: (template: TemplateItem) => void;
   onEdit: (template: TemplateItem) => void;
   onDuplicate: (template: TemplateItem) => void;
   onArchive: (template: TemplateItem) => void;
 }
 
-export function TemplatesTable({ templates, isLoading, isError, onEdit, onDuplicate, onArchive }: TemplatesTableProps) {
+export function TemplatesTable({ templates, isLoading, isError, onRowClick, onEdit, onDuplicate, onArchive }: TemplatesTableProps) {
   const openConfirmDialog = useUIStore((s) => s.openConfirmDialog);
 
   const columns = useMemo<Column<TemplateItem>[]>(() => [
@@ -98,6 +99,7 @@ export function TemplatesTable({ templates, isLoading, isError, onEdit, onDuplic
       data={templates}
       isLoading={isLoading}
       isError={isError}
+      onRowClick={onRowClick}
       keyExtractor={(t) => t.id}
       emptyTitle="No templates found"
       emptyDescription="Create a template to standardize your project workflows."

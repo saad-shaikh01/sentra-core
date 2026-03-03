@@ -50,7 +50,7 @@ export function TemplateFormModal({ open, onOpenChange, template }: TemplateForm
   }, [open, template, reset]);
 
   const createMutation = useMutation({
-    mutationFn: (dto: Record<string, unknown>) => api.fetch('/pm/templates', { method: 'POST', body: JSON.stringify(dto) }),
+    mutationFn: (dto: Record<string, unknown>) => api.fetch('/templates', { method: 'POST', body: JSON.stringify(dto), service: 'pm' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pmKeys.templates });
       toast.success('Template created');
@@ -60,7 +60,7 @@ export function TemplateFormModal({ open, onOpenChange, template }: TemplateForm
   });
 
   const updateMutation = useMutation({
-    mutationFn: (dto: Record<string, unknown>) => api.fetch(`/pm/templates/${template.id}`, { method: 'PATCH', body: JSON.stringify(dto) }),
+    mutationFn: (dto: Record<string, unknown>) => api.fetch(`/templates/${template.id}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pmKeys.templates });
       toast.success('Template updated');

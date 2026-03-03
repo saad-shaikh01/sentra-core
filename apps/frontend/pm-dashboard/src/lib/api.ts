@@ -6,6 +6,15 @@ interface FetchOptions extends RequestInit {
   service?: 'core' | 'pm';
 }
 
+export interface PmSingleResponse<T> {
+  data: T;
+}
+
+export interface PmMutationResponse {
+  success: boolean;
+  data?: any;
+}
+
 class ApiClient {
   private coreUrl: string;
   private pmUrl: string;
@@ -68,7 +77,12 @@ class ApiClient {
     const { skipAuth = false, service = 'core', ...fetchOptions } = options;
     const baseUrl = service === 'pm' ? this.pmUrl : this.coreUrl;
     
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    // Normalize endpoint: ensure it doesn't double-prefix /pm
+    let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    if (service === 'pm' && cleanEndpoint.startsWith('/pm/')) {
+      cleanEndpoint = cleanEndpoint.substring(3); // Remove /pm
+    }
+    
     const url = `${baseUrl}${cleanEndpoint}`;
 
     const headers: HeadersInit = {
@@ -169,7 +183,7 @@ class ApiClient {
 
   // User endpoints
   async getMe() {
-    return this.fetch<any>('/users/me');
+    return this.fetch<PmSingleResponse<any>>('/users/me');
   }
 
   async updateProfile(data: {
@@ -179,7 +193,7 @@ class ApiClient {
     phone?: string;
     bio?: string;
   }) {
-    return this.fetch<any>('/users/me', {
+    return this.fetch<PmSingleResponse<any>>('/users/me', {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -191,7 +205,7 @@ class ApiClient {
   }
 
   async updateMemberRole(userId: string, role: string) {
-    return this.fetch<any>(`/organization/members/${userId}/role`, {
+    return this.fetch<PmSingleResponse<any>>(`/organization/members/${userId}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     });
@@ -205,7 +219,7 @@ class ApiClient {
 
   // Invitation endpoints
   async sendInvitation(email: string, role: string) {
-    return this.fetch<any>('/organization/invite', {
+    return this.fetch<PmSingleResponse<any>>('/organization/invite', {
       method: 'POST',
       body: JSON.stringify({ email, role }),
     });
@@ -228,15 +242,15 @@ class ApiClient {
   }
 
   async getBrand(id: string) {
-    return this.fetch<any>(`/brands/${id}`);
+    return this.fetch<PmSingleResponse<any>>(`/brands/${id}`);
   }
 
   async createBrand(dto: Record<string, unknown>) {
-    return this.fetch<any>('/brands', { method: 'POST', body: JSON.stringify(dto) });
+    return this.fetch<PmSingleResponse<any>>('/brands', { method: 'POST', body: JSON.stringify(dto) });
   }
 
   async updateBrand(id: string, dto: Record<string, unknown>) {
-    return this.fetch<any>(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+    return this.fetch<PmSingleResponse<any>>(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }
 
   async deleteBrand(id: string) {
@@ -250,15 +264,15 @@ class ApiClient {
   }
 
   async getClient(id: string) {
-    return this.fetch<any>(`/clients/${id}`);
+    return this.fetch<PmSingleResponse<any>>(`/clients/${id}`);
   }
 
   async createClient(dto: Record<string, unknown>) {
-    return this.fetch<any>('/clients', { method: 'POST', body: JSON.stringify(dto) });
+    return this.fetch<PmSingleResponse<any>>('/clients', { method: 'POST', body: JSON.stringify(dto) });
   }
 
   async updateClient(id: string, dto: Record<string, unknown>) {
-    return this.fetch<any>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+    return this.fetch<PmSingleResponse<any>>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }
 
   async deleteClient(id: string) {
@@ -272,15 +286,15 @@ class ApiClient {
   }
 
   async getProject(id: string) {
-    return this.fetch<any>(`/projects/${id}`, { service: 'pm' });
+    return this.fetch<PmSingleResponse<any>>(`/projects/${id}`, { service: 'pm' });
   }
 
   async createProject(dto: Record<string, unknown>) {
-    return this.fetch<any>('/projects', { method: 'POST', body: JSON.stringify(dto), service: 'pm' });
+    return this.fetch<PmSingleResponse<any>>('/projects', { method: 'POST', body: JSON.stringify(dto), service: 'pm' });
   }
 
   async updateProject(id: string, dto: Record<string, unknown>) {
-    return this.fetch<any>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' });
+    return this.fetch<PmSingleResponse<any>>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' });
   }
 
   async getEngagements(params?: Record<string, unknown>) {
@@ -319,11 +333,11 @@ class ApiClient {
   }
 
   async getSubmission(id: string) {
-    return this.fetch<any>(`/submissions/${id}`, { service: 'pm' });
+    return this.fetch<PmSingleResponse<any>>(`/submissions/${id}`, { service: 'pm' });
   }
 
   async submitReview(submissionId: string, dto: Record<string, unknown>) {
-    return this.fetch<any>(`/submissions/${submissionId}/qc-reviews`, { 
+    return this.fetch<PmMutationResponse>(`/submissions/${submissionId}/qc-reviews`, { 
       method: 'POST', 
       body: JSON.stringify(dto),
       service: 'pm' 

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared';
 import { CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { useSubmissionDetail, useSubmitReview } from '@/hooks/use-qc-reviews';
+import { toast } from '@/hooks/use-toast';
 
 interface QcReviewDrawerProps {
   submissionId: string | null;
@@ -16,14 +17,19 @@ interface QcReviewDrawerProps {
 }
 
 export function QcReviewDrawer({ submissionId, onClose }: QcReviewDrawerProps) {
-  const { data: submission, isLoading } = useSubmissionDetail(submissionId!);
+  const { data: submissionRes, isLoading } = useSubmissionDetail(submissionId!);
+  const submission = submissionRes?.data;
   const submitReview = useSubmitReview();
   const [feedback, setFeedback] = useState('');
 
   const handleDecision = (decision: 'APPROVED' | 'REJECTED') => {
     submitReview.mutate(
       { submissionId: submissionId!, decision, feedback: feedback || undefined },
-      { onSuccess: () => { setFeedback(''); onClose(); } }
+      { onSuccess: (data: any) => { 
+        setFeedback(''); 
+        toast.success(decision === 'APPROVED' ? 'Approved' : 'Rejected');
+        onClose(); 
+      } }
     );
   };
 

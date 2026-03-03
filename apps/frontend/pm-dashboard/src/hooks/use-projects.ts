@@ -26,7 +26,7 @@ export function useProjects(params?: Record<string, unknown>) {
 export function useProject(id: string) {
   return useQuery({
     queryKey: projectsKeys.detail(id),
-    queryFn:  () => api.getProject(id) as Promise<any>,
+    queryFn:  () => api.getProject(id),
     enabled:  !!id,
     staleTime: 60_000,
   });
@@ -61,7 +61,7 @@ export function useUpdateProject() {
 export function useProjectStages(projectId: string) {
   return useQuery({
     queryKey: projectsKeys.stages(projectId),
-    queryFn:  () => api.getStages(projectId) as Promise<any>,
+    queryFn:  () => api.getStages(projectId),
     enabled:  !!projectId,
     staleTime: 30_000,
   });
@@ -70,7 +70,7 @@ export function useProjectStages(projectId: string) {
 export function useTasksByStage(stageId: string) {
   return useQuery({
     queryKey: projectsKeys.tasks(stageId),
-    queryFn:  () => api.getTasksByStage(stageId) as Promise<any>,
+    queryFn:  () => api.getTasksByStage(stageId),
     enabled:  !!stageId,
     staleTime: 30_000,
   });

@@ -20,17 +20,22 @@ export function FileList({ scopeType, scopeId, className }: FileListProps) {
 
   const queryKey = ['files', 'links', scopeType, scopeId];
 
-  const { data: links, isLoading } = useQuery({
+  const { data: linksRes, isLoading } = useQuery({
     queryKey,
-    queryFn: () => api.fetch<any[]>(`/files/links?scopeType=${scopeType}&scopeId=${scopeId}`, { service: 'pm' }),
+    queryFn: () => api.fetch<any>(`/files/links?scopeType=${scopeType}&scopeId=${scopeId}`, { service: 'pm' }),
     enabled: !!scopeId,
   });
 
+  const links = linksRes?.data ?? [];
+
   const getSignedUrl = useMutation({
     mutationFn: (fileAssetId: string) => api.fetch<any>(`/files/${fileAssetId}/signed-url`, { service: 'pm' }),
-    onSuccess: (data) => {
+    onSuccess: (res) => {
       // Open the presigned URL in a new tab
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      const data = res.data;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      }
     },
     onError: (e: Error) => toast.error('Failed to get file link', e.message),
   });

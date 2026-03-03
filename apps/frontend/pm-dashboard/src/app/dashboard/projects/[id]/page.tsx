@@ -25,9 +25,10 @@ export default function ProjectDetailPage() {
   const id = params.id as string;
   const router = useRouter();
 
-  const { data: project, isLoading, isError } = useProject(id);
+  const { data: projectRes, isLoading, isError } = useProject(id);
   const { data: stagesData, isLoading: stagesLoading } = useProjectStages(id);
 
+  const project = projectRes?.data;
   const [activeTab, setActiveTab] = useState<'threads' | 'files'>('threads');
 
   if (isLoading) return <div>Loading...</div>;
@@ -67,13 +68,13 @@ export default function ProjectDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
+          <Button variant="outline" size="sm" className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed" disabled>
             <History className="h-4 w-4 mr-2" /> Timeline
           </Button>
-          <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
+          <Button variant="outline" size="sm" className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed" disabled>
             <Settings className="h-4 w-4 mr-2" /> Project Settings
           </Button>
-          <Button size="sm" className="shadow-lg shadow-primary/20">
+          <Button size="sm" className="shadow-lg shadow-primary/20 opacity-50 cursor-not-allowed" disabled>
             Publish Work
           </Button>
         </div>
