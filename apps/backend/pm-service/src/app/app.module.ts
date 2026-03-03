@@ -10,9 +10,10 @@
  * - PmEventsModule is global — PmEventsService is available to all domain modules.
  */
 
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { JwtContextMiddleware } from '../common/middleware/jwt-context.middleware';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaClientModule } from '@sentra-core/prisma-client';
 import { AppController } from './app.controller';
@@ -84,4 +85,8 @@ import { FilesModule } from '../modules/files/files.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(JwtContextMiddleware).forRoutes('*');
+  }
+}

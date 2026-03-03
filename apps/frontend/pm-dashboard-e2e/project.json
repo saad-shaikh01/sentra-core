@@ -1,0 +1,10 @@
+{
+  "name": "pm-dashboard-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/frontend/pm-dashboard-e2e/src",
+  "tags": [],
+  "implicitDependencies": ["pm-dashboard"],
+  "// targets": "to see all targets run: nx show project pm-dashboard-e2e --web",
+  "targets": {}
+}

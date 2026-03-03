@@ -10,7 +10,9 @@
       "Bash(npx tsc:*)",
       "Bash(docker ps:*)",
       "Bash(docker stop:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

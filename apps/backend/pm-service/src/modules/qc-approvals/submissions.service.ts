@@ -18,6 +18,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
+import { PmSubmissionStatus } from '@prisma/client';
 import {
   buildPmPaginationResponse,
   toPrismaPagination,
@@ -209,7 +210,7 @@ export class SubmissionsService {
     const { skip, take } = toPrismaPagination(page, limit);
 
     const where = {
-      status: { in: ['SUBMITTED', 'UNDER_REVIEW'] },
+      status: { in: [PmSubmissionStatus.SUBMITTED, PmSubmissionStatus.UNDER_REVIEW] },
       task: { organizationId },
     };
 

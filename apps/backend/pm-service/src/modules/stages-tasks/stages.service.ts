@@ -25,8 +25,61 @@ import {
   buildPmPaginationResponse,
   toPrismaPagination,
 } from '../../common/helpers/pagination.helper';
+import { UpdateStageDto } from './dto/update-stage.dto';
+import { StageLeadDto } from './dto/stage-lead.dto';
+import { BlockStageDto } from './dto/block-stage.dto';
 
-// ... (existing imports)
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type StageSelect = {
+  id: true;
+  organizationId: true;
+  projectId: true;
+  templateStageId: true;
+  name: true;
+  description: true;
+  departmentCode: true;
+  status: true;
+  sortOrder: true;
+  ownerLeadId: true;
+  clientReviewMode: true;
+  requiresStageApproval: true;
+  requiresQcByDefault: true;
+  isOptional: true;
+  isBlocked: true;
+  startedAt: true;
+  dueAt: true;
+  completedAt: true;
+  createdAt: true;
+  updatedAt: true;
+};
+
+const STAGE_SELECT: StageSelect = {
+  id: true,
+  organizationId: true,
+  projectId: true,
+  templateStageId: true,
+  name: true,
+  description: true,
+  departmentCode: true,
+  status: true,
+  sortOrder: true,
+  ownerLeadId: true,
+  clientReviewMode: true,
+  requiresStageApproval: true,
+  requiresQcByDefault: true,
+  isOptional: true,
+  isBlocked: true,
+  startedAt: true,
+  dueAt: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+// ---------------------------------------------------------------------------
 
 @Injectable()
 export class StagesService {
