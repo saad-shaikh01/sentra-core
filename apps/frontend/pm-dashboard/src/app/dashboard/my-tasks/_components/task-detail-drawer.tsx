@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -86,9 +87,12 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
   });
 
   const addWorklogMutation = useMutation({
-    mutationFn: (note: string) => api.fetch(`/tasks/${taskId}/worklogs`, { 
+    mutationFn: (notes: string) => api.fetch(`/tasks/${taskId}/worklogs`, { 
       method: 'POST', 
-      body: JSON.stringify({ note, minutesSpent: 0 }), // simplified for now
+      body: JSON.stringify({ 
+        startedAt: new Date().toISOString(),
+        notes 
+      }),
       service: 'pm' 
     }),
     onSuccess: () => { 
@@ -185,52 +189,61 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
               {/* Quick Actions */}
               <div className="space-y-3">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Actions</h3>
-                <div className="flex flex-wrap gap-3">
-                  {!task.assigneeId && (
-                    <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => claimTaskMutation.mutate()} disabled={claimTaskMutation.isPending}>
-                      <UserPlus className="h-4 w-4 mr-2" /> Claim Task
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-3">
+                    {!task.assigneeId && (
+                      <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={() => claimTaskMutation.mutate()} disabled={claimTaskMutation.isPending}>
+                        <UserPlus className="h-4 w-4 mr-2" /> Claim Task
+                      </Button>
+                    )}
+                    {task.status === 'READY' && task.assigneeId && (
+                      <Button 
+                        size="sm" 
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => startTaskMutation.mutate()}
+                        disabled={startTaskMutation.isPending}
+                      >
+                        <Play className="h-4 w-4 mr-2" /> Start Work
+                      </Button>
+                    )}
+                    {task.status === 'IN_PROGRESS' && (
+                      <Button 
+                        size="sm" 
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => submitTaskMutation.mutate()}
+                        disabled={submitTaskMutation.isPending || task.requiresQc}
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" /> Submit for Review
+                      </Button>
+                    )}
+                    {!task.isBlocked && (
+                      <Button variant="outline" size="sm" className="border-red-500/20 text-red-400 hover:bg-red-500/10" onClick={() => blockTaskMutation.mutate('Manual block')}>
+                        <Lock className="h-4 w-4 mr-2" /> Block
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10">
+                      <MessageSquare className="h-4 w-4 mr-2" /> Discuss
                     </Button>
+                  </div>
+                  
+                  {task.status === 'IN_PROGRESS' && task.requiresQc && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                      <p className="text-xs text-amber-400">
+                        This task requires QC. Please use the specialized QC submission flow (coming soon) or contact your lead to submit.
+                      </p>
+                    </div>
                   )}
-                  {task.status === 'READY' && task.assigneeId && (
-                    <Button 
-                      size="sm" 
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={() => startTaskMutation.mutate()}
-                      disabled={startTaskMutation.isPending}
-                    >
-                      <Play className="h-4 w-4 mr-2" /> Start Work
-                    </Button>
-                  )}
-                  {task.status === 'IN_PROGRESS' && (
-                    <Button 
-                      size="sm" 
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => submitTaskMutation.mutate()}
-                      disabled={submitTaskMutation.isPending}
-                    >
-                      <CheckCircle2 className="h-4 w-4 mr-2" /> Submit for Review
-                    </Button>
-                  )}
-                  {!task.isBlocked && (
-                    <Button variant="outline" size="sm" className="border-red-500/20 text-red-400 hover:bg-red-500/10" onClick={() => blockTaskMutation.mutate('Manual block')}>
-                      <Lock className="h-4 w-4 mr-2" /> Block
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10">
-                    <MessageSquare className="h-4 w-4 mr-2" /> Discuss
-                  </Button>
                 </div>
               </div>
 
               {/* Assignment (Lead Only style) */}
               <div className="space-y-3">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Assignee</h3>
-                <Select value={task.assigneeId || 'none'} onValueChange={(v) => assignTaskMutation.mutate(v === 'none' ? '' : v)}>
+                <Select value={task.assigneeId || 'none'} onValueChange={(v) => v !== 'none' && assignTaskMutation.mutate(v)}>
                   <SelectTrigger className="bg-white/5 border-white/10">
                     <SelectValue placeholder="Select member" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
                     {members?.map((m: any) => (
                       <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                     ))}
@@ -245,7 +258,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                   <input 
                     type="text" 
                     placeholder="Quick activity log..." 
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 text-sm"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 text-sm outline-none focus:border-primary/50"
                     value={worklogNote}
                     onChange={(e) => setWorklogNote(e.target.value)}
                   />

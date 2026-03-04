@@ -45,20 +45,11 @@ export default function ProjectDetailPage() {
 
   const approvals = approvalsRes?.data ?? [];
 
+  // Intentionally disabling this CTA because the current screen lacks a deliverablePackageId selection source
+  // needed for a valid CreateApprovalRequestDto.
   const requestApprovalMutation = useMutation({
-    mutationFn: () => api.fetch(`/projects/${id}/approval-requests`, { 
-      method: 'POST', 
-      body: JSON.stringify({ 
-        title: `Final Review for ${project.name}`,
-        requiredRoles: ['CLIENT_ADMIN']
-      }),
-      service: 'pm' 
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project-approvals', id] });
-      toast.success('Approval request sent to client');
-    },
-    onError: (e: Error) => toast.error('Failed to send request', e.message),
+    mutationFn: () => Promise.reject(new Error('Deliverable required')),
+    onError: (e: Error) => toast.error('Creation failed', e.message),
   });
 
   if (isLoading) return <div className="p-10 text-center">Loading project detail...</div>;
@@ -106,11 +97,11 @@ export default function ProjectDetailPage() {
           </Button>
           <Button 
             size="sm" 
-            className="shadow-lg shadow-primary/20" 
-            onClick={() => requestApprovalMutation.mutate()}
-            disabled={requestApprovalMutation.isPending || project.status === 'COMPLETED'}
+            className="shadow-lg shadow-primary/20 opacity-50 cursor-not-allowed" 
+            disabled
+            title="Requires deliverable package"
           >
-            <Send className="h-4 w-4 mr-2" /> {requestApprovalMutation.isPending ? 'Sending...' : 'Request Client Approval'}
+            <Send className="h-4 w-4 mr-2" /> Request Client Approval
           </Button>
         </div>
       </div>
@@ -178,16 +169,27 @@ export default function ProjectDetailPage() {
 
             {activeTab === 'approvals' && (
               <div className="p-6 space-y-4">
-                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Client Approval Log</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Client Approval Log</h3>
+                </div>
+                
+                <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[11px] text-amber-200/60 leading-relaxed">
+                  Approval requests require a deliverable package to be created first. Approval creation is not yet supported from this screen.
+                </div>
+
                 {approvals.length > 0 ? (
                   <div className="space-y-3">
                     {approvals.map((app: any) => (
                       <div key={app.id} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold">{app.title}</span>
+                          <span className="text-xs font-bold capitalize">{app.approvalTargetType.replace('_', ' ')}</span>
                           <StatusBadge status={app.status} />
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Requested {new Date(app.createdAt).toLocaleDateString()}</p>
+                        <div className="flex flex-col gap-1 text-[10px] text-muted-foreground">
+                          {app.approvalTargetEmail && <span>Target: {app.approvalTargetEmail}</span>}
+                          <span>Sent: {new Date(app.sentAt).toLocaleDateString()}</span>
+                          {app.dueAt && <span>Due: {new Date(app.dueAt).toLocaleDateString()}</span>}
+                        </div>
                       </div>
                     ))}
                   </div>

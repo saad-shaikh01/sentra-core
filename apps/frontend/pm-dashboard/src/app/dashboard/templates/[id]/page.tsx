@@ -111,6 +111,8 @@ function TemplateStageCard({ stage, templateId }: { stage: any, templateId: stri
   const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   const { data: tasksRes, isLoading: tasksLoading } = useQuery({
     queryKey: ['template-tasks', stage.id],
@@ -145,6 +147,19 @@ function TemplateStageCard({ stage, templateId }: { stage: any, templateId: stri
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['template-checklists', stage.id] });
       toast.success('Checklist item added');
+    },
+  });
+
+  const updateChecklistMutation = useMutation({
+    mutationFn: ({ id, label }: { id: string, label: string }) => api.fetch(`/templates/checklists/${id}`, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ label }), 
+      service: 'pm' 
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['template-checklists', stage.id] });
+      setEditingChecklistId(null);
+      toast.success('Item updated');
     },
   });
 
@@ -198,11 +213,39 @@ function TemplateStageCard({ stage, templateId }: { stage: any, templateId: stri
               </div>
               <div className="space-y-2">
                 {checklists.map((item: any) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/10">
-                    <span className="text-sm">{item.label}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => deleteChecklistMutation.mutate(item.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                  <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/10 group/item">
+                    {editingChecklistId === item.id ? (
+                      <div className="flex flex-1 items-center gap-2">
+                        <input 
+                          autoFocus
+                          className="flex-1 bg-white/10 border border-primary/30 rounded px-2 py-1 text-sm outline-none"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') updateChecklistMutation.mutate({ id: item.id, label: editValue });
+                            if (e.key === 'Escape') setEditingChecklistId(null);
+                          }}
+                        />
+                        <Button size="sm" className="h-7" onClick={() => updateChecklistMutation.mutate({ id: item.id, label: editValue })}>Save</Button>
+                      </div>
+                    ) : (
+                      <>
+                        <span 
+                          className="text-sm cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => {
+                            setEditingChecklistId(item.id);
+                            setEditValue(item.label);
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => deleteChecklistMutation.mutate(item.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
                 {checklists.length === 0 && <p className="text-xs text-muted-foreground italic text-center py-2">No checklist items defined.</p>}
