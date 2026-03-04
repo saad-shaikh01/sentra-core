@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Send, User, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useMembers } from '@/hooks/use-organization';
+import { useThreadSocket, type ThreadMessage } from '@/hooks/use-thread-socket';
 
 interface ThreadPaneProps {
   projectId: string;
@@ -22,47 +23,70 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   const queryClient = useQueryClient();
   const { data: members } = useMembers();
   const [newMessage, setNewMessage] = useState('');
+  const [wsMessages, setWsMessages] = useState<ThreadMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const memberMap = Object.fromEntries((members ?? []).map((m: any) => [m.id, m.name]));
 
-  // 1. Fetch thread by scope
+  // 1. Fetch thread by scope (one-time, no polling)
   const { data: threadRes, isLoading: loadingThread } = useQuery({
     queryKey: ['thread', 'scope', scopeType, scopeId],
     queryFn: () => api.fetch<any>(`/threads/scope/lookup?scopeType=${scopeType}&scopeId=${scopeId}`, { service: 'pm' }),
     enabled: !!scopeId,
     retry: false,
+    staleTime: Infinity,
   });
 
   const thread = threadRes?.data;
 
-  // 2. Fetch messages if thread exists
+  // 2. Initial message history fetch (REST, no polling — WS delivers live updates)
   const { data: messagesData, isLoading: loadingMessages } = useQuery({
     queryKey: ['thread', thread?.id, 'messages'],
     queryFn: () => api.fetch<any>(`/threads/${thread.id}/messages`, { service: 'pm' }),
     enabled: !!thread?.id,
-    refetchInterval: 10000,
+    staleTime: Infinity,
   });
 
-  // Scroll to bottom when messages load
+  // Reset WS messages when thread changes
+  useEffect(() => {
+    setWsMessages([]);
+  }, [thread?.id]);
+
+  // 3. WebSocket for real-time messages
+  const handleIncomingMessage = useCallback((msg: ThreadMessage) => {
+    setWsMessages((prev) => {
+      // Deduplicate by id
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  }, []);
+
+  const { status: wsStatus, sendMessage: wsSend } = useThreadSocket({
+    threadId: thread?.id,
+    enabled: !!thread?.id,
+    onMessage: handleIncomingMessage,
+  });
+
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messagesData?.data]);
+  }, [messagesData?.data, wsMessages]);
 
-  // 3. Create thread mutation (lazy)
+  // 4. Create thread mutation (lazy — only when there is no thread yet)
   const createThread = useMutation({
-    mutationFn: () => api.fetch<any>('/threads', {
-      method: 'POST',
-      body: JSON.stringify({ projectId, scopeType, scopeId, visibility: 'INTERNAL' }),
-      service: 'pm',
-    }).then(res => res.data),
+    mutationFn: () =>
+      api.fetch<any>('/threads', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, scopeType, scopeId, visibility: 'INTERNAL' }),
+        service: 'pm',
+      }).then((res) => res.data),
   });
 
-  // 4. Send message mutation
-  const sendMessage = useMutation({
+  // 5. Send message — prefer WebSocket, fallback to HTTP if WS not connected
+  const sendMessageHttp = useMutation({
     mutationFn: async (content: string) => {
       let targetThreadId = thread?.id;
-      
+
       // Lazy create thread if it doesn't exist
       if (!targetThreadId) {
         const newThread = await createThread.mutateAsync();
@@ -76,8 +100,11 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
         service: 'pm',
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['thread', thread?.id, 'messages'] });
+    onSuccess: (res) => {
+      // Add to local state (WS will also broadcast but deduplicate)
+      if (res?.data) {
+        handleIncomingMessage(res.data);
+      }
       setNewMessage('');
     },
     onError: (e: Error) => toast.error('Failed to send message', e.message),
@@ -85,31 +112,53 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!newMessage.trim() || sendMessage.isPending) return;
-    sendMessage.mutate(newMessage.trim());
+    const content = newMessage.trim();
+    if (!content || sendMessageHttp.isPending || createThread.isPending) return;
+
+    // Try WebSocket first; if not connected, fall back to HTTP
+    const sentViaWs = thread?.id ? wsSend(content) : false;
+    if (sentViaWs) {
+      setNewMessage('');
+    } else {
+      sendMessageHttp.mutate(content);
+    }
   };
 
-  const messages = messagesData?.data ?? [];
+  // Combine historical and live messages, deduplicating by id
+  const historicalMessages: ThreadMessage[] = messagesData?.data ?? [];
+  const allIds = new Set(historicalMessages.map((m: any) => m.id));
+  const liveOnly = wsMessages.filter((m) => !allIds.has(m.id));
+  const messages = [...historicalMessages, ...liveOnly];
+
+  const isDisconnected = thread?.id && wsStatus === 'disconnected';
 
   return (
-    <div className={cn("flex flex-col h-[500px] border border-white/10 rounded-2xl bg-black/20 overflow-hidden", className)}>
+    <div className={cn('flex flex-col h-[500px] border border-white/10 rounded-2xl bg-black/20 overflow-hidden', className)}>
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-white/5 bg-white/[0.02]">
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-          <MessageSquare className="h-4 w-4" />
+      <div className="flex items-center justify-between gap-3 p-4 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+            <MessageSquare className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-foreground tracking-tight">Discussion</h3>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Internal Only</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-bold text-foreground tracking-tight">Discussion</h3>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Internal Only</p>
-        </div>
+        {isDisconnected && (
+          <div className="flex items-center gap-1.5 text-[10px] text-amber-400 bg-amber-400/10 px-2 py-1 rounded-full">
+            <WifiOff className="h-3 w-3" />
+            Reconnecting…
+          </div>
+        )}
       </div>
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {loadingThread || loadingMessages ? (
           <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className={cn("flex gap-3", i % 2 === 0 ? "justify-end" : "")}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className={cn('flex gap-3', i % 2 === 0 ? 'justify-end' : '')}>
                 <div className="h-16 w-64 bg-white/5 rounded-2xl animate-pulse" />
               </div>
             ))}
@@ -124,7 +173,7 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
           messages.map((msg: any) => {
             const isMe = msg.authorId === user?.id;
             return (
-              <div key={msg.id} className={cn("flex flex-col gap-1 max-w-[85%]", isMe ? "ml-auto items-end" : "mr-auto")}>
+              <div key={msg.id} className={cn('flex flex-col gap-1 max-w-[85%]', isMe ? 'ml-auto items-end' : 'mr-auto')}>
                 <div className="flex items-center gap-2 px-1">
                   <span className="text-[10px] font-medium text-muted-foreground">
                     {isMe ? 'You' : (memberMap[msg.authorId] ?? 'Unknown User')}
@@ -133,12 +182,14 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <div className={cn(
-                  "p-3 rounded-2xl text-sm leading-relaxed",
-                  isMe 
-                    ? "bg-primary/20 text-primary-foreground border border-primary/20 rounded-tr-sm" 
-                    : "bg-white/5 text-foreground border border-white/10 rounded-tl-sm"
-                )}>
+                <div
+                  className={cn(
+                    'p-3 rounded-2xl text-sm leading-relaxed',
+                    isMe
+                      ? 'bg-primary/20 text-primary-foreground border border-primary/20 rounded-tr-sm'
+                      : 'bg-white/5 text-foreground border border-white/10 rounded-tl-sm',
+                  )}
+                >
                   {msg.body}
                 </div>
               </div>
@@ -157,12 +208,12 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 text-sm outline-none focus:border-primary/50 transition-colors"
-            disabled={sendMessage.isPending || createThread.isPending}
+            disabled={sendMessageHttp.isPending || createThread.isPending}
           />
-          <Button 
-            type="submit" 
-            size="icon" 
-            disabled={!newMessage.trim() || sendMessage.isPending || createThread.isPending}
+          <Button
+            type="submit"
+            size="icon"
+            disabled={!newMessage.trim() || sendMessageHttp.isPending || createThread.isPending}
             className="h-10 w-10 shrink-0"
           >
             <Send className="h-4 w-4" />

@@ -7,7 +7,8 @@ import { Eye, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MyTask {
-  id: string;
+  id?: string;
+  taskId?: string;
   name: string;
   status: string;
   priority: string;
@@ -25,6 +26,9 @@ interface MyTasksTableProps {
 }
 
 export function MyTasksTable({ tasks, isLoading, isError, onRowClick }: MyTasksTableProps) {
+  const resolveTaskId = (task: MyTask) =>
+    task.id ?? task.taskId ?? `${task.name}-${task.dueAt ?? 'no-due'}`;
+
   const columns = useMemo<Column<MyTask>[]>(() => [
     {
       key: 'name',
@@ -110,7 +114,7 @@ export function MyTasksTable({ tasks, isLoading, isError, onRowClick }: MyTasksT
       isLoading={isLoading}
       isError={isError}
       onRowClick={onRowClick}
-      keyExtractor={(t) => t.id}
+      keyExtractor={(t) => resolveTaskId(t)}
       emptyTitle="No tasks assigned to you"
       emptyDescription="You're all caught up! Enjoy your day."
     />

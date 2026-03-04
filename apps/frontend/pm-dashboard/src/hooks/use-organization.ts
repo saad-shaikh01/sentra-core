@@ -14,7 +14,12 @@ export const organizationKeys = {
 export function useMembers() {
   return useQuery({
     queryKey: organizationKeys.members(),
-    queryFn: () => api.getMembers(),
+    queryFn: async () => {
+      const result = await api.getMembers();
+      if (Array.isArray(result)) return result;
+      if (Array.isArray((result as any)?.data)) return (result as any).data;
+      return [];
+    },
   });
 }
 

@@ -24,7 +24,7 @@ export function useBrands(params?: Record<string, unknown>) {
 export function useBrand(id: string) {
   return useQuery({
     queryKey: brandsKeys.detail(id),
-    queryFn:  () => api.getBrand(id) as Promise<IBrand>,
+    queryFn:  () => api.getBrand(id) as unknown as Promise<IBrand>,
     enabled:  !!id,
     staleTime: 60_000,
   });

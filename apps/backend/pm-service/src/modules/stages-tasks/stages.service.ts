@@ -28,6 +28,7 @@ import {
 import { UpdateStageDto } from './dto/update-stage.dto';
 import { StageLeadDto } from './dto/stage-lead.dto';
 import { BlockStageDto } from './dto/block-stage.dto';
+import { PmDepartmentCode, PmStageStatus } from '../../common/enums/pm.enums';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,8 +145,8 @@ export class StagesService {
     userId: string, // reserved for future role-based filtering
     page = 1,
     limit = 20,
-    status?: string,
-    departmentCode?: string,
+    status?: PmStageStatus,
+    departmentCode?: PmDepartmentCode,
   ) {
     const { skip, take } = toPrismaPagination(page, limit);
 

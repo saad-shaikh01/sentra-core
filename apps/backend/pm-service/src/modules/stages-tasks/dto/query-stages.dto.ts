@@ -1,6 +1,6 @@
-import { IsOptional, IsEnum, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsEnum } from 'class-validator';
 import { PmPaginationQueryDto } from '../../../common/dto/pagination-query.dto';
-import { PmStageStatus } from '../../../common/enums/pm.enums';
+import { PmDepartmentCode, PmStageStatus } from '../../../common/enums/pm.enums';
 
 /**
  * Query DTO for the stage queue (GET /api/pm/stages).
@@ -12,7 +12,6 @@ export class QueryStagesDto extends PmPaginationQueryDto {
   status?: PmStageStatus;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  departmentCode?: string;
+  @IsEnum(PmDepartmentCode)
+  departmentCode?: PmDepartmentCode;
 }

@@ -12,7 +12,10 @@
       "Bash(docker stop:*)",
       "Bash(ls:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(python3:*)",
+      "Bash(npx nx:*)",
+      "Bash(node:*)"
     ]
   }
 }

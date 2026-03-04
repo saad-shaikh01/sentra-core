@@ -16,15 +16,13 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { 
-  Clock, 
-  CheckCircle2, 
-  MessageSquare, 
-  AlertTriangle, 
+import {
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
   User as UserIcon,
   Play,
   Lock,
-  Unlock,
   UserPlus,
   History
 } from 'lucide-react';
@@ -48,6 +46,8 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
   const queryClient = useQueryClient();
   const { data: members } = useMembers();
   const [worklogNote, setWorklogNote] = useState('');
+  const [submissionNotes, setSubmissionNotes] = useState('');
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['task', taskId] });
@@ -114,12 +114,16 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
   });
 
   const submitTaskMutation = useMutation({
-    mutationFn: () => api.fetch(`/tasks/${taskId}/submissions`, { 
-      method: 'POST', 
-      body: JSON.stringify({ notes: 'Submitted from dashboard' }),
-      service: 'pm' 
+    mutationFn: (notes: string) => api.createTaskSubmission(taskId!, {
+      notes: notes.trim() || undefined,
+      selfQcResponses: [],
     }),
-    onSuccess: () => { invalidate(); toast.success('Task submitted for review'); },
+    onSuccess: () => {
+      invalidate();
+      setSubmissionNotes('');
+      setShowSubmitForm(false);
+      toast.success('Task submitted for review');
+    },
     onError: (e: Error) => toast.error('Failed to submit task', e.message),
   });
 
@@ -197,8 +201,8 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                       </Button>
                     )}
                     {task.status === 'READY' && task.assigneeId && (
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         className="bg-blue-600 hover:bg-blue-700 text-white"
                         onClick={() => startTaskMutation.mutate()}
                         disabled={startTaskMutation.isPending}
@@ -206,31 +210,57 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                         <Play className="h-4 w-4 mr-2" /> Start Work
                       </Button>
                     )}
-                    {task.status === 'IN_PROGRESS' && (
-                      <Button 
-                        size="sm" 
+                    {(task.status === 'IN_PROGRESS' || task.status === 'REVISION_REQUIRED') && (
+                      <Button
+                        size="sm"
                         className="bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => submitTaskMutation.mutate()}
-                        disabled={submitTaskMutation.isPending || task.requiresQc}
+                        onClick={() => setShowSubmitForm(true)}
+                        disabled={submitTaskMutation.isPending}
                       >
-                        <CheckCircle2 className="h-4 w-4 mr-2" /> Submit for Review
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        {task.status === 'REVISION_REQUIRED' ? 'Resubmit' : 'Submit for Review'}
                       </Button>
                     )}
-                    {!task.isBlocked && (
+                    {!task.isBlocked && task.status !== 'COMPLETED' && task.status !== 'CANCELLED' && (
                       <Button variant="outline" size="sm" className="border-red-500/20 text-red-400 hover:bg-red-500/10" onClick={() => blockTaskMutation.mutate('Manual block')}>
                         <Lock className="h-4 w-4 mr-2" /> Block
                       </Button>
                     )}
-                    <Button variant="outline" size="sm" className="bg-white/5 border-white/10 hover:bg-white/10">
-                      <MessageSquare className="h-4 w-4 mr-2" /> Discuss
-                    </Button>
                   </div>
-                  
-                  {task.status === 'IN_PROGRESS' && task.requiresQc && (
-                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                      <p className="text-xs text-amber-400">
-                        This task requires QC. Please use the specialized QC submission flow (coming soon) or contact your lead to submit.
-                      </p>
+
+                  {/* QC / Submission form */}
+                  {showSubmitForm && (
+                    <div className="p-4 bg-white/[0.02] border border-white/10 rounded-xl space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Submission Notes
+                        {task.requiresQc && <span className="ml-2 text-amber-400">(QC Review Required)</span>}
+                      </h4>
+                      <textarea
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary/50 resize-none"
+                        rows={3}
+                        placeholder="Describe the work completed, any context for the reviewer..."
+                        value={submissionNotes}
+                        onChange={(e) => setSubmissionNotes(e.target.value)}
+                        disabled={submitTaskMutation.isPending}
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { setShowSubmitForm(false); setSubmissionNotes(''); }}
+                          disabled={submitTaskMutation.isPending}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => submitTaskMutation.mutate(submissionNotes)}
+                          disabled={submitTaskMutation.isPending}
+                        >
+                          {submitTaskMutation.isPending ? 'Submitting...' : 'Confirm Submit'}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>

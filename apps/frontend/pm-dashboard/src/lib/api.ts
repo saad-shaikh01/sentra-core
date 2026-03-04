@@ -242,15 +242,15 @@ class ApiClient {
   }
 
   async getBrand(id: string) {
-    return this.fetch<PmSingleResponse<any>>(`/brands/${id}`);
+    return this.fetch<any>(`/brands/${id}`);
   }
 
   async createBrand(dto: Record<string, unknown>) {
-    return this.fetch<PmSingleResponse<any>>('/brands', { method: 'POST', body: JSON.stringify(dto) });
+    return this.fetch<any>('/brands', { method: 'POST', body: JSON.stringify(dto) });
   }
 
   async updateBrand(id: string, dto: Record<string, unknown>) {
-    return this.fetch<PmSingleResponse<any>>(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+    return this.fetch<any>(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }
 
   async deleteBrand(id: string) {
@@ -264,15 +264,15 @@ class ApiClient {
   }
 
   async getClient(id: string) {
-    return this.fetch<PmSingleResponse<any>>(`/clients/${id}`);
+    return this.fetch<any>(`/clients/${id}`);
   }
 
   async createClient(dto: Record<string, unknown>) {
-    return this.fetch<PmSingleResponse<any>>('/clients', { method: 'POST', body: JSON.stringify(dto) });
+    return this.fetch<any>('/clients', { method: 'POST', body: JSON.stringify(dto) });
   }
 
   async updateClient(id: string, dto: Record<string, unknown>) {
-    return this.fetch<PmSingleResponse<any>>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+    return this.fetch<any>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }
 
   async deleteClient(id: string) {
@@ -337,11 +337,31 @@ class ApiClient {
   }
 
   async submitReview(submissionId: string, dto: Record<string, unknown>) {
-    return this.fetch<PmMutationResponse>(`/submissions/${submissionId}/qc-reviews`, { 
-      method: 'POST', 
+    return this.fetch<PmMutationResponse>(`/submissions/${submissionId}/qc-reviews`, {
+      method: 'POST',
       body: JSON.stringify(dto),
-      service: 'pm' 
+      service: 'pm'
     });
+  }
+
+  async createTaskSubmission(taskId: string, dto: { notes?: string; selfQcResponses?: { labelSnapshot: string; isChecked?: boolean; responseText?: string }[] }) {
+    return this.fetch<any>(`/tasks/${taskId}/submissions`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async getTask(taskId: string) {
+    return this.fetch<any>(`/tasks/${taskId}`, { service: 'pm' });
+  }
+
+  async updateTask(taskId: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' });
+  }
+
+  async getStageHead(threadId: string) {
+    return this.fetch<{ lastMessageAt: string | null; count: number }>(`/threads/${threadId}/head`, { service: 'pm' });
   }
 }
 

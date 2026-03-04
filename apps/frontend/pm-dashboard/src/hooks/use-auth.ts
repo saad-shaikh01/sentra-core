@@ -32,7 +32,8 @@ export function useUser() {
   const query = useQuery({
     queryKey: authKeys.user(),
     queryFn: async (): Promise<IUserProfile> => {
-      return api.getMe();
+      const res = await api.getMe();
+      return (res as any).data ?? res;
     },
     enabled: checked && hasToken,
     retry: false,

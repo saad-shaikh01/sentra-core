@@ -56,7 +56,7 @@ export function FileList({ scopeType, scopeId, className }: FileListProps) {
 
   return (
     <div className={cn("space-y-2", className)}>
-      {links.map((link) => (
+      {links.map((link: any) => (
         <div 
           key={link.id} 
           className="group flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all"

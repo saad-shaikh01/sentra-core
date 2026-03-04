@@ -55,8 +55,18 @@ export class SubmissionsService {
     });
     if (!task) throw new NotFoundException('Task not found');
 
-    if (task.status === 'COMPLETED' || task.status === 'CANCELLED') {
+    const terminalStatuses = ['COMPLETED', 'CANCELLED'];
+    const inFlightStatuses = ['SUBMITTED', 'IN_QC'];
+
+    if (terminalStatuses.includes(task.status)) {
       throw new BadRequestException('Task is already done and cannot be submitted');
+    }
+
+    // Prevent double-submission when already under review (unless resubmitting after rejection)
+    if (inFlightStatuses.includes(task.status)) {
+      throw new BadRequestException(
+        'Task is already under review. Wait for the reviewer to complete or reject before resubmitting.',
+      );
     }
 
     if (task.requiresQc && (!dto.selfQcResponses || dto.selfQcResponses.length === 0)) {
@@ -98,7 +108,10 @@ export class SubmissionsService {
         });
       }
 
-      // Move task to appropriate status
+      // Move task to SUBMITTED (non-QC) or IN_QC (QC required).
+      // Both states render as "Under Review" in the UI.
+      // IN_QC locks the task for reviewer assignment.
+      // SUBMITTED allows lightweight internal sign-off flows.
       const nextTaskStatus = task.requiresQc ? 'IN_QC' : 'SUBMITTED';
       await tx.pmTask.update({
         where: { id: taskId },

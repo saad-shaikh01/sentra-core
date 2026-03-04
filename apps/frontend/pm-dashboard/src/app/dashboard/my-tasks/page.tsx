@@ -35,6 +35,7 @@ export default function MyTasksPage() {
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   const tasks = (data?.data ?? []) as MyTask[];
+  const resolveTaskId = (task: MyTask) => task.id ?? task.taskId ?? null;
 
   return (
     <div className="space-y-6">
@@ -119,7 +120,7 @@ export default function MyTasksPage() {
           tasks={tasks}
           isLoading={isLoading}
           isError={isError}
-          onRowClick={(t) => setDetailTaskId(t.id)}
+          onRowClick={(t) => setDetailTaskId(resolveTaskId(t))}
         />
         
         <div className="p-4 border-t border-white/5">
