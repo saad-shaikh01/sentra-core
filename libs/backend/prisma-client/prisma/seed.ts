@@ -12,10 +12,6 @@ import {
   OrganizationOnboardingMode,
   LeadStatus,
   SaleStatus,
-  InvoiceStatus,
-  LeadActivityType,
-  TransactionStatus,
-  TransactionType,
   PmServiceType,
   PmProjectType,
   PmProjectStatus,
@@ -23,12 +19,31 @@ import {
   PmDepartmentCode,
   PmClientReviewMode,
   PmDependencyType,
+  PmStageStatus,
+  PmTaskStatus,
+  PmTaskPriority,
+  PmAssignmentType,
+  PmSubmissionStatus,
+  PmDeliverableType,
+  PmApprovalTargetType,
+  PmApprovalRequestStatus,
+  PmThreadScopeType,
+  PmThreadVisibility,
+  PmFileAssetType,
+  PmFileScopeType,
+  PmFileLinkType,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+type SeedUser = {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  jobTitle: string;
+};
 
 function hash(plain: string) {
   return bcrypt.hashSync(plain, 10);
@@ -44,12 +59,16 @@ function daysAgo(days: number): Date {
   return daysFromNow(-days);
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+function hoursAgo(hours: number): Date {
+  const d = new Date();
+  d.setHours(d.getHours() - hours);
+  return d;
+}
 
 async function main() {
-  console.log('🌱  Seeding Sentra Core database…\n');
+  console.log('🌱  Seeding Sentra Core database...\n');
 
-  // ── 1. Organization ────────────────────────────────────────────────────────
+  // ── 1. Organization ──────────────────────────────────────────────────────
   const org = await prisma.organization.create({
     data: {
       name: 'Madcom Digital',
@@ -59,45 +78,40 @@ async function main() {
   });
   console.log(`✅  Organization: ${org.name} (${org.id})`);
 
-  // ── 2. Users ───────────────────────────────────────────────────────────────
-  const owner = await prisma.user.create({
-    data: {
+  // ── 2. Users (all roles) ────────────────────────────────────────────────
+  const seedUsers: SeedUser[] = [
+    {
       name: 'Adam Hassan',
       email: 'admin@madcom.com',
-      password: hash('Admin@123'),
+      password: 'Admin@123',
       role: UserRole.OWNER,
       jobTitle: 'CEO',
-      organizationId: org.id,
     },
-  });
-
-  const sarah = await prisma.user.create({
-    data: {
+    {
+      name: 'Nadia Ali',
+      email: 'nadia@madcom.com',
+      password: 'Admin@123',
+      role: UserRole.ADMIN,
+      jobTitle: 'Operations Admin',
+    },
+    {
       name: 'Sarah Khan',
       email: 'sarah@madcom.com',
-      password: hash('Agent@123'),
+      password: 'Agent@123',
       role: UserRole.SALES_MANAGER,
       jobTitle: 'Sales Manager',
-      organizationId: org.id,
     },
-  });
-
-  const alex = await prisma.user.create({
-    data: {
+    {
       name: 'Alex Rivera',
       email: 'alex@madcom.com',
-      password: hash('Agent@123'),
+      password: 'Agent@123',
       role: UserRole.FRONTSELL_AGENT,
-      jobTitle: 'Sales Agent',
-      organizationId: org.id,
+      jobTitle: 'Frontsell Agent',
     },
-  });
-
-  const mike = await prisma.user.create({
-    data: {
+    {
       name: 'Mike Thomas',
       email: 'mike@madcom.com',
-      password: hash('Agent@123'),
+      password: 'Agent@123',
       role: UserRole.UPSELL_AGENT,
       jobTitle: 'Upsell Specialist',
       organizationId: org.id,
@@ -399,7 +413,7 @@ async function main() {
 
   console.log('✅  IAM: app registry, permissions, app roles, user access + scopes');
 
-  // ── 3. Brands ──────────────────────────────────────────────────────────────
+  // ── 3. Brands ────────────────────────────────────────────────────────────
   const pulpHouse = await prisma.brand.create({
     data: {
       name: 'The Pulp House',
@@ -418,10 +432,31 @@ async function main() {
     },
   });
 
-  const brands = [pulpHouse, urbanQuill];
-  console.log(`✅  Brands (${brands.length}): ${brands.map((b) => b.name).join(', ')}`);
+  const velocityBooks = await prisma.brand.create({
+    data: {
+      name: 'Velocity Books',
+      domain: 'velocitybooks.com',
+      logoUrl: 'https://placehold.co/120x40/10b981/fff?text=VelocityBooks',
+      organizationId: org.id,
+    },
+  });
 
-  // ── 4. Clients ─────────────────────────────────────────────────────────────
+  await prisma.brandAccess.createMany({
+    data: [
+      { userId: admin.id, brandId: pulpHouse.id, role: 'ADMIN' },
+      { userId: admin.id, brandId: urbanQuill.id, role: 'ADMIN' },
+      { userId: pmLeadPublishing.id, brandId: pulpHouse.id, role: 'EDITOR' },
+      { userId: pmLeadDesign.id, brandId: pulpHouse.id, role: 'EDITOR' },
+      { userId: pmEditor.id, brandId: pulpHouse.id, role: 'EDITOR' },
+      { userId: pmDesigner.id, brandId: pulpHouse.id, role: 'EDITOR' },
+      { userId: pmQc.id, brandId: pulpHouse.id, role: 'EDITOR' },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅  Brands: 3 + brand access linked');
+
+  // ── 4. Clients ───────────────────────────────────────────────────────────
   const novatechClient = await prisma.client.create({
     data: {
       companyName: 'NovaTech Solutions',
@@ -433,25 +468,50 @@ async function main() {
       organizationId: org.id,
     },
   });
-  console.log(`✅  Clients: ${novatechClient.companyName}`);
 
-  // ── 5. Sales ───────────────────────────────────────────────────────────────
-  const sale1 = await prisma.sale.create({
+  const bluewaveClient = await prisma.client.create({
     data: {
-      totalAmount: 4500,
-      currency: 'USD',
-      status: SaleStatus.ACTIVE,
-      description: 'Full-service retainer — Q1',
-      clientId: novatechClient.id,
-      brandId: pulpHouse.id,
+      companyName: 'BlueWave Labs',
+      contactName: 'Emily Watson',
+      email: 'emily@bluewave.ai',
+      password: hash('Client@123'),
+      phone: '+1-555-0202',
+      brandId: urbanQuill.id,
       organizationId: org.id,
-      createdAt: daysAgo(30),
     },
   });
-  console.log(`✅  Sales: 1 record`);
 
-  // ── 6. PM Service Templates ───────────────────────────────────────────────
-  console.log('\n🏗️  Seeding PM Templates…');
+  console.log('✅  Clients: NovaTech Solutions, BlueWave Labs');
+
+  // ── 5. Sales ─────────────────────────────────────────────────────────────
+  await prisma.sale.createMany({
+    data: [
+      {
+        totalAmount: 4500,
+        currency: 'USD',
+        status: SaleStatus.ACTIVE,
+        description: 'Full-service retainer — Q1',
+        clientId: novatechClient.id,
+        brandId: pulpHouse.id,
+        organizationId: org.id,
+        createdAt: daysAgo(30),
+      },
+      {
+        totalAmount: 2200,
+        currency: 'USD',
+        status: SaleStatus.ACTIVE,
+        description: 'Quarterly campaign setup',
+        clientId: bluewaveClient.id,
+        brandId: urbanQuill.id,
+        organizationId: org.id,
+        createdAt: daysAgo(14),
+      },
+    ],
+  });
+  console.log('✅  Sales: 2 active records');
+
+  // ── 6. PM Templates ──────────────────────────────────────────────────────
+  console.log('\n🏗️  Seeding PM templates...');
 
   const publishingTemplate = await prisma.pmServiceTemplate.create({
     data: {
@@ -464,54 +524,102 @@ async function main() {
     },
   });
 
-  const pubStages = [
-    { name: 'Manuscript Review', dept: PmDepartmentCode.EDITING, order: 1, sla: 72 },
-    { name: 'Cover Design', dept: PmDepartmentCode.DESIGN, order: 2, sla: 120, review: PmClientReviewMode.REQUIRED },
-    { name: 'Interior Formatting', dept: PmDepartmentCode.EDITING, order: 3, sla: 96 },
-    { name: 'Final QC', dept: PmDepartmentCode.QC, order: 4, sla: 48, approval: true },
-    { name: 'Publishing & Distribution', dept: PmDepartmentCode.OPERATIONS, order: 5, sla: 168 },
+  const publishingBlueprint = [
+    {
+      name: 'Manuscript Review',
+      departmentCode: PmDepartmentCode.EDITING,
+      sortOrder: 1,
+      defaultSlaHours: 72,
+      clientReviewMode: PmClientReviewMode.NONE,
+      requiresStageApproval: false,
+      requiresQcByDefault: true,
+      tasks: ['Structural edit', 'Language proofread'],
+    },
+    {
+      name: 'Cover Design',
+      departmentCode: PmDepartmentCode.DESIGN,
+      sortOrder: 2,
+      defaultSlaHours: 120,
+      clientReviewMode: PmClientReviewMode.REQUIRED,
+      requiresStageApproval: false,
+      requiresQcByDefault: false,
+      tasks: ['Cover concept', 'Cover revisions'],
+    },
+    {
+      name: 'Interior Formatting',
+      departmentCode: PmDepartmentCode.EDITING,
+      sortOrder: 3,
+      defaultSlaHours: 96,
+      clientReviewMode: PmClientReviewMode.NONE,
+      requiresStageApproval: false,
+      requiresQcByDefault: false,
+      tasks: ['Layout formatting', 'Pagination QA'],
+    },
+    {
+      name: 'Final QC',
+      departmentCode: PmDepartmentCode.QC,
+      sortOrder: 4,
+      defaultSlaHours: 48,
+      clientReviewMode: PmClientReviewMode.NONE,
+      requiresStageApproval: true,
+      requiresQcByDefault: true,
+      tasks: ['QC checklist', 'Final approval prep'],
+    },
+    {
+      name: 'Publishing & Distribution',
+      departmentCode: PmDepartmentCode.OPERATIONS,
+      sortOrder: 5,
+      defaultSlaHours: 168,
+      clientReviewMode: PmClientReviewMode.NONE,
+      requiresStageApproval: false,
+      requiresQcByDefault: false,
+      tasks: ['Platform publishing', 'Distribution rollout'],
+    },
   ];
 
-  const pubStageRecords = [];
-  for (const s of pubStages) {
-    const stage = await prisma.pmTemplateStage.create({
+  const templateStages: Awaited<ReturnType<typeof prisma.pmTemplateStage.create>>[] = [];
+  for (const stage of publishingBlueprint) {
+    const createdStage = await prisma.pmTemplateStage.create({
       data: {
         templateId: publishingTemplate.id,
-        name: s.name,
-        departmentCode: s.dept,
-        sortOrder: s.order,
-        defaultSlaHours: s.sla,
-        clientReviewMode: s.review ?? PmClientReviewMode.NONE,
-        requiresStageApproval: s.approval ?? false,
+        name: stage.name,
+        departmentCode: stage.departmentCode,
+        sortOrder: stage.sortOrder,
+        defaultSlaHours: stage.defaultSlaHours,
+        clientReviewMode: stage.clientReviewMode,
+        requiresStageApproval: stage.requiresStageApproval,
+        requiresQcByDefault: stage.requiresQcByDefault,
       },
     });
-    pubStageRecords.push(stage);
+    templateStages.push(createdStage);
 
-    await prisma.pmTemplateTask.create({
+    for (const [taskOrder, taskName] of stage.tasks.entries()) {
+      await prisma.pmTemplateTask.create({
+        data: {
+          templateStageId: createdStage.id,
+          name: taskName,
+          sortOrder: taskOrder + 1,
+          requiresQc: stage.requiresQcByDefault,
+        },
+      });
+    }
+  }
+
+  for (let i = 1; i < templateStages.length; i++) {
+    await prisma.pmTemplateStageDependency.create({
       data: {
-        templateStageId: stage.id,
-        name: `${s.name} - Initial Draft`,
-        sortOrder: 1,
-        requiresQc: true,
+        templateStageId: templateStages[i].id,
+        dependsOnTemplateStageId: templateStages[i - 1].id,
+        dependencyType: PmDependencyType.FINISH_TO_START,
       },
     });
   }
+  console.log('✅  PM Template: Standard Book Publishing (+ stages + tasks + dependencies)');
 
-  // Dependency: Design depends on Editing
-  await prisma.pmTemplateStageDependency.create({
-    data: {
-      templateStageId: pubStageRecords[1].id,
-      dependsOnTemplateStageId: pubStageRecords[0].id,
-      dependencyType: PmDependencyType.FINISH_TO_START,
-    },
-  });
+  // ── 7. PM Engagements + Projects ────────────────────────────────────────
+  console.log('\n🚀  Seeding PM execution data...');
 
-  console.log('✅  PM Templates: Publishing');
-
-  // ── 7. PM Engagements + Projects ──────────────────────────────────────────
-  console.log('\n🚀  Seeding PM Execution Layer…');
-
-  const engagement = await prisma.pmEngagement.create({
+  const clientEngagement = await prisma.pmEngagement.create({
     data: {
       organizationId: org.id,
       ownerType: 'CLIENT',
@@ -523,10 +631,22 @@ async function main() {
     },
   });
 
-  const project = await prisma.pmProject.create({
+  const internalEngagement = await prisma.pmEngagement.create({
     data: {
       organizationId: org.id,
-      engagementId: engagement.id,
+      ownerType: 'INTERNAL_BRAND',
+      ownerBrandId: velocityBooks.id,
+      primaryBrandId: velocityBooks.id,
+      name: 'Internal Process Upgrade',
+      status: 'DRAFT',
+      createdById: admin.id,
+    },
+  });
+
+  const activeProject = await prisma.pmProject.create({
+    data: {
+      organizationId: org.id,
+      engagementId: clientEngagement.id,
       brandId: pulpHouse.id,
       clientId: novatechClient.id,
       templateId: publishingTemplate.id,
@@ -540,9 +660,406 @@ async function main() {
     },
   });
 
-  console.log(`✅  PM Project: ${project.name}`);
+  const sandboxProject = await prisma.pmProject.create({
+    data: {
+      organizationId: org.id,
+      engagementId: internalEngagement.id,
+      brandId: velocityBooks.id,
+      projectType: PmProjectType.INTERNAL,
+      serviceType: PmServiceType.GENERAL,
+      name: 'PM Sandbox - Fresh Build',
+      status: PmProjectStatus.DRAFT,
+      priority: PmProjectPriority.MEDIUM,
+      deliveryDueAt: daysFromNow(30),
+      createdById: admin.id,
+    },
+  });
 
-  // ── Done ───────────────────────────────────────────────────────────────────
+  const stageStatusByOrder: PmStageStatus[] = [
+    PmStageStatus.ACTIVE,
+    PmStageStatus.READY,
+    PmStageStatus.PENDING,
+    PmStageStatus.PENDING,
+    PmStageStatus.PENDING,
+  ];
+  const stageLeadByOrder = [
+    pmLeadPublishing.id,
+    pmLeadDesign.id,
+    pmLeadPublishing.id,
+    pmQc.id,
+    pmLeadPublishing.id,
+  ];
+
+  const projectStages: Awaited<ReturnType<typeof prisma.pmProjectStage.create>>[] = [];
+  for (const [index, templateStage] of templateStages.entries()) {
+    const createdStage = await prisma.pmProjectStage.create({
+      data: {
+        organizationId: org.id,
+        projectId: activeProject.id,
+        templateStageId: templateStage.id,
+        name: templateStage.name,
+        description: `${templateStage.name} execution lane`,
+        departmentCode: templateStage.departmentCode,
+        status: stageStatusByOrder[index] ?? PmStageStatus.PENDING,
+        sortOrder: index,
+        ownerLeadId: stageLeadByOrder[index] ?? pmLeadPublishing.id,
+        clientReviewMode: templateStage.clientReviewMode,
+        requiresStageApproval: templateStage.requiresStageApproval,
+        requiresQcByDefault: templateStage.requiresQcByDefault,
+        dueAt: daysFromNow(7 + index * 5),
+        startedAt: index === 0 ? daysAgo(2) : null,
+      },
+    });
+    projectStages.push(createdStage);
+  }
+
+  for (let i = 1; i < projectStages.length; i++) {
+    await prisma.pmStageDependency.create({
+      data: {
+        projectId: activeProject.id,
+        projectStageId: projectStages[i].id,
+        dependsOnProjectStageId: projectStages[i - 1].id,
+        dependencyType: PmDependencyType.FINISH_TO_START,
+      },
+    });
+  }
+
+  const getStage = (name: string) => {
+    const stage = projectStages.find((s) => s.name === name);
+    if (!stage) {
+      throw new Error(`Missing stage in seed: ${name}`);
+    }
+    return stage;
+  };
+
+  const createTaskWithAssignment = async (input: {
+    stageId: string;
+    name: string;
+    description: string;
+    status: PmTaskStatus;
+    priority: PmTaskPriority;
+    sortOrder: number;
+    ownerLeadId: string;
+    assigneeId?: string;
+    dueInDays: number;
+    requiresQc?: boolean;
+  }) => {
+    const task = await prisma.pmTask.create({
+      data: {
+        organizationId: org.id,
+        projectId: activeProject.id,
+        projectStageId: input.stageId,
+        name: input.name,
+        description: input.description,
+        status: input.status,
+        priority: input.priority,
+        sortOrder: input.sortOrder,
+        ownerLeadId: input.ownerLeadId,
+        assigneeId: input.assigneeId ?? null,
+        requiresQc: input.requiresQc ?? false,
+        dueAt: daysFromNow(input.dueInDays),
+        startedAt: input.status === PmTaskStatus.IN_PROGRESS ? hoursAgo(12) : null,
+        createdById: pmLeadPublishing.id,
+        updatedById: pmLeadPublishing.id,
+      },
+    });
+
+    if (input.assigneeId) {
+      await prisma.pmTaskAssignment.create({
+        data: {
+          taskId: task.id,
+          assignedById: input.ownerLeadId,
+          assignedToId: input.assigneeId,
+          assignmentType: PmAssignmentType.MANUAL,
+          isCurrent: true,
+          startedAt: hoursAgo(24),
+          notes: 'Assigned during seed setup for PM testing',
+        },
+      });
+    }
+
+    return task;
+  };
+
+  const manuscriptEditTask = await createTaskWithAssignment({
+    stageId: getStage('Manuscript Review').id,
+    name: 'Structural edit draft',
+    description: 'Review manuscript structure and mark major revisions.',
+    status: PmTaskStatus.IN_PROGRESS,
+    priority: PmTaskPriority.HIGH,
+    sortOrder: 0,
+    ownerLeadId: pmLeadPublishing.id,
+    assigneeId: pmEditor.id,
+    dueInDays: 2,
+    requiresQc: true,
+  });
+
+  const proofreadTask = await createTaskWithAssignment({
+    stageId: getStage('Manuscript Review').id,
+    name: 'Language proofread',
+    description: 'Perform grammar and style pass for submission readiness.',
+    status: PmTaskStatus.READY,
+    priority: PmTaskPriority.MEDIUM,
+    sortOrder: 1,
+    ownerLeadId: pmLeadPublishing.id,
+    assigneeId: pmEditor.id,
+    dueInDays: 3,
+    requiresQc: true,
+  });
+
+  await createTaskWithAssignment({
+    stageId: getStage('Cover Design').id,
+    name: 'Cover concept v1',
+    description: 'Create and share first cover concept options.',
+    status: PmTaskStatus.READY,
+    priority: PmTaskPriority.HIGH,
+    sortOrder: 0,
+    ownerLeadId: pmLeadDesign.id,
+    assigneeId: pmDesigner.id,
+    dueInDays: 5,
+  });
+
+  await createTaskWithAssignment({
+    stageId: getStage('Cover Design').id,
+    name: 'Cover feedback incorporation',
+    description: 'Apply stakeholder feedback to selected concept.',
+    status: PmTaskStatus.PENDING,
+    priority: PmTaskPriority.MEDIUM,
+    sortOrder: 1,
+    ownerLeadId: pmLeadDesign.id,
+    dueInDays: 7,
+  });
+
+  await createTaskWithAssignment({
+    stageId: getStage('Interior Formatting').id,
+    name: 'Layout formatting pass',
+    description: 'Apply final trim size and chapter layout.',
+    status: PmTaskStatus.PENDING,
+    priority: PmTaskPriority.MEDIUM,
+    sortOrder: 0,
+    ownerLeadId: pmLeadPublishing.id,
+    dueInDays: 10,
+  });
+
+  await createTaskWithAssignment({
+    stageId: getStage('Final QC').id,
+    name: 'Pre-publish QC checklist',
+    description: 'Run submission against full QC checklist.',
+    status: PmTaskStatus.READY,
+    priority: PmTaskPriority.HIGH,
+    sortOrder: 0,
+    ownerLeadId: pmQc.id,
+    assigneeId: pmQc.id,
+    dueInDays: 12,
+    requiresQc: true,
+  });
+
+  await prisma.pmTaskWorklog.createMany({
+    data: [
+      {
+        taskId: manuscriptEditTask.id,
+        userId: pmEditor.id,
+        startedAt: hoursAgo(10),
+        endedAt: hoursAgo(8),
+        durationMinutes: 120,
+        notes: 'Completed chapter-1 to chapter-4 structural review.',
+      },
+      {
+        taskId: manuscriptEditTask.id,
+        userId: pmEditor.id,
+        startedAt: hoursAgo(5),
+        endedAt: hoursAgo(4),
+        durationMinutes: 60,
+        notes: 'Prepared revision comments for author.',
+      },
+    ],
+  });
+
+  await prisma.pmTask.update({
+    where: { id: proofreadTask.id },
+    data: {
+      status: PmTaskStatus.SUBMITTED,
+      submittedAt: hoursAgo(3),
+      updatedById: pmEditor.id,
+    },
+  });
+
+  const submittedProofread = await prisma.pmTaskSubmission.create({
+    data: {
+      taskId: proofreadTask.id,
+      submittedById: pmEditor.id,
+      submissionNumber: 1,
+      status: PmSubmissionStatus.SUBMITTED,
+      notes: 'Proofread completed with tracked changes.',
+      submittedAt: hoursAgo(3),
+    },
+  });
+
+  await prisma.pmSelfQcResponse.createMany({
+    data: [
+      {
+        taskSubmissionId: submittedProofread.id,
+        labelSnapshot: 'Spell check complete',
+        isChecked: true,
+      },
+      {
+        taskSubmissionId: submittedProofread.id,
+        labelSnapshot: 'Formatting consistency',
+        isChecked: true,
+      },
+    ],
+  });
+
+  const deliverable = await prisma.pmDeliverablePackage.create({
+    data: {
+      projectId: activeProject.id,
+      name: 'Initial Editorial Delivery',
+      description: 'First complete editorial package for client review.',
+      deliveryType: PmDeliverableType.CLIENT,
+      createdById: pmLeadPublishing.id,
+    },
+  });
+
+  await prisma.pmDeliverableItem.create({
+    data: {
+      deliverablePackageId: deliverable.id,
+      taskSubmissionId: submittedProofread.id,
+      sortOrder: 0,
+      label: 'Proofread manuscript v1',
+    },
+  });
+
+  await prisma.pmApprovalRequest.create({
+    data: {
+      projectId: activeProject.id,
+      deliverablePackageId: deliverable.id,
+      approvalTargetType: PmApprovalTargetType.CLIENT,
+      approvalTargetEmail: novatechClient.email,
+      status: PmApprovalRequestStatus.PENDING,
+      sentById: pmLeadPublishing.id,
+      sentAt: hoursAgo(2),
+      dueAt: daysFromNow(3),
+    },
+  });
+
+  const projectThread = await prisma.pmConversationThread.create({
+    data: {
+      organizationId: org.id,
+      projectId: activeProject.id,
+      scopeType: PmThreadScopeType.PROJECT,
+      scopeId: activeProject.id,
+      visibility: PmThreadVisibility.INTERNAL,
+      createdById: pmLeadPublishing.id,
+    },
+  });
+
+  await prisma.pmThreadParticipant.createMany({
+    data: [
+      { threadId: projectThread.id, userId: owner.id },
+      { threadId: projectThread.id, userId: pmLeadPublishing.id },
+      { threadId: projectThread.id, userId: pmLeadDesign.id },
+      { threadId: projectThread.id, userId: pmEditor.id },
+      { threadId: projectThread.id, userId: pmDesigner.id },
+      { threadId: projectThread.id, userId: pmQc.id },
+    ],
+    skipDuplicates: true,
+  });
+
+  await prisma.pmMessage.create({
+    data: {
+      threadId: projectThread.id,
+      authorId: pmLeadPublishing.id,
+      body: 'Kickoff complete. Manuscript stage is active and assignments are done.',
+    },
+  });
+
+  const taskThread = await prisma.pmConversationThread.create({
+    data: {
+      organizationId: org.id,
+      projectId: activeProject.id,
+      scopeType: PmThreadScopeType.TASK,
+      scopeId: manuscriptEditTask.id,
+      visibility: PmThreadVisibility.INTERNAL,
+      createdById: pmEditor.id,
+    },
+  });
+
+  await prisma.pmThreadParticipant.createMany({
+    data: [
+      { threadId: taskThread.id, userId: pmEditor.id },
+      { threadId: taskThread.id, userId: pmLeadPublishing.id },
+      { threadId: taskThread.id, userId: pmLeadDesign.id },
+    ],
+    skipDuplicates: true,
+  });
+
+  const taskMessage = await prisma.pmMessage.create({
+    data: {
+      threadId: taskThread.id,
+      authorId: pmEditor.id,
+      body: 'Draft edit complete for first batch. @lead please review notes.',
+    },
+  });
+
+  await prisma.pmMessageMention.create({
+    data: {
+      messageId: taskMessage.id,
+      mentionedUserId: pmLeadPublishing.id,
+    },
+  });
+
+  const workingAsset = await prisma.pmFileAsset.create({
+    data: {
+      organizationId: org.id,
+      projectId: activeProject.id,
+      assetType: PmFileAssetType.WORKING,
+      name: 'manuscript-v1.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      createdById: pmEditor.id,
+    },
+  });
+
+  const workingVersion = await prisma.pmFileVersion.create({
+    data: {
+      fileAssetId: workingAsset.id,
+      versionNumber: 1,
+      storageKey: `seed/org-${org.id}/projects/${activeProject.id}/manuscript-v1.docx`,
+      originalFilename: 'manuscript-v1.docx',
+      sizeBytes: 238000,
+      checksum: 'seed-checksum-manuscript-v1',
+      uploadedById: pmEditor.id,
+      isLatest: true,
+      isApproved: false,
+      isPublished: false,
+    },
+  });
+
+  await prisma.pmFileLink.create({
+    data: {
+      fileAssetId: workingAsset.id,
+      fileVersionId: workingVersion.id,
+      scopeType: PmFileScopeType.TASK,
+      scopeId: manuscriptEditTask.id,
+      linkType: PmFileLinkType.REFERENCE,
+      createdById: pmEditor.id,
+    },
+  });
+
+  console.log(`✅  PM Engagements: 2`);
+  console.log(`✅  PM Projects: ${activeProject.name} (active) + ${sandboxProject.name} (draft)`);
+  console.log('✅  PM Execution: stages, tasks, assignments, worklogs, submission, deliverable, approval');
+  console.log('✅  PM Collaboration: project/task threads, mentions, task file link');
+
+  // ── Done ─────────────────────────────────────────────────────────────────
+  console.log('\n🔐  Test users (passwords for local testing)');
+  for (const user of seedUsers) {
+    console.log(`   - ${user.role.padEnd(15)} ${user.email} / ${user.password}`);
+  }
+
+  console.log('\n🧪  Quick PM flow data ready');
+  console.log(`   - Active project: ${activeProject.name}`);
+  console.log('   - Stage/task assignment paths are pre-seeded');
+  console.log(`   - Draft sandbox project: ${sandboxProject.name} (good for manual stage/task creation tests)`);
   console.log('\n🎉  Seed complete!\n');
 }
 

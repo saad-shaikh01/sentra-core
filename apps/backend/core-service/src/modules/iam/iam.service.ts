@@ -182,7 +182,7 @@ export class IamService {
     const rows = await db.appRegistry.findMany({
       where: {
         code: {
-          in: appCodes as unknown as string[],
+          in: appCodes,
         },
         isActive: true,
       },
@@ -786,7 +786,7 @@ export class IamService {
       const appRows = await tx.appRegistry.findMany({
         where: {
           code: {
-            in: [AppCode.SALES_DASHBOARD, AppCode.PM_DASHBOARD] as unknown as string[],
+            in: [AppCode.SALES_DASHBOARD, AppCode.PM_DASHBOARD],
           },
         },
         select: { id: true, code: true },
@@ -895,7 +895,7 @@ export class IamService {
           ? (bundle.roleIds as string[])
           : [];
         const scopeGrants = Array.isArray(bundle.scopeGrants)
-          ? (bundle.scopeGrants as InviteAppBundleDto['scopeGrants'])
+          ? (bundle.scopeGrants as unknown as InviteAppBundleDto['scopeGrants'])
           : [];
 
         await this.setUserEntitlementsForBundle(
@@ -921,7 +921,7 @@ export class IamService {
     const appRows = await this.prisma.appRegistry.findMany({
       where: {
         code: {
-          in: [AppCode.SALES_DASHBOARD, AppCode.PM_DASHBOARD] as unknown as string[],
+          in: [AppCode.SALES_DASHBOARD, AppCode.PM_DASHBOARD],
         },
       },
       select: { id: true, code: true },

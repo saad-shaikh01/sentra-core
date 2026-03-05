@@ -64,27 +64,31 @@ export enum TransactionType {
   REFUND = 'REFUND',
 }
 
-export enum OrganizationOnboardingMode {
-  PUBLIC_OWNER_SIGNUP = 'PUBLIC_OWNER_SIGNUP',
-  INVITE_ONLY = 'INVITE_ONLY',
-}
+export const OrganizationOnboardingMode = {
+  PUBLIC_OWNER_SIGNUP: 'PUBLIC_OWNER_SIGNUP',
+  INVITE_ONLY: 'INVITE_ONLY',
+} as const;
+export type OrganizationOnboardingMode =
+  (typeof OrganizationOnboardingMode)[keyof typeof OrganizationOnboardingMode];
 
-export enum AppCode {
-  SALES_DASHBOARD = 'SALES_DASHBOARD',
-  PM_DASHBOARD = 'PM_DASHBOARD',
-  HRMS = 'HRMS',
-  CLIENT_PORTAL = 'CLIENT_PORTAL',
-  COMM_SERVICE = 'COMM_SERVICE',
-}
+export const AppCode = {
+  SALES_DASHBOARD: 'SALES_DASHBOARD',
+  PM_DASHBOARD: 'PM_DASHBOARD',
+  HRMS: 'HRMS',
+  CLIENT_PORTAL: 'CLIENT_PORTAL',
+  COMM_SERVICE: 'COMM_SERVICE',
+} as const;
+export type AppCode = (typeof AppCode)[keyof typeof AppCode];
 
-export enum DataScopeType {
-  OWN = 'OWN',
-  TEAM = 'TEAM',
-  DEPARTMENT = 'DEPARTMENT',
-  BRAND = 'BRAND',
-  PROJECT = 'PROJECT',
-  ALL = 'ALL',
-}
+export const DataScopeType = {
+  OWN: 'OWN',
+  TEAM: 'TEAM',
+  DEPARTMENT: 'DEPARTMENT',
+  BRAND: 'BRAND',
+  PROJECT: 'PROJECT',
+  ALL: 'ALL',
+} as const;
+export type DataScopeType = (typeof DataScopeType)[keyof typeof DataScopeType];
 
 // ==========================================
 // LEAD STATUS TRANSITIONS
