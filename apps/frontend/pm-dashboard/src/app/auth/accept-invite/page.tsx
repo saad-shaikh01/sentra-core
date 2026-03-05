@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
 
@@ -79,7 +79,7 @@ function AcceptInviteForm() {
   };
 
   const getRoleBadgeVariant = (role: string) => {
-    const variants: Record<string, any> = {
+    const variants: Record<string, BadgeProps['variant']> = {
       OWNER: 'owner',
       ADMIN: 'admin',
       SALES_MANAGER: 'sales-manager',

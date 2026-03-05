@@ -9,6 +9,7 @@ import { ProjectGeneratorService } from '../modules/engagements-projects/project
 import { PrismaService } from '@sentra-core/prisma-client';
 import { PmCacheService } from '../common/cache/pm-cache.service';
 import { PmEventsService } from '../modules/events/pm-events.service';
+import { PmProjectPriority, PmProjectType, PmServiceType } from '../common/enums/pm.enums';
 
 describe('ProjectsService', () => {
   let service: ProjectsService;
@@ -74,9 +75,9 @@ describe('ProjectsService', () => {
       engagementId: 'eng-123',
       brandId: 'brand-123',
       name: 'Test Project',
-      projectType: 'EXTERNAL' as any,
-      serviceType: 'PUBLISHING' as any,
-      priority: 'MEDIUM' as any,
+      projectType: PmProjectType.EXTERNAL,
+      serviceType: PmServiceType.PUBLISHING,
+      priority: PmProjectPriority.MEDIUM,
     };
 
     it('should throw NotFoundException if engagement not found', async () => {

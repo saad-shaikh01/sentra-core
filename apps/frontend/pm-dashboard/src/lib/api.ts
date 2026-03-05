@@ -1,3 +1,12 @@
+import {
+  IInvitation,
+  ILoginResponse,
+  IOrganizationMember,
+  ISignupResponse,
+  IUserProfile,
+  UserRole,
+} from '@sentra-core/types';
+
 const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:3001/api';
 const PM_API_URL   = process.env.NEXT_PUBLIC_PM_API_URL   || 'http://localhost:3003/api/pm';
 
@@ -12,7 +21,76 @@ export interface PmSingleResponse<T> {
 
 export interface PmMutationResponse {
   success: boolean;
-  data?: any;
+  data?: unknown;
+}
+
+export interface InvitationLookupResponse {
+  id: string;
+  email: string;
+  role: UserRole;
+  organizationName: string;
+}
+
+export interface PmThread {
+  id: string;
+  projectId: string;
+  scopeType: 'PROJECT' | 'STAGE' | 'TASK' | 'APPROVAL';
+  scopeId: string;
+  visibility: 'INTERNAL' | 'EXTERNAL';
+}
+
+export interface PmThreadMessage {
+  id: string;
+  threadId: string;
+  authorId: string;
+  body: string;
+  messageType: string;
+  createdAt: string;
+}
+
+export interface PmThreadHead {
+  lastMessageAt: string | null;
+  count: number;
+}
+
+export interface PmFileUploadToken {
+  fileAssetId: string;
+  storageKey: string;
+  uploadUrl: string;
+  bucket: string;
+}
+
+export interface PmFileVersion {
+  id: string;
+  versionNumber: number;
+  originalFilename: string;
+  sizeBytes: number | null;
+}
+
+export interface PmFileLink {
+  id: string;
+  fileAssetId: string;
+  createdAt: string;
+  fileAsset: {
+    id: string;
+    name: string;
+    assetType: string;
+    mimeType: string | null;
+  };
+  fileVersion: {
+    versionNumber: number;
+    originalFilename: string;
+    sizeBytes: number | null;
+    isLatest: boolean;
+  } | null;
+}
+
+export interface PmSignedUrlResponse {
+  fileAssetId: string;
+  fileVersionId: string;
+  storageKey: string;
+  signedUrl: string;
+  expiresInSeconds: number;
 }
 
 class ApiClient {
@@ -22,6 +100,13 @@ class ApiClient {
   constructor(coreUrl: string, pmUrl: string) {
     this.coreUrl = coreUrl;
     this.pmUrl   = pmUrl;
+  }
+
+  private unwrapData<T>(payload: PmSingleResponse<T> | T): T {
+    if (payload && typeof payload === 'object' && 'data' in (payload as Record<string, unknown>)) {
+      return (payload as PmSingleResponse<T>).data;
+    }
+    return payload as T;
   }
 
   private getAccessToken(): string | null {
@@ -123,11 +208,7 @@ class ApiClient {
 
   // Auth endpoints
   async login(email: string, password: string) {
-    return this.fetch<{
-      accessToken: string;
-      refreshToken: string;
-      user: any;
-    }>('/auth/login', {
+    return this.fetch<ILoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
       skipAuth: true,
@@ -140,12 +221,7 @@ class ApiClient {
     name: string;
     organizationName: string;
   }) {
-    return this.fetch<{
-      accessToken: string;
-      refreshToken: string;
-      user: any;
-      organization: any;
-    }>('/auth/signup', {
+    return this.fetch<ISignupResponse>('/auth/signup', {
       method: 'POST',
       body: JSON.stringify(data),
       skipAuth: true,
@@ -161,29 +237,39 @@ class ApiClient {
   }
 
   async getInvitation(token: string) {
-    return this.fetch<{
-      id: string;
-      email: string;
-      role: string;
-      organizationName: string;
-    }>(`/auth/invite?token=${token}`, { skipAuth: true });
+    return this.fetch<InvitationLookupResponse>(
+      `/auth/invite?token=${token}`,
+      { skipAuth: true },
+    );
   }
 
   async acceptInvitation(data: { token: string; name: string; password: string }) {
-    return this.fetch<{
-      accessToken: string;
-      refreshToken: string;
-      user: any;
-    }>('/auth/accept-invite', {
+    return this.fetch<ILoginResponse>('/auth/accept-invite', {
       method: 'POST',
       body: JSON.stringify(data),
       skipAuth: true,
     });
   }
 
+  async forgotPassword(email: string) {
+    return this.fetch<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+      skipAuth: true,
+    });
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    return this.fetch<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+      skipAuth: true,
+    });
+  }
+
   // User endpoints
   async getMe() {
-    return this.fetch<PmSingleResponse<any>>('/users/me');
+    return this.fetch<IUserProfile>('/users/me');
   }
 
   async updateProfile(data: {
@@ -193,7 +279,7 @@ class ApiClient {
     phone?: string;
     bio?: string;
   }) {
-    return this.fetch<PmSingleResponse<any>>('/users/me', {
+    return this.fetch<IUserProfile>('/users/me', {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -201,11 +287,11 @@ class ApiClient {
 
   // Organization endpoints
   async getMembers() {
-    return this.fetch<any[]>('/organization/members');
+    return this.fetch<IOrganizationMember[]>('/organization/members');
   }
 
   async updateMemberRole(userId: string, role: string) {
-    return this.fetch<PmSingleResponse<any>>(`/organization/members/${userId}/role`, {
+    return this.fetch<IOrganizationMember>(`/organization/members/${userId}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     });
@@ -219,14 +305,14 @@ class ApiClient {
 
   // Invitation endpoints
   async sendInvitation(email: string, role: string) {
-    return this.fetch<PmSingleResponse<any>>('/organization/invite', {
+    return this.fetch<IInvitation>('/organization/invite', {
       method: 'POST',
       body: JSON.stringify({ email, role }),
     });
   }
 
   async getPendingInvitations() {
-    return this.fetch<any[]>('/organization/invitations');
+    return this.fetch<IInvitation[]>('/organization/invitations');
   }
 
   async cancelInvitation(invitationId: string) {
@@ -360,8 +446,106 @@ class ApiClient {
     return this.fetch<any>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' });
   }
 
+  async getThreadByScope(scopeType: string, scopeId: string) {
+    const query = new URLSearchParams({ scopeType, scopeId }).toString();
+    return this.fetch<PmSingleResponse<PmThread>>(`/threads/scope/lookup?${query}`, {
+      service: 'pm',
+    });
+  }
+
+  async createThread(dto: {
+    projectId: string;
+    scopeType: 'PROJECT' | 'STAGE' | 'TASK' | 'APPROVAL';
+    scopeId: string;
+    visibility?: 'INTERNAL' | 'EXTERNAL';
+  }) {
+    return this.fetch<PmSingleResponse<PmThread>>('/threads', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async getThreadMessages(threadId: string, params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<{ data: PmThreadMessage[]; meta: { total: number; page: number; limit: number; totalPages: number } }>(
+      `/threads/${threadId}/messages${qs}`,
+      { service: 'pm' },
+    );
+  }
+
+  async createThreadMessage(
+    threadId: string,
+    dto: { body: string; parentMessageId?: string; mentionedUserIds?: string[] },
+  ) {
+    return this.fetch<PmSingleResponse<PmThreadMessage>>(`/threads/${threadId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async listFileLinks(scopeType: string, scopeId: string) {
+    const query = new URLSearchParams({ scopeType, scopeId }).toString();
+    return this.fetch<PmSingleResponse<PmFileLink[]>>(`/files/links?${query}`, {
+      service: 'pm',
+    });
+  }
+
+  async requestFileUploadToken(dto: {
+    projectId: string;
+    assetType: string;
+    name: string;
+    mimeType?: string;
+  }) {
+    return this.fetch<PmSingleResponse<PmFileUploadToken>>('/files/upload-token', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async completeFileUpload(dto: {
+    fileAssetId: string;
+    storageKey: string;
+    originalFilename: string;
+    sizeBytes?: number;
+  }) {
+    return this.fetch<PmSingleResponse<PmFileVersion>>('/files/complete-upload', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async linkFile(
+    fileAssetId: string,
+    dto: { fileVersionId?: string; scopeType: string; scopeId: string; linkType?: string },
+  ) {
+    return this.fetch<PmSingleResponse<PmFileLink>>(`/files/${fileAssetId}/link`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async getFileSignedUrl(fileAssetId: string, versionId?: string) {
+    const qs = versionId ? `?${new URLSearchParams({ versionId }).toString()}` : '';
+    return this.fetch<PmSingleResponse<PmSignedUrlResponse>>(`/files/${fileAssetId}/signed-url${qs}`, {
+      service: 'pm',
+    });
+  }
+
+  async getThreadHead(threadId: string): Promise<PmThreadHead> {
+    const payload = await this.fetch<PmSingleResponse<PmThreadHead> | PmThreadHead>(
+      `/threads/${threadId}/head`,
+      { service: 'pm' },
+    );
+    return this.unwrapData(payload);
+  }
+
   async getStageHead(threadId: string) {
-    return this.fetch<{ lastMessageAt: string | null; count: number }>(`/threads/${threadId}/head`, { service: 'pm' });
+    return this.getThreadHead(threadId);
   }
 }
 

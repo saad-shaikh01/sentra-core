@@ -7,6 +7,7 @@ import { QcReviewsService } from '../modules/qc-approvals/qc-reviews.service';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { PmEventsService } from '../modules/events/pm-events.service';
 import { PerformanceService } from '../modules/performance/performance.service';
+import { PmReviewDecision } from '../common/enums/pm.enums';
 
 describe('QcReviewsService', () => {
   let service: QcReviewsService;
@@ -62,7 +63,7 @@ describe('QcReviewsService', () => {
     const subId = 'sub-123';
     const reviewerId = 'rev-123';
     const dto = {
-      decision: 'APPROVED' as any,
+      decision: PmReviewDecision.APPROVED,
       feedback: 'Good work',
     };
 
@@ -101,7 +102,10 @@ describe('QcReviewsService', () => {
       mockPrisma.pmQcReview.create.mockResolvedValue({ id: 'review-2' });
       mockPrisma.pmQcReview.count.mockResolvedValue(1);
 
-      await service.createReview(orgId, subId, reviewerId, { decision: 'REJECTED' as any, feedback: 'Redo it' });
+      await service.createReview(orgId, subId, reviewerId, {
+        decision: PmReviewDecision.REJECTED,
+        feedback: 'Redo it',
+      });
 
       expect(mockPerformance.logEvent).toHaveBeenCalledWith(
         expect.objectContaining({

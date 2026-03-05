@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, type PmThread, type PmThreadMessage } from '@/lib/api';
 import { Send, MessageSquare, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
@@ -26,23 +26,23 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   const [wsMessages, setWsMessages] = useState<ThreadMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const memberMap = Object.fromEntries((members ?? []).map((m: any) => [m.id, m.name]));
+  const memberMap = Object.fromEntries((members ?? []).map((m) => [m.id, m.name]));
 
   // 1. Fetch thread by scope (one-time, no polling)
   const { data: threadRes, isLoading: loadingThread } = useQuery({
     queryKey: ['thread', 'scope', scopeType, scopeId],
-    queryFn: () => api.fetch<any>(`/threads/scope/lookup?scopeType=${scopeType}&scopeId=${scopeId}`, { service: 'pm' }),
+    queryFn: () => api.getThreadByScope(scopeType, scopeId),
     enabled: !!scopeId,
     retry: false,
     staleTime: Infinity,
   });
 
-  const thread = threadRes?.data;
+  const thread: PmThread | undefined = threadRes?.data;
 
   // 2. Initial message history fetch (REST, no polling — WS delivers live updates)
   const { data: messagesData, isLoading: loadingMessages } = useQuery({
     queryKey: ['thread', thread?.id, 'messages'],
-    queryFn: () => api.fetch<any>(`/threads/${thread.id}/messages`, { service: 'pm' }),
+    queryFn: () => api.getThreadMessages(thread.id),
     enabled: !!thread?.id,
     staleTime: Infinity,
   });
@@ -75,11 +75,9 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   // 4. Create thread mutation (lazy — only when there is no thread yet)
   const createThread = useMutation({
     mutationFn: () =>
-      api.fetch<any>('/threads', {
-        method: 'POST',
-        body: JSON.stringify({ projectId, scopeType, scopeId, visibility: 'INTERNAL' }),
-        service: 'pm',
-      }).then((res) => res.data),
+      api
+        .createThread({ projectId, scopeType, scopeId, visibility: 'INTERNAL' })
+        .then((res) => res.data),
   });
 
   // 5. Send message — prefer WebSocket, fallback to HTTP if WS not connected
@@ -94,11 +92,7 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
         queryClient.setQueryData(['thread', 'scope', scopeType, scopeId], { data: newThread });
       }
 
-      return api.fetch<any>(`/threads/${targetThreadId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ body: content }),
-        service: 'pm',
-      });
+      return api.createThreadMessage(targetThreadId, { body: content });
     },
     onSuccess: (res) => {
       // Add to local state (WS will also broadcast but deduplicate)
@@ -125,8 +119,8 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   };
 
   // Combine historical and live messages, deduplicating by id
-  const historicalMessages: ThreadMessage[] = messagesData?.data ?? [];
-  const allIds = new Set(historicalMessages.map((m: any) => m.id));
+  const historicalMessages: (PmThreadMessage | ThreadMessage)[] = messagesData?.data ?? [];
+  const allIds = new Set(historicalMessages.map((m) => m.id));
   const liveOnly = wsMessages.filter((m) => !allIds.has(m.id));
   const messages = [...historicalMessages, ...liveOnly];
 
@@ -170,7 +164,7 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
             <p className="text-xs mt-1">Be the first to start the conversation.</p>
           </div>
         ) : (
-          messages.map((msg: any) => {
+          messages.map((msg) => {
             const isMe = msg.authorId === user?.id;
             return (
               <div key={msg.id} className={cn('flex flex-col gap-1 max-w-[85%]', isMe ? 'ml-auto items-end' : 'mr-auto')}>

@@ -48,6 +48,7 @@ export class AuthController {
   }
 
   @UseGuards(RefreshTokenGuard)
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   refreshTokens(

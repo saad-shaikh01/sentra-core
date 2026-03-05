@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { UploadCloud, X, File as FileIcon, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
+import { UploadCloud, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -48,15 +47,11 @@ export function FileUploader({
 
       try {
         // 1. Request Upload Token (creates FileAsset and returns presigned URL)
-        const tokenRes = await api.fetch<any>('/files/upload-token', {
-          method: 'POST',
-          body: JSON.stringify({
-            projectId,
-            assetType,
-            name: file.name,
-            mimeType: file.type,
-          }),
-          service: 'pm',
+        const tokenRes = await api.requestFileUploadToken({
+          projectId,
+          assetType,
+          name: file.name,
+          mimeType: file.type,
         });
         const tokenData = tokenRes.data;
 
@@ -78,28 +73,20 @@ export function FileUploader({
         );
 
         // 3. Complete Upload (creates FileVersion)
-        const versionRes = await api.fetch<any>('/files/complete-upload', {
-          method: 'POST',
-          body: JSON.stringify({
-            fileAssetId: tokenData.fileAssetId,
-            storageKey: tokenData.storageKey,
-            originalFilename: file.name,
-            sizeBytes: file.size,
-          }),
-          service: 'pm',
+        const versionRes = await api.completeFileUpload({
+          fileAssetId: tokenData.fileAssetId,
+          storageKey: tokenData.storageKey,
+          originalFilename: file.name,
+          sizeBytes: file.size,
         });
         const versionData = versionRes.data;
 
         // 4. Link File to Scope
-        await api.fetch<any>(`/files/${tokenData.fileAssetId}/link`, {
-          method: 'POST',
-          body: JSON.stringify({
-            fileVersionId: versionData.id,
-            scopeType,
-            scopeId,
-            linkType: 'REFERENCE',
-          }),
-          service: 'pm',
+        await api.linkFile(tokenData.fileAssetId, {
+          fileVersionId: versionData.id,
+          scopeType,
+          scopeId,
+          linkType: 'REFERENCE',
         });
 
         setUploadingFiles((prev) => prev.filter((f) => f.name !== file.name));
@@ -108,9 +95,11 @@ export function FileUploader({
         queryClient.invalidateQueries({ queryKey: ['files', 'links', scopeType, scopeId] });
         if (onUploadComplete) onUploadComplete();
         
-      } catch (error: any) {
+      } catch (error: unknown) {
         setUploadingFiles((prev) => prev.filter((f) => f.name !== file.name));
-        toast.error(`Failed to upload ${file.name}`, error.message);
+        const message =
+          error instanceof Error ? error.message : 'Unexpected upload error';
+        toast.error(`Failed to upload ${file.name}`, message);
       }
     }
   };

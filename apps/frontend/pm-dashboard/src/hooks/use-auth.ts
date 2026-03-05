@@ -31,10 +31,7 @@ export function useUser() {
 
   const query = useQuery({
     queryKey: authKeys.user(),
-    queryFn: async (): Promise<IUserProfile> => {
-      const res = await api.getMe();
-      return (res as any).data ?? res;
-    },
+    queryFn: (): Promise<IUserProfile> => api.getMe(),
     enabled: checked && hasToken,
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes

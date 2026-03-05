@@ -240,6 +240,32 @@ export class ThreadsService {
   }
 
   // -------------------------------------------------------------------------
+  // Head metadata for lightweight polling
+  // -------------------------------------------------------------------------
+
+  async getHead(organizationId: string, threadId: string) {
+    const thread = await this.prisma.pmConversationThread.findFirst({
+      where: { id: threadId, organizationId },
+      select: { id: true },
+    });
+    if (!thread) throw new NotFoundException('Thread not found');
+
+    const [count, latest] = await this.prisma.$transaction([
+      this.prisma.pmMessage.count({ where: { threadId } }),
+      this.prisma.pmMessage.findFirst({
+        where: { threadId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+    ]);
+
+    return {
+      lastMessageAt: latest?.createdAt ?? null,
+      count,
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // Update message body (author-only)
   // -------------------------------------------------------------------------
 

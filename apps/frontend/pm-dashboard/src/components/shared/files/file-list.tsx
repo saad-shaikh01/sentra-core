@@ -1,11 +1,10 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import { FileIcon, ExternalLink, Download, Trash2, Clock } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { api, type PmFileLink } from '@/lib/api';
+import { FileIcon, ExternalLink, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores/ui-store';
 import { toast } from '@/hooks/use-toast';
 
 interface FileListProps {
@@ -15,21 +14,18 @@ interface FileListProps {
 }
 
 export function FileList({ scopeType, scopeId, className }: FileListProps) {
-  const queryClient = useQueryClient();
-  const openConfirmDialog = useUIStore((s) => s.openConfirmDialog);
-
   const queryKey = ['files', 'links', scopeType, scopeId];
 
   const { data: linksRes, isLoading } = useQuery({
     queryKey,
-    queryFn: () => api.fetch<any>(`/files/links?scopeType=${scopeType}&scopeId=${scopeId}`, { service: 'pm' }),
+    queryFn: () => api.listFileLinks(scopeType, scopeId),
     enabled: !!scopeId,
   });
 
-  const links = linksRes?.data ?? [];
+  const links: PmFileLink[] = linksRes?.data ?? [];
 
   const getSignedUrl = useMutation({
-    mutationFn: (fileAssetId: string) => api.fetch<any>(`/files/${fileAssetId}/signed-url`, { service: 'pm' }),
+    mutationFn: (fileAssetId: string) => api.getFileSignedUrl(fileAssetId),
     onSuccess: (res) => {
       // Open the presigned URL in a new tab
       const data = res.data;
@@ -56,7 +52,7 @@ export function FileList({ scopeType, scopeId, className }: FileListProps) {
 
   return (
     <div className={cn("space-y-2", className)}>
-      {links.map((link: any) => (
+      {links.map((link) => (
         <div 
           key={link.id} 
           className="group flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all"
@@ -81,7 +77,7 @@ export function FileList({ scopeType, scopeId, className }: FileListProps) {
                     <span>&bull;</span>
                     <span>v{link.fileVersion.versionNumber}</span>
                     <span>&bull;</span>
-                    <span>{(link.fileVersion.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
+                    <span>{((link.fileVersion.sizeBytes ?? 0) / 1024 / 1024).toFixed(2)} MB</span>
                   </>
                 )}
               </div>

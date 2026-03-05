@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { IInvitation, IOrganizationMember } from '@sentra-core/types';
 
 // Query keys
 export const organizationKeys = {
@@ -12,14 +13,9 @@ export const organizationKeys = {
 
 // Hook to get organization members
 export function useMembers() {
-  return useQuery({
+  return useQuery<IOrganizationMember[]>({
     queryKey: organizationKeys.members(),
-    queryFn: async () => {
-      const result = await api.getMembers();
-      if (Array.isArray(result)) return result;
-      if (Array.isArray((result as any)?.data)) return (result as any).data;
-      return [];
-    },
+    queryFn: () => api.getMembers(),
   });
 }
 
@@ -50,7 +46,7 @@ export function useRemoveMember() {
 
 // Hook to get pending invitations
 export function useInvitations() {
-  return useQuery({
+  return useQuery<IInvitation[]>({
     queryKey: organizationKeys.invitations(),
     queryFn: () => api.getPendingInvitations(),
   });

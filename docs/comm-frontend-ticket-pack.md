@@ -3,7 +3,7 @@
 **Apps:** `apps/frontend/sales-dashboard` + `apps/frontend/pm-dashboard`
 **Stack:** Next.js, React Query (TanStack), Zustand, Tailwind, shadcn/ui
 **API client pattern:** Extend existing `ApiClient` in `lib/api.ts` with `service: 'comm'`
-**Milestone mapping:** M1=COMM-FE-001–005 | M2=006–010 | M3=011–014 | M4=015–018 | M5=019–020
+**Milestone mapping:** M1=COMM-FE-001–005 | M2=006–010,021 | M3=011–014 | M4=015–018 | M5=019–020
 
 ---
 

@@ -143,10 +143,19 @@ Immutable once synced. Never deleted; soft-deleted flag only.
     filename: string,
     mimeType: string,
     size: number,
-    s3Key: string | null,       // null until proxied
+    s3Key: string | null,       // populated eagerly during sync (see below)
     gmailAttachmentId: string,
     isInline: boolean,
   }],
+  // ATTACHMENT ARCHIVAL STRATEGY (locked):
+  // s3Key is populated EAGERLY during sync, not lazily on first open.
+  // Reason: if the Gmail account is disconnected or deleted, lazy-proxy
+  // would permanently lose attachments whose s3Key is still null.
+  // During full_sync and backfill_sync: after upserting a message,
+  // immediately enqueue an `attachment_archive` job per attachment
+  // that fetches from Gmail API and uploads to S3.
+  // If the attachment_archive job fails (e.g., quota), it retries 3x
+  // then moves to DLQ. The s3Key remains null until the DLQ job is retried.
   labelIds: string[],
   inReplyToMessageId: string | null,
   references: string[],
@@ -266,14 +275,17 @@ User clicks "Connect Gmail"
 **Phase M1 — Polling (simple, reliable):**
 - BullMQ repeatable job per identity, 2-minute interval
 - Call `users.history.list` with stored `historyId`
-- On first sync (no historyId): **`users.messages.list` with `q: 'after:{unixEpochSeconds}'`** where epoch = `now - 90 days`. This is a hard cap. Full mailbox import is explicitly out of scope for V1 due to quota and performance risk on large mailboxes.
+- On first sync (no historyId): **two-phase import:**
+  1. **Phase A (fast):** `users.messages.list` with `q: 'after:{epoch90days}'` — imports last 90 days of messages. This completes the initial sync job and makes the inbox usable immediately.
+  2. **Phase B (background backfill):** A separate low-priority BullMQ job `backfill_sync` runs after Phase A completes. It continues paginating `users.messages.list` with NO time filter, starting from the oldest `pageToken` not yet processed, importing in reverse chronological batches of 50. Rate-limited to 10 API calls/minute to avoid quota pressure. Runs only during off-peak (configurable, default: always on).
+  This ensures the **archive objective is met** — all historical email is eventually preserved in MongoDB even if the mailbox is later deleted. Phase B can take hours/days for large mailboxes; that's acceptable because Phase A already provides working inbox.
 - Each message: `users.messages.get` with `format=full`, upsert to `comm_messages`
 - Update `historyId` after successful batch
 
 **Phase M3 — Push (Google Pub/Sub, low-latency):**
 - `users.watch` registers Pub/Sub topic per identity
 - Pub/Sub push webhook → `/api/comm/sync/webhook`
-- **Auth verification:** Google sends a signed JWT in `Authorization: Bearer <token>` header. Verify using `google-auth-library`'s `OAuth2Client.verifyIdToken()` with `audience = GOOGLE_REDIRECT_URI_BASE`. Do NOT use HMAC — Google Pub/Sub push does not use HMAC signatures.
+- **Auth verification:** Google sends a signed JWT in `Authorization: Bearer <token>` header. Verify using `google-auth-library`'s `OAuth2Client.verifyIdToken()` with `audience = COMM_PUBSUB_AUDIENCE` (env var, e.g. `https://your-domain.com/api/comm/sync/webhook`). Do NOT use HMAC — Google Pub/Sub push does not use HMAC signatures.
 - On valid JWT: decode `data.message.data` (base64) → `{ emailAddress, historyId }`, enqueue incremental job
 - Renew watch every 6 days (max expiry is ~7 days per Google docs; renew before expiry)
 - Polling remains as fallback regardless
@@ -352,7 +364,7 @@ unsubscribe:entity   { entityType, entityId }
 **Step 2 — Lead lookup (conditional):**
 - `Lead` has no email column. Email lives in `data: Json?` (unstructured).
 - Auto-link for leads requires a schema convention: `data.email` is treated as the contact email if present.
-- core-service `contact-lookup` endpoint includes lead lookup using Postgres JSONB: `SELECT id FROM "Lead" WHERE organization_id = $1 AND data->>'email' = ANY($2::text[])`
+- core-service `contact-lookup` endpoint includes lead lookup using Postgres JSONB: `SELECT id FROM "Lead" WHERE "organizationId" = $1 AND data->>'email' = ANY($2::text[])`
 - **If no `data.email` convention is followed for a lead, it will not auto-link.** Manual link remains always available.
 - This is an M1 known limitation; document in onboarding.
 
@@ -439,7 +451,7 @@ Includes: actor, action, entity, metadata (e.g., recipient for sends), IP, user-
 
 | Area | Scope |
 |---|---|
-| Backend | comm-service bootstrap, Mongoose schemas, OAuth2 flow, full sync worker, messages/threads READ endpoints, entity-link auto-detection |
+| Backend | COMM-BE-CORE-001 (core-service internal lookup), comm-service bootstrap, Mongoose schemas, OAuth2 flow + sendAs alias population, two-phase sync worker (Phase A: 90-day fast + Phase B: backfill), eager attachment archival, messages/threads READ endpoints, entity-link auto-detection |
 | Frontend | Identity connect UI (Settings), inbox list in lead-detail-sheet (read-only), comm api client |
 
 **Exit criteria:** User can connect Gmail, sync runs, inbound emails appear in lead/client timeline.
@@ -452,7 +464,7 @@ Includes: actor, action, entity, metadata (e.g., recipient for sends), IP, user-
 | Area | Scope |
 |---|---|
 | Backend | Send/reply/forward endpoints (idempotency), manual entity link API, incremental history sync, DLQ, audit logs |
-| Frontend | Compose drawer in sales-dashboard, reply inline in thread view, manual link widget, pm-dashboard project timeline tab |
+| Frontend | Compose drawer in both dashboards, reply inline in thread view, manual link widget, pm-dashboard project timeline tab + active send/reply (COMM-FE-021) |
 
 **Exit criteria:** Users can send/reply from within the app; messages are linked to leads/clients/projects; DLQ monitoring active.
 
@@ -501,7 +513,8 @@ Includes: actor, action, entity, metadata (e.g., recipient for sends), IP, user-
 | Gmail OAuth token expiry/revocation mid-session | Medium | High | Token refresh watchdog; `identity.status = error` + WS event on failure; UI prompt to re-authenticate |
 | Gmail API quota exhaustion (250 units/user/s) | Low | High | BullMQ rate limiter per identity; exponential backoff on 429; DLQ for non-critical sync jobs |
 | Google Pub/Sub push webhook unreachable (dev/staging) | High | Low | Polling fallback always active; push is additive optimization |
-| Large mailbox initial sync (100k+ emails) | Medium | Medium | Initial sync: import last 90 days only; paginated, async BullMQ job with progress events; UI shows sync progress |
+| Large mailbox initial sync (100k+ emails) | Medium | Medium | Two-phase sync: Phase A imports 90 days (fast, usable immediately); Phase B backfills full history at 10 API calls/min (slow, safe). Backfill is resume-safe via persisted pageToken. |
+| Mailbox deleted before backfill completes | Low | High | Phase B runs continuously until done. Attachment archival is eager (during sync, not lazy). Any remaining unarchived attachments go to DLQ for admin attention. |
 | OAuth consent screen not verified by Google (shows warning) | High | Medium | Use internal/test users for V1; submit for verification in M4; document workaround in onboarding |
 | Lead auto-link misfire (no email field on Lead model) | High | Low | Lead.data.email convention documented; leads without it get manual-link only; this is a known V1 limitation, not a bug |
 | sendAs alias not verified in Gmail (user connected Gmail but alias not set up there) | Medium | Medium | `isVerified` flag checked before allowing send; UI warns if no verified alias exists; admin guided to configure alias in Gmail settings first |
@@ -534,6 +547,8 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=http://localhost:3004/api/comm/identities/oauth/callback
 COMM_TOKEN_ENCRYPTION_KEY=<32-byte hex>
 COMM_IDEMPOTENCY_TTL_SECONDS=86400
+COMM_BACKFILL_RATE_LIMIT=10          # max Gmail API calls/minute for Phase B backfill
+COMM_PUBSUB_AUDIENCE=https://your-domain.com/api/comm/sync/webhook
 ```
 
 ---
@@ -542,11 +557,13 @@ COMM_IDEMPOTENCY_TTL_SECONDS=86400
 
 ### M1 Acceptance
 - [ ] `POST /api/comm/identities/oauth/authorize` returns redirect URL
-- [ ] OAuth callback stores encrypted tokens, triggers full_sync job
-- [ ] Full sync imports last 90 days of emails into `comm_messages`
+- [ ] OAuth callback stores encrypted tokens, populates `sendAsAliases[]`, triggers full_sync job
+- [ ] Phase A sync imports last 90 days of emails into `comm_messages`; inbox usable immediately
+- [ ] Phase B backfill_sync job enqueued after Phase A; imports remaining historical email at low priority
+- [ ] Attachment archival: all attachments have `s3Key` populated after sync (no null s3Key except DLQ failures)
 - [ ] `GET /api/comm/threads` returns paginated threads for org
 - [ ] `GET /api/comm/timeline?entityType=lead&entityId=x` returns linked messages
-- [ ] Auto-link assigns inbound email to lead/client when email matches known contact
+- [ ] Auto-link uses `POST /api/internal/comm/contact-lookup` (COMM-BE-CORE-001); client by email, lead by `data.email`
 - [ ] All responses include `x-request-id` header
 
 ### M2 Acceptance

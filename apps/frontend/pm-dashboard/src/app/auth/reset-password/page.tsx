@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
+import { toast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const resetPasswordSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -40,29 +42,20 @@ function ResetPasswordContent() {
 
   const onSubmit = async (data: ResetPasswordFormValues) => {
     if (!token) {
-      alert('Invalid or missing reset token.');
+      toast.error('Invalid reset link', 'Invalid or missing reset token.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password: data.password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to reset password');
-      }
-
+      await api.resetPassword(token, data.password);
       setIsSuccess(true);
+      toast.success('Password updated', 'You can now sign in with your new password.');
       // Redirect to login after 3 seconds
       setTimeout(() => router.push('/auth/login'), 3000);
-    } catch (error: any) {
-      console.error(error);
-      alert(error.message || 'Something went wrong. Please try again.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+      toast.error('Failed to reset password', message);
     } finally {
       setIsLoading(false);
     }

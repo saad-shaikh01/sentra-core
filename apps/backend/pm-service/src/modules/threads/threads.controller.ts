@@ -5,6 +5,7 @@
  *   POST   /api/pm/threads                           — create thread
  *   GET    /api/pm/threads/:id                       — thread detail
  *   GET    /api/pm/threads/scope                     — find thread by scope
+ *   GET    /api/pm/threads/:id/head                  — message head metadata
  *   POST   /api/pm/threads/:id/messages              — create message
  *   GET    /api/pm/threads/:id/messages              — list messages (paginated)
  *   PATCH  /api/pm/messages/:id                      — update message body
@@ -69,6 +70,15 @@ export class ThreadsController {
       scopeId,
     );
     return wrapSingle(thread);
+  }
+
+  @Get('threads/:id/head')
+  async head(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const head = await this.threadsService.getHead(ctx.organizationId, id);
+    return wrapSingle(head);
   }
 
   // ── messages ──────────────────────────────────────────────────────────────

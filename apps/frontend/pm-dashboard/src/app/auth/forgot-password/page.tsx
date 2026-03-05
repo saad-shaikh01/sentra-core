@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { toast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -34,21 +35,12 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (data: ForgotPasswordFormValues) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send reset email');
-      }
-
+      await api.forgotPassword(data.email);
       setIsSubmitted(true);
-    } catch (error) {
-      console.error(error);
-      // Fallback simple alert if toast context isn't global yet
-      alert('Something went wrong. Please try again.');
+      toast.success('Reset link sent', 'Check your inbox for password reset instructions.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+      toast.error('Failed to send reset link', message);
     } finally {
       setIsLoading(false);
     }

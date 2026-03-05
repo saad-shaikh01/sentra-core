@@ -3,7 +3,7 @@
 **Service:** `apps/backend/comm-service`
 **Port:** 3004 (`PORT_COMM`)
 **Stack:** NestJS, MongoDB (Mongoose), BullMQ, Redis, Socket.io, googleapis
-**Milestone mapping:** M1=COMM-BE-001–007 | M2=008–014 | M3=015–019 | M4=020–023 | M5=024–025
+**Milestone mapping:** M1=COMM-BE-CORE-001,001–007 | M2=008–013 | M3=014–016 | M4=017–019 | M5=020–022
 
 ---
 
@@ -27,7 +27,15 @@ POST /api/internal/comm/contact-lookup
 
 **Logic:**
 1. Client lookup: `prisma.client.findMany({ where: { organizationId, email: { in: emails } } })` → `[{ entityType: 'client', entityId: id, email }]`
-2. Lead lookup (JSONB): `prisma.$queryRaw<Array<{ id: string, email: string }>> sql\`SELECT id, data->>'email' as email FROM "Lead" WHERE "organizationId" = ${organizationId} AND data->>'email' = ANY(${emails})\`` → `[{ entityType: 'lead', entityId: id, email }]`
+2. Lead lookup (JSONB raw query — Prisma column name matches schema: `"organizationId"`):
+   ```typescript
+   prisma.$queryRaw<Array<{ id: string; email: string }>>`
+     SELECT id, data->>'email' as email
+     FROM "Lead"
+     WHERE "organizationId" = ${organizationId}
+       AND data->>'email' = ANY(${emails}::text[])
+   `
+   ``` → `[{ entityType: 'lead', entityId: id, email }]`
 3. Return merged array, deduped by `(entityType, entityId)`
 
 **Guard:** `InternalServiceGuard` — checks `X-Service-Secret: {SERVICE_SECRET}` header. Returns 403 if missing or incorrect.
@@ -169,17 +177,41 @@ Create `modules/sync/` with BullMQ:
 
 **`sync.processor.ts`** — `@Processor('comm:sync')`:
 
-Job type `full_sync`:
+Job type `full_sync` **(two-phase — locked):**
+
+> **Phase A (fast, blocking):** Imports last 90 days. This is the job that runs on OAuth callback. Makes inbox usable immediately.
+
 1. Load identity, decrypt tokens, refresh if needed
 2. Compute cutoff: `const afterEpoch = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000)`
-3. Call `gmail.users.messages.list` with **`q: \`after:${afterEpoch}\``**, paginated (pageToken). **Never use `q: ''` (full mailbox) — large mailboxes exceed quota and processing time bounds.**
+3. Call `gmail.users.messages.list` with `q: \`after:${afterEpoch}\``, paginated (pageToken)
 4. For each message page: call `gmail.users.messages.get(format=full)` in batches of 10
-4. Upsert into `comm_messages` on `gmailMessageId` (unique index guard)
-5. Upsert `comm_threads` per `gmailThreadId`
-6. Run auto-link detection (see COMM-BE-007)
-7. Update `identity.syncState.historyId` after all pages processed
-8. Update `CommSyncJob` doc with `status: completed`
-9. Emit `sync:progress` WS event periodically (every 50 messages)
+5. Upsert into `comm_messages` on `gmailMessageId` (unique index guard)
+6. **For each message with attachments:** enqueue `attachment_archive` job per attachment (see step 10)
+7. Upsert `comm_threads` per `gmailThreadId`
+8. Run auto-link detection (see COMM-BE-007)
+9. Update `identity.syncState.historyId` after all pages processed
+10. Update `CommSyncJob` doc with `status: completed`
+11. Emit `sync:progress` WS event periodically (every 50 messages)
+12. **Enqueue `backfill_sync` job** for this identity (Phase B)
+
+> **Phase B (background backfill):** Imports ALL remaining historical email. Runs at low priority after Phase A completes. Ensures the archive objective is met — even if the mailbox is deleted later, all email is preserved in MongoDB.
+
+1. Load identity, decrypt tokens
+2. Call `gmail.users.messages.list` with **NO time filter** (`q: ''`), paginated
+3. For each message: check if `gmailMessageId` already exists in `comm_messages` (from Phase A) → skip if so
+4. Upsert new historical messages + enqueue `attachment_archive` per attachment
+5. **Rate limiting:** max 10 Gmail API calls/minute (configurable via `COMM_BACKFILL_RATE_LIMIT`)
+6. Persist `pageToken` to `CommSyncJob.payload.lastPageToken` after each page (resume-safe on failure)
+7. On completion: update `CommSyncJob.status = 'completed'`
+8. On failure: retries 3x, then DLQ. Resume from `lastPageToken` on retry.
+
+> **Attachment archival:** Separate BullMQ job type `attachment_archive`:
+1. Load message, load identity, decrypt tokens
+2. Call `gmail.users.messages.attachments.get(messageId, attachmentId)`
+3. Upload to S3: `comm/{orgId}/{gmailMessageId}/{filename}`
+4. Update `comm_messages.attachments[index].s3Key` with S3 key
+5. Retries 3x; on final failure → DLQ (s3Key remains null; admin can retry later)
+6. **This runs eagerly during sync, not lazily on first open.** Reason: lazy-proxy loses attachments permanently if Gmail account is disconnected/deleted before the user opens them.
 
 **Job type `incremental`:**
 1. Load identity, call `gmail.users.history.list(startHistoryId=identity.syncState.historyId)`
@@ -436,9 +468,10 @@ Create `modules/attachments/`:
 
 - `attachments.service.ts`:
   - `getAttachmentUrl(orgId, messageId, attachmentIndex)`:
-    - If `s3Key` is set: return presigned S3 URL (15 min TTL)
-    - If no `s3Key`: stream from Gmail API `users.messages.attachments.get`, upload to S3 key `comm/{orgId}/{gmailMessageId}/{filename}`, update message doc, return presigned URL
+    - If `s3Key` is set (normal case — eagerly archived during sync): return presigned S3 URL (15 min TTL)
+    - If `s3Key` is null (edge case — archive job failed or still pending): attempt live fetch from Gmail API `users.messages.attachments.get`, upload to S3, update message doc, return presigned URL. If Gmail API fails (account disconnected): return `{ error: 'ATTACHMENT_UNAVAILABLE', filename }` with HTTP 410 Gone.
   - `uploadAttachment(orgId, file)` → upload file to S3 for outbound compose (pre-upload flow)
+  - `archiveAttachment(orgId, messageId, attachmentIndex)` → called by `attachment_archive` BullMQ job (see COMM-BE-005). Fetches from Gmail, uploads to S3, updates `s3Key`. This is the primary archival path — runs eagerly during sync, not on user request.
 
 - `attachments.controller.ts`:
   ```
@@ -695,6 +728,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3004/api/comm/identities/oauth/callback
 GOOGLE_PUBSUB_TOPIC=projects/{project-id}/topics/sentra-gmail-push
 COMM_TOKEN_ENCRYPTION_KEY=   # 32-byte hex secret
 COMM_IDEMPOTENCY_TTL_SECONDS=86400
+COMM_BACKFILL_RATE_LIMIT=10          # max Gmail API calls/minute for Phase B backfill sync
 SERVICE_SECRET=              # shared secret for inter-service calls (used in X-Service-Secret header)
 COMM_PUBSUB_AUDIENCE=https://your-domain.com/api/comm/sync/webhook  # JWT audience for Pub/Sub verification
 REDIS_URL=redis://localhost:6379
