@@ -172,6 +172,13 @@ export class PmEventsService {
         err,
       );
     });
+
+    this.persistNotification(envelope).catch((err: unknown) => {
+      this.logger.error(
+        `Failed to persist notification for ${envelope.eventName}`,
+        err,
+      );
+    });
   }
 
   private async persistToActivityLog<T>(envelope: PmEventEnvelope<T>): Promise<void> {
@@ -193,6 +200,46 @@ export class PmEventsService {
       },
     }).catch(() => {
       // Silently ignore DB errors for activity log — never block the caller
+    });
+  }
+
+  private async persistNotification<T>(envelope: PmEventEnvelope<T>): Promise<void> {
+    const payload = envelope.payload as Record<string, unknown>;
+    const projectId = (payload['projectId'] as string | undefined) ?? null;
+
+    let targetUserId: string | null = null;
+    let scopeType = 'PROJECT';
+    let scopeId = projectId ?? envelope.eventId;
+
+    if (envelope.eventName === 'pm.task_assigned') {
+      targetUserId = (payload['assignedToId'] as string | undefined) ?? null;
+      scopeType = 'TASK';
+      scopeId = (payload['taskId'] as string | undefined) ?? scopeId;
+    } else if (envelope.eventName === 'pm.mention_created') {
+      targetUserId = (payload['mentionedUserId'] as string | undefined) ?? null;
+      scopeType = (payload['scopeType'] as string | undefined) ?? 'THREAD';
+      scopeId = (payload['scopeId'] as string | undefined) ?? scopeId;
+    } else if (envelope.eventName === 'pm.approval_requested') {
+      targetUserId = (payload['approvalTargetUserId'] as string | undefined) ?? null;
+      scopeType = 'APPROVAL';
+      scopeId = (payload['approvalRequestId'] as string | undefined) ?? scopeId;
+    }
+
+    if (!targetUserId) return;
+
+    await this.prisma.pmNotification.create({
+      data: {
+        organizationId: envelope.organizationId,
+        projectId,
+        userId: targetUserId,
+        eventType: envelope.eventName,
+        scopeType,
+        scopeId,
+        status: 'UNREAD',
+        payload: envelope as unknown as object,
+      },
+    }).catch(() => {
+      // Notification persistence must not block business flow.
     });
   }
 

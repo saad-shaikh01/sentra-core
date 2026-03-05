@@ -18,6 +18,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Body,
   Query,
@@ -159,6 +160,25 @@ export class FilesController {
       ctx.userId,
       versionId,
     );
+    return wrapSingle(result);
+  }
+
+  @Delete('links/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unlink(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    await this.filesService.unlink(ctx.organizationId, id);
+  }
+
+  @Post(':id/archive')
+  @HttpCode(HttpStatus.OK)
+  async archiveAsset(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const result = await this.filesService.archiveAsset(ctx.organizationId, id);
     return wrapSingle(result);
   }
 }

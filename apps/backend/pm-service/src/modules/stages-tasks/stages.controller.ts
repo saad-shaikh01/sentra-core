@@ -2,6 +2,7 @@
  * StagesController — PM-BE-010
  *
  * Routes (global prefix /api/pm):
+ *   POST   /api/pm/projects/:projectId/stages       — create project stage
  *   GET    /api/pm/projects/:projectId/stages       — list project stages
  *   GET    /api/pm/stages/:id                       — stage detail
  *   PATCH  /api/pm/stages/:id                       — update stage metadata
@@ -33,6 +34,7 @@ import { UpdateStageDto } from './dto/update-stage.dto';
 import { StageLeadDto } from './dto/stage-lead.dto';
 import { BlockStageDto } from './dto/block-stage.dto';
 import { QueryStagesDto } from './dto/query-stages.dto';
+import { CreateStageDto } from './dto/create-stage.dto';
 
 @UseGuards(OrgContextGuard)
 @Controller()
@@ -40,6 +42,21 @@ export class StagesController {
   constructor(private readonly stagesService: StagesService) {}
 
   // ── project stage list ────────────────────────────────────────────────────
+
+  @Post('projects/:projectId/stages')
+  @HttpCode(HttpStatus.CREATED)
+  async create(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('projectId') projectId: string,
+    @Body() dto: CreateStageDto,
+  ) {
+    const stage = await this.stagesService.create(
+      ctx.organizationId,
+      projectId,
+      dto,
+    );
+    return wrapSingle(stage);
+  }
 
   @Get('projects/:projectId/stages')
   async list(

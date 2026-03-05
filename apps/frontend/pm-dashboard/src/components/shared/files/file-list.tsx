@@ -2,10 +2,11 @@
 
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api, type PmFileLink } from '@/lib/api';
-import { FileIcon, ExternalLink, Clock } from 'lucide-react';
+import { FileIcon, ExternalLink, Clock, Unlink2, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface FileListProps {
   scopeType: string;
@@ -15,6 +16,7 @@ interface FileListProps {
 
 export function FileList({ scopeType, scopeId, className }: FileListProps) {
   const queryKey = ['files', 'links', scopeType, scopeId];
+  const queryClient = useQueryClient();
 
   const { data: linksRes, isLoading } = useQuery({
     queryKey,
@@ -34,6 +36,24 @@ export function FileList({ scopeType, scopeId, className }: FileListProps) {
       }
     },
     onError: (e: Error) => toast.error('Failed to get file link', e.message),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: (linkId: string) => api.unlinkFile(linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast.success('File unlinked');
+    },
+    onError: (e: Error) => toast.error('Failed to unlink file', e.message),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (fileAssetId: string) => api.archiveFile(fileAssetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast.success('File archived');
+    },
+    onError: (e: Error) => toast.error('Failed to archive file', e.message),
   });
 
   if (isLoading) {
@@ -94,6 +114,26 @@ export function FileList({ scopeType, scopeId, className }: FileListProps) {
               title="View/Download"
             >
               <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-white/10"
+              onClick={() => unlinkMutation.mutate(link.id)}
+              disabled={unlinkMutation.isPending}
+              title="Unlink"
+            >
+              <Unlink2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-red-500/10 hover:text-red-400"
+              onClick={() => archiveMutation.mutate(link.fileAssetId)}
+              disabled={archiveMutation.isPending}
+              title="Archive"
+            >
+              <Archive className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

@@ -313,12 +313,9 @@ export class ApprovalsService {
 
     return this.prisma.$transaction(async (tx) => {
       // Create immutable snapshot.
-      // TODO(traceability): deliverablePackageId is available on the approval
-      // request (request.deliverablePackageId) but is not denormalised into the
-      // snapshot.  When the schema is ready, add a deliverablePackageId column to
-      // PmApprovalSnapshot so each snapshot row is independently traceable to the
-      // exact deliverable without a join.  Safe to add as a nullable column in a
-      // future migration without altering this transaction.
+      // deliverablePackageId is currently traceable through approvalRequestId.
+      // If snapshot-level denormalization is needed later, add a nullable
+      // deliverablePackageId column to PmApprovalSnapshot in a safe migration.
       const snapshot = await tx.pmApprovalSnapshot.create({
         data: {
           approvalRequestId: request.id,

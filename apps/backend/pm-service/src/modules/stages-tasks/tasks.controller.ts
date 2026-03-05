@@ -21,6 +21,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -40,6 +41,8 @@ import { AssignTaskDto } from './dto/assign-task.dto';
 import { BlockTaskDto } from './dto/block-task.dto';
 import { CreateWorklogDto } from './dto/create-worklog.dto';
 import { QueryMyTasksDto } from './dto/query-my-tasks.dto';
+import { MoveTaskDto } from './dto/move-task.dto';
+import { ReorderStageTasksDto } from './dto/reorder-stage-tasks.dto';
 
 @UseGuards(OrgContextGuard)
 @Controller()
@@ -78,6 +81,22 @@ export class TasksController {
     @Query() query: QueryTasksDto,
   ) {
     return this.tasksService.listByStage(ctx.organizationId, stageId, query);
+  }
+
+  @Patch('stages/:stageId/tasks/reorder')
+  @HttpCode(HttpStatus.OK)
+  async reorderByStage(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('stageId') stageId: string,
+    @Body() dto: ReorderStageTasksDto,
+  ) {
+    const result = await this.tasksService.reorderByStage(
+      ctx.organizationId,
+      stageId,
+      dto.items,
+      ctx.userId,
+    );
+    return wrapSingle(result);
   }
 
   // ── list tasks by project ─────────────────────────────────────────────────
@@ -122,6 +141,42 @@ export class TasksController {
   ) {
     const task = await this.tasksService.update(ctx.organizationId, id, ctx.userId, dto);
     return wrapSingle(task);
+  }
+
+  @Post('tasks/:id/move')
+  @HttpCode(HttpStatus.OK)
+  async move(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+    @Body() dto: MoveTaskDto,
+  ) {
+    const task = await this.tasksService.move(
+      ctx.organizationId,
+      id,
+      dto.projectStageId,
+      ctx.userId,
+      dto.sortOrder,
+    );
+    return wrapSingle(task);
+  }
+
+  @Post('tasks/:id/archive')
+  @HttpCode(HttpStatus.OK)
+  async archive(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const task = await this.tasksService.archive(ctx.organizationId, id, ctx.userId);
+    return wrapSingle(task);
+  }
+
+  @Delete('tasks/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    await this.tasksService.remove(ctx.organizationId, id, ctx.userId);
   }
 
   // ── assign ────────────────────────────────────────────────────────────────

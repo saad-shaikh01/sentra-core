@@ -17,6 +17,7 @@ import { Request } from 'express';
 export interface OrgContext {
   organizationId: string;
   userId: string;
+  userRole?: string;
 }
 
 export const GetOrgContext = createParamDecorator(
@@ -25,6 +26,7 @@ export const GetOrgContext = createParamDecorator(
     return {
       organizationId: req.headers['x-organization-id'] as string,
       userId: req.headers['x-user-id'] as string,
+      userRole: req.headers['x-user-role'] as string | undefined,
     };
   },
 );

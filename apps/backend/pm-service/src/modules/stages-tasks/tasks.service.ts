@@ -194,6 +194,20 @@ export class TasksService {
     const task = await this.prisma.pmTask.findFirst({
       where: { id: taskId, organizationId },
       include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            serviceType: true,
+          },
+        },
+        projectStage: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
         assignments: {
           where: { isCurrent: true },
           select: { assignedToId: true, assignedById: true, assignmentType: true, startedAt: true },
@@ -218,7 +232,31 @@ export class TasksService {
     userId: string,
     dto: UpdateTaskDto,
   ) {
-    await this.assertExists(organizationId, taskId);
+    const existing = await this.assertExists(organizationId, taskId);
+
+    if (dto.projectStageId && dto.projectStageId !== existing.projectStageId) {
+      await this.move(
+        organizationId,
+        taskId,
+        dto.projectStageId,
+        userId,
+        dto.sortOrder,
+      );
+    }
+
+    const shouldUpdateFields =
+      dto.name !== undefined ||
+      dto.description !== undefined ||
+      dto.status !== undefined ||
+      dto.priority !== undefined ||
+      dto.sortOrder !== undefined ||
+      dto.requiresQc !== undefined ||
+      dto.isRequired !== undefined ||
+      dto.dueAt !== undefined;
+
+    if (!shouldUpdateFields) {
+      return this.findOne(organizationId, taskId);
+    }
 
     const updated = await this.prisma.pmTask.update({
       where: { id: taskId },
@@ -237,6 +275,135 @@ export class TasksService {
 
     await this.invalidateTask(organizationId, taskId);
     return updated;
+  }
+
+  // -------------------------------------------------------------------------
+  // Move task to another stage (kanban)
+  // -------------------------------------------------------------------------
+
+  async move(
+    organizationId: string,
+    taskId: string,
+    targetStageId: string,
+    userId: string,
+    sortOrder?: number,
+  ) {
+    const task = await this.assertExists(organizationId, taskId);
+    const targetStage = await this.prisma.pmProjectStage.findFirst({
+      where: {
+        id: targetStageId,
+        organizationId,
+        projectId: task.projectId,
+      },
+      select: { id: true },
+    });
+    if (!targetStage) {
+      throw new NotFoundException('Target stage not found in this project');
+    }
+
+    const nextOrder =
+      sortOrder !== undefined ? sortOrder : await this.nextSortOrder(targetStageId);
+
+    const updated = await this.prisma.pmTask.update({
+      where: { id: taskId },
+      data: {
+        projectStageId: targetStageId,
+        sortOrder: nextOrder,
+        updatedById: userId,
+      },
+    });
+
+    await this.invalidateTask(organizationId, taskId);
+    return updated;
+  }
+
+  // -------------------------------------------------------------------------
+  // Reorder tasks within a stage
+  // -------------------------------------------------------------------------
+
+  async reorderByStage(
+    organizationId: string,
+    stageId: string,
+    items: Array<{ taskId: string; sortOrder: number }>,
+    userId: string,
+  ) {
+    const stage = await this.prisma.pmProjectStage.findFirst({
+      where: { id: stageId, organizationId },
+      select: { id: true },
+    });
+    if (!stage) throw new NotFoundException('Stage not found');
+
+    if (items.length === 0) {
+      await this.cache.invalidateOrgResource(organizationId, this.CACHE_RESOURCE);
+      return { success: true };
+    }
+
+    const taskIds = items.map((item) => item.taskId);
+    const rows = await this.prisma.pmTask.findMany({
+      where: { id: { in: taskIds }, organizationId, projectStageId: stageId },
+      select: { id: true },
+    });
+    if (rows.length !== taskIds.length) {
+      throw new BadRequestException('Some tasks do not belong to this stage');
+    }
+
+    await this.prisma.$transaction(
+      items.map((item) =>
+        this.prisma.pmTask.update({
+          where: { id: item.taskId },
+          data: {
+            sortOrder: item.sortOrder,
+            updatedById: userId,
+          },
+        }),
+      ),
+    );
+
+    await this.cache.invalidateOrgResource(organizationId, this.CACHE_RESOURCE);
+    return { success: true };
+  }
+
+  // -------------------------------------------------------------------------
+  // Archive / delete
+  // -------------------------------------------------------------------------
+
+  async archive(organizationId: string, taskId: string, userId: string) {
+    await this.assertExists(organizationId, taskId);
+    const updated = await this.prisma.pmTask.update({
+      where: { id: taskId },
+      data: {
+        status: 'CANCELLED',
+        isBlocked: false,
+        updatedById: userId,
+      },
+    });
+    await this.invalidateTask(organizationId, taskId);
+    return updated;
+  }
+
+  async remove(organizationId: string, taskId: string, userId: string) {
+    const task = await this.assertExists(organizationId, taskId);
+
+    if (task.status !== 'PENDING' && task.status !== 'READY') {
+      throw new BadRequestException(
+        'Hard delete is allowed only for PENDING/READY tasks',
+      );
+    }
+
+    const [worklogs, submissions, links] = await this.prisma.$transaction([
+      this.prisma.pmTaskWorklog.count({ where: { taskId } }),
+      this.prisma.pmTaskSubmission.count({ where: { taskId } }),
+      this.prisma.pmFileLink.count({ where: { scopeType: 'TASK', scopeId: taskId } }),
+    ]);
+
+    if (worklogs > 0 || submissions > 0 || links > 0) {
+      throw new BadRequestException(
+        'Cannot hard delete task with worklogs, submissions, or files; archive it instead',
+      );
+    }
+
+    await this.prisma.pmTask.delete({ where: { id: taskId } });
+    await this.cache.invalidateOrgResource(organizationId, this.CACHE_RESOURCE);
   }
 
   // -------------------------------------------------------------------------

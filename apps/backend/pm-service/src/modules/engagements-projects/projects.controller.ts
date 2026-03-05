@@ -5,7 +5,10 @@
  *   POST   /api/pm/projects        — create project (triggers template generation if templateId provided)
  *   GET    /api/pm/projects        — list projects (paginated)
  *   GET    /api/pm/projects/:id    — project detail with stages
+ *   GET    /api/pm/projects/:id/board — kanban payload for project workspace
+ *   GET    /api/pm/projects/:id/activity — project audit/activity feed
  *   PATCH  /api/pm/projects/:id    — update project metadata
+ *   POST   /api/pm/projects/:id/archive — archive project
  */
 
 import {
@@ -64,6 +67,30 @@ export class ProjectsController {
     return wrapSingle(project);
   }
 
+  @Get(':id/board')
+  async board(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const board = await this.projectsService.board(ctx.organizationId, id);
+    return wrapSingle(board);
+  }
+
+  @Get(':id/activity')
+  async activity(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.projectsService.activity(
+      ctx.organizationId,
+      id,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
+  }
+
   @Patch(':id')
   async update(
     @GetOrgContext() ctx: OrgContext,
@@ -77,5 +104,19 @@ export class ProjectsController {
       dto,
     );
     return wrapSingle(updated);
+  }
+
+  @Post(':id/archive')
+  @HttpCode(HttpStatus.OK)
+  async archive(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const archived = await this.projectsService.archive(
+      ctx.organizationId,
+      id,
+      ctx.userId,
+    );
+    return wrapSingle(archived);
   }
 }

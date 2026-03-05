@@ -6,6 +6,7 @@ import {
   IsInt,
   Min,
   IsDateString,
+  IsUUID,
 } from 'class-validator';
 import { PmTaskPriority, PmTaskStatus } from '../../../common/enums/pm.enums';
 
@@ -42,4 +43,8 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   dueAt?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  projectStageId?: string;
 }

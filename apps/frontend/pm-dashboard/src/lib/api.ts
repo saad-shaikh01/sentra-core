@@ -93,6 +93,32 @@ export interface PmSignedUrlResponse {
   expiresInSeconds: number;
 }
 
+export interface PmNotification {
+  id: string;
+  organizationId: string;
+  projectId: string | null;
+  userId: string;
+  eventType: string;
+  scopeType: string;
+  scopeId: string;
+  status: 'UNREAD' | 'READ';
+  payload?: unknown;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface PmActivityLog {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  scopeType: string;
+  scopeId: string;
+  actorUserId: string | null;
+  eventType: string;
+  payloadJson?: unknown;
+  createdAt: string;
+}
+
 class ApiClient {
   private coreUrl: string;
   private pmUrl: string;
@@ -203,7 +229,13 @@ class ApiClient {
       throw new Error(error.message || `HTTP ${response.status}`);
     }
 
-    return response.json();
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    const text = await response.text();
+    if (!text) return {} as T;
+    return JSON.parse(text) as T;
   }
 
   // Auth endpoints
@@ -375,6 +407,15 @@ class ApiClient {
     return this.fetch<PmSingleResponse<any>>(`/projects/${id}`, { service: 'pm' });
   }
 
+  async getProjectBoard(id: string) {
+    return this.fetch<PmSingleResponse<any>>(`/projects/${id}/board`, { service: 'pm' });
+  }
+
+  async getProjectActivity(id: string, params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/projects/${id}/activity${qs}`, { service: 'pm' });
+  }
+
   async createProject(dto: Record<string, unknown>) {
     return this.fetch<PmSingleResponse<any>>('/projects', { method: 'POST', body: JSON.stringify(dto), service: 'pm' });
   }
@@ -383,9 +424,40 @@ class ApiClient {
     return this.fetch<PmSingleResponse<any>>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' });
   }
 
+  async archiveProject(id: string) {
+    return this.fetch<PmSingleResponse<any>>(`/projects/${id}/archive`, { method: 'POST', service: 'pm' });
+  }
+
   async getEngagements(params?: Record<string, unknown>) {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
     return this.fetch<any>(`/engagements${qs}`, { service: 'pm' });
+  }
+
+  async getEngagement(id: string) {
+    return this.fetch<PmSingleResponse<any>>(`/engagements/${id}`, { service: 'pm' });
+  }
+
+  async createEngagement(dto: Record<string, unknown>) {
+    return this.fetch<PmSingleResponse<any>>('/engagements', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async updateEngagement(id: string, dto: Record<string, unknown>) {
+    return this.fetch<PmSingleResponse<any>>(`/engagements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async archiveEngagement(id: string) {
+    return this.fetch<PmSingleResponse<any>>(`/engagements/${id}/archive`, {
+      method: 'POST',
+      service: 'pm',
+    });
   }
 
   async getTemplates(params?: Record<string, unknown>) {
@@ -396,6 +468,66 @@ class ApiClient {
   async getStages(projectId: string, params?: Record<string, unknown>) {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
     return this.fetch<any>(`/projects/${projectId}/stages${qs}`, { service: 'pm' });
+  }
+
+  async createStage(projectId: string, dto: Record<string, unknown>) {
+    return this.fetch<PmSingleResponse<any>>(`/projects/${projectId}/stages`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async updateStage(stageId: string, dto: Record<string, unknown>) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async updateStageLead(stageId: string, ownerLeadId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/lead`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ownerLeadId }),
+      service: 'pm',
+    });
+  }
+
+  async activateStage(stageId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/activate`, {
+      method: 'POST',
+      service: 'pm',
+    });
+  }
+
+  async completeStage(stageId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/complete`, {
+      method: 'POST',
+      service: 'pm',
+    });
+  }
+
+  async blockStage(stageId: string, reason: string) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/block`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+      service: 'pm',
+    });
+  }
+
+  async unblockStage(stageId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/unblock`, {
+      method: 'POST',
+      service: 'pm',
+    });
+  }
+
+  async skipStage(stageId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/skip`, {
+      method: 'POST',
+      service: 'pm',
+    });
   }
 
   async getAllStages(params?: Record<string, unknown>) {
@@ -442,8 +574,47 @@ class ApiClient {
     return this.fetch<any>(`/tasks/${taskId}`, { service: 'pm' });
   }
 
+  async createTask(stageId: string, projectId: string, dto: Record<string, unknown>) {
+    const qs = new URLSearchParams({ projectId }).toString();
+    return this.fetch<any>(`/stages/${stageId}/tasks?${qs}`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
   async updateTask(taskId: string, dto: Record<string, unknown>) {
     return this.fetch<any>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(dto), service: 'pm' });
+  }
+
+  async moveTask(taskId: string, dto: { projectStageId: string; sortOrder?: number }) {
+    return this.fetch<PmSingleResponse<any>>(`/tasks/${taskId}/move`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async reorderStageTasks(stageId: string, items: { taskId: string; sortOrder: number }[]) {
+    return this.fetch<PmSingleResponse<any>>(`/stages/${stageId}/tasks/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+      service: 'pm',
+    });
+  }
+
+  async archiveTask(taskId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/tasks/${taskId}/archive`, {
+      method: 'POST',
+      service: 'pm',
+    });
+  }
+
+  async deleteTask(taskId: string) {
+    return this.fetch(`/tasks/${taskId}`, {
+      method: 'DELETE',
+      service: 'pm',
+    });
   }
 
   async getThreadByScope(scopeType: string, scopeId: string) {
@@ -481,6 +652,13 @@ class ApiClient {
     return this.fetch<PmSingleResponse<PmThreadMessage>>(`/threads/${threadId}/messages`, {
       method: 'POST',
       body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async deleteThreadMessage(messageId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/messages/${messageId}`, {
+      method: 'DELETE',
       service: 'pm',
     });
   }
@@ -529,6 +707,20 @@ class ApiClient {
     });
   }
 
+  async unlinkFile(linkId: string) {
+    return this.fetch(`/files/links/${linkId}`, {
+      method: 'DELETE',
+      service: 'pm',
+    });
+  }
+
+  async archiveFile(fileAssetId: string) {
+    return this.fetch<PmSingleResponse<any>>(`/files/${fileAssetId}/archive`, {
+      method: 'POST',
+      service: 'pm',
+    });
+  }
+
   async getFileSignedUrl(fileAssetId: string, versionId?: string) {
     const qs = versionId ? `?${new URLSearchParams({ versionId }).toString()}` : '';
     return this.fetch<PmSingleResponse<PmSignedUrlResponse>>(`/files/${fileAssetId}/signed-url${qs}`, {
@@ -546,6 +738,46 @@ class ApiClient {
 
   async getStageHead(threadId: string) {
     return this.getThreadHead(threadId);
+  }
+
+  async createDeliverable(projectId: string, dto: Record<string, unknown>) {
+    return this.fetch<PmSingleResponse<any>>(`/projects/${projectId}/deliverables`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async createApprovalRequest(projectId: string, dto: Record<string, unknown>) {
+    return this.fetch<PmSingleResponse<any>>(`/projects/${projectId}/approval-requests`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async getApprovalRequests(projectId: string, params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/projects/${projectId}/approval-requests${qs}`, { service: 'pm' });
+  }
+
+  async getNotifications(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/notifications${qs}`, { service: 'pm' });
+  }
+
+  async markNotificationRead(id: string) {
+    return this.fetch<PmSingleResponse<PmNotification>>(`/notifications/${id}/read`, {
+      method: 'POST',
+      service: 'pm',
+    });
+  }
+
+  async markAllNotificationsRead() {
+    return this.fetch<{ success: boolean; updatedCount: number }>('/notifications/read-all', {
+      method: 'POST',
+      service: 'pm',
+    });
   }
 }
 

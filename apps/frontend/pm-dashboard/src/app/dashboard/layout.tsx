@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar';
 import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { ConfirmModal, Toaster } from '@/components/shared';
+import { UserRole } from '@sentra-core/types';
 
 export default function DashboardLayout({
   children,
@@ -12,7 +13,13 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      allowedRoles={[
+        UserRole.OWNER,
+        UserRole.ADMIN,
+        UserRole.PROJECT_MANAGER,
+      ]}
+    >
       <SpotlightBackground>
         <div className="flex h-screen overflow-hidden">
           <Sidebar />

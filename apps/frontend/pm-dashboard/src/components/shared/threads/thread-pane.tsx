@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type PmThread, type PmThreadMessage } from '@/lib/api';
-import { Send, MessageSquare, WifiOff } from 'lucide-react';
+import { Send, MessageSquare, WifiOff, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
@@ -104,6 +104,15 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
     onError: (e: Error) => toast.error('Failed to send message', e.message),
   });
 
+  const deleteMessageMutation = useMutation({
+    mutationFn: (messageId: string) => api.deleteThreadMessage(messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['thread', thread?.id, 'messages'] });
+      toast.success('Message deleted');
+    },
+    onError: (e: Error) => toast.error('Failed to delete message', e.message),
+  });
+
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
     const content = newMessage.trim();
@@ -186,6 +195,16 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
                 >
                   {msg.body}
                 </div>
+                {isMe && msg.messageType !== 'SYSTEM' && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors flex items-center gap-1"
+                    onClick={() => deleteMessageMutation.mutate(msg.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </button>
+                )}
               </div>
             );
           })

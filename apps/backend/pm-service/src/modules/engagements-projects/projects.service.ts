@@ -276,6 +276,107 @@ export class ProjectsService {
   }
 
   // -------------------------------------------------------------------------
+  // Archive (safe close)
+  // -------------------------------------------------------------------------
+
+  async archive(organizationId: string, id: string, userId: string) {
+    await this.assertExists(organizationId, id);
+
+    const archived = await this.prisma.pmProject.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        updatedById: userId,
+      },
+    });
+
+    await this.invalidateProject(organizationId, id);
+    return archived;
+  }
+
+  // -------------------------------------------------------------------------
+  // Board payload (kanban-friendly shape)
+  // -------------------------------------------------------------------------
+
+  async board(organizationId: string, id: string) {
+    await this.assertExists(organizationId, id);
+
+    const [stages, tasks] = await this.prisma.$transaction([
+      this.prisma.pmProjectStage.findMany({
+        where: { organizationId, projectId: id },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          sortOrder: true,
+          status: true,
+          departmentCode: true,
+          ownerLeadId: true,
+          dueAt: true,
+          _count: { select: { tasks: true } },
+        },
+      }),
+      this.prisma.pmTask.findMany({
+        where: { organizationId, projectId: id },
+        orderBy: [{ projectStageId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          projectStageId: true,
+          name: true,
+          status: true,
+          priority: true,
+          assigneeId: true,
+          dueAt: true,
+          sortOrder: true,
+          isBlocked: true,
+        },
+      }),
+    ]);
+
+    const byStage = new Map<string, typeof tasks>();
+    for (const task of tasks) {
+      const arr = byStage.get(task.projectStageId) ?? [];
+      arr.push(task);
+      byStage.set(task.projectStageId, arr);
+    }
+
+    return {
+      projectId: id,
+      stages: stages.map((stage) => ({
+        ...stage,
+        tasks: byStage.get(stage.id) ?? [],
+      })),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Project activity feed
+  // -------------------------------------------------------------------------
+
+  async activity(
+    organizationId: string,
+    projectId: string,
+    page = 1,
+    limit = 20,
+  ) {
+    await this.assertExists(organizationId, projectId);
+    const { skip, take } = toPrismaPagination(page, limit);
+
+    const where = { organizationId, projectId };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.pmActivityLog.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.pmActivityLog.count({ where }),
+    ]);
+
+    return buildPmPaginationResponse(rows, total, page, limit);
+  }
+
+  // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
 

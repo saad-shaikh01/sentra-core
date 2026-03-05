@@ -3,10 +3,14 @@
 import { Bell, Search, Command } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useNotifications } from '@/hooks/use-notifications';
 
 export function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: unreadRes } = useNotifications({ page: 1, limit: 1, status: 'UNREAD' });
+  const unreadCount = unreadRes?.meta?.total ?? 0;
 
   // Simple breadcrumb logic
   const segments = pathname.split('/').filter(Boolean);
@@ -46,9 +50,16 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-white/10 relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-xl hover:bg-white/10 relative"
+            onClick={() => router.push('/dashboard/notifications')}
+          >
             <Bell className="h-5 w-5 text-muted-foreground" />
-            <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-primary rounded-full border-2 border-black" />
+            {unreadCount > 0 && (
+              <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-primary rounded-full border-2 border-black" />
+            )}
           </Button>
           
           <div className="h-6 w-px bg-white/10 mx-2" />

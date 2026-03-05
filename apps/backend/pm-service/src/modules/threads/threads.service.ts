@@ -296,6 +296,35 @@ export class ThreadsService {
     });
   }
 
+  async deleteMessage(
+    organizationId: string,
+    messageId: string,
+    userId: string,
+  ) {
+    const message = await this.prisma.pmMessage.findFirst({
+      where: { id: messageId },
+      include: { thread: { select: { organizationId: true } } },
+    });
+
+    if (!message || message.thread.organizationId !== organizationId) {
+      throw new NotFoundException('Message not found');
+    }
+    if (message.authorId !== userId) {
+      throw new ForbiddenException('Only the author can delete this message');
+    }
+    if (message.messageType === 'SYSTEM') {
+      throw new BadRequestException('System messages cannot be deleted');
+    }
+
+    return this.prisma.pmMessage.update({
+      where: { id: messageId },
+      data: {
+        body: '[message deleted]',
+        messageType: 'SYSTEM',
+      },
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Scope validation — ensures scopeId exists and belongs to the project/org
   // -------------------------------------------------------------------------

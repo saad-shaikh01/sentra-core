@@ -1,4 +1,4 @@
-import { IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsOptional, IsEnum, IsUUID, IsString, MaxLength } from 'class-validator';
 import { PmPaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import {
   PmEngagementStatus,
@@ -7,6 +7,16 @@ import {
 } from '../../../common/enums/pm.enums';
 
 export class QueryEngagementsDto extends PmPaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
   @IsOptional()
   @IsEnum(PmEngagementStatus)
   status?: PmEngagementStatus;

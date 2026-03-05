@@ -29,6 +29,8 @@ import { StagesTasksModule } from '../modules/stages-tasks/stages-tasks.module';
 import { QcApprovalsModule } from '../modules/qc-approvals/qc-approvals.module';
 import { ThreadsModule } from '../modules/threads/threads.module';
 import { FilesModule } from '../modules/files/files.module';
+import { PmRoleGuard } from '../common/guards/pm-role.guard';
+import { NotificationsModule } from '../modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -75,6 +77,7 @@ import { FilesModule } from '../modules/files/files.module';
     QcApprovalsModule,              // PM-BE-013/014/015
     ThreadsModule,                  // PM-BE-016
     FilesModule,                    // PM-BE-017
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -82,6 +85,10 @@ import { FilesModule } from '../modules/files/files.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PmRoleGuard,
     },
   ],
 })

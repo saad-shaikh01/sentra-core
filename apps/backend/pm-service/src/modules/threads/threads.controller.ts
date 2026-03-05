@@ -17,6 +17,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -125,6 +126,20 @@ export class ThreadsController {
       messageId,
       ctx.userId,
       dto,
+    );
+    return wrapSingle(message);
+  }
+
+  @Delete('messages/:id')
+  @HttpCode(HttpStatus.OK)
+  async deleteMessage(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') messageId: string,
+  ) {
+    const message = await this.threadsService.deleteMessage(
+      ctx.organizationId,
+      messageId,
+      ctx.userId,
     );
     return wrapSingle(message);
   }

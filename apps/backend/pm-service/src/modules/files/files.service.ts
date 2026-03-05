@@ -304,4 +304,37 @@ export class FilesService {
 
     return links;
   }
+
+  async unlink(organizationId: string, linkId: string) {
+    const link = await this.prisma.pmFileLink.findFirst({
+      where: {
+        id: linkId,
+        fileAsset: { organizationId },
+      },
+      select: { id: true },
+    });
+    if (!link) throw new NotFoundException('File link not found');
+
+    await this.prisma.pmFileLink.delete({ where: { id: linkId } });
+  }
+
+  async archiveAsset(organizationId: string, fileAssetId: string) {
+    const asset = await this.prisma.pmFileAsset.findFirst({
+      where: { id: fileAssetId, organizationId },
+      select: { id: true },
+    });
+    if (!asset) throw new NotFoundException('File not found');
+
+    // "Archive" in current schema means unlinking from all scopes,
+    // while retaining immutable version history for auditability.
+    const result = await this.prisma.pmFileLink.deleteMany({
+      where: { fileAssetId },
+    });
+
+    return {
+      fileAssetId,
+      unlinkedCount: result.count,
+      archived: true,
+    };
+  }
 }

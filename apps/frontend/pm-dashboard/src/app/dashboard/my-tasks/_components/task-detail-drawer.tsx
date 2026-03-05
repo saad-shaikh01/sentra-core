@@ -24,11 +24,15 @@ import {
   Play,
   Lock,
   UserPlus,
-  History
+  History,
+  Archive,
+  Trash2,
 } from 'lucide-react';
 import { pmKeys } from '@/hooks/use-pm-data';
 import { toast } from '@/hooks/use-toast';
 import { useMembers } from '@/hooks/use-organization';
+import { ThreadPane } from '@/components/shared/threads/thread-pane';
+import { FileList, FileUploader } from '@/components/shared/files';
 
 interface TaskDetailDrawerProps {
   taskId: string | null;
@@ -42,7 +46,15 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
     enabled: !!taskId,
   });
 
+  const { data: worklogsRes } = useQuery({
+    queryKey: ['task', taskId, 'worklogs'],
+    queryFn: () =>
+      api.fetch<any>(`/tasks/${taskId}/worklogs?page=1&limit=25`, { service: 'pm' }),
+    enabled: !!taskId,
+  });
+
   const task = taskRes?.data;
+  const worklogs = worklogsRes?.data ?? [];
   const queryClient = useQueryClient();
   const { data: members } = useMembers();
   const [worklogNote, setWorklogNote] = useState('');
@@ -51,7 +63,9 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['task', taskId] });
+    queryClient.invalidateQueries({ queryKey: ['task', taskId, 'worklogs'] });
     queryClient.invalidateQueries({ queryKey: pmKeys.myTasks });
+    queryClient.invalidateQueries({ queryKey: ['projects'] });
   };
 
   const claimTaskMutation = useMutation({
@@ -125,6 +139,25 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
       toast.success('Task submitted for review');
     },
     onError: (e: Error) => toast.error('Failed to submit task', e.message),
+  });
+
+  const archiveTaskMutation = useMutation({
+    mutationFn: () => api.archiveTask(taskId!),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Task archived');
+    },
+    onError: (e: Error) => toast.error('Failed to archive task', e.message),
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: () => api.deleteTask(taskId!),
+    onSuccess: () => {
+      invalidate();
+      onClose();
+      toast.success('Task deleted');
+    },
+    onError: (e: Error) => toast.error('Failed to delete task', e.message),
   });
 
   const memberMap = Object.fromEntries((members ?? []).map((m: any) => [m.id, m.name]));
@@ -226,6 +259,30 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                         <Lock className="h-4 w-4 mr-2" /> Block
                       </Button>
                     )}
+                    {task.status !== 'CANCELLED' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-500/20 text-amber-400 hover:bg-amber-500/10"
+                        onClick={() => archiveTaskMutation.mutate()}
+                        disabled={archiveTaskMutation.isPending}
+                      >
+                        <Archive className="h-4 w-4 mr-2" />
+                        Archive
+                      </Button>
+                    )}
+                    {(task.status === 'PENDING' || task.status === 'READY') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-500/20 text-red-400 hover:bg-red-500/10"
+                        onClick={() => deleteTaskMutation.mutate()}
+                        disabled={deleteTaskMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </Button>
+                    )}
                   </div>
 
                   {/* QC / Submission form */}
@@ -274,6 +331,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                     <SelectValue placeholder="Select member" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
                     {members?.map((m: any) => (
                       <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                     ))}
@@ -296,6 +354,52 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
                     Log
                   </Button>
                 </div>
+              </div>
+
+              {/* Discussion */}
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Discussion</h3>
+                <ThreadPane
+                  projectId={task.projectId}
+                  scopeType="TASK"
+                  scopeId={task.id}
+                  className="!h-[360px]"
+                />
+              </div>
+
+              {/* Files */}
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Files</h3>
+                <FileUploader
+                  projectId={task.projectId}
+                  scopeType="TASK"
+                  scopeId={task.id}
+                />
+                <FileList scopeType="TASK" scopeId={task.id} />
+              </div>
+
+              {/* History */}
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">Activity History</h3>
+                {worklogs.length > 0 ? (
+                  <div className="space-y-2">
+                    {worklogs.map((row: any) => (
+                      <div key={row.id} className="p-3 rounded-lg bg-white/[0.03] border border-white/10">
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                          <span>{memberMap[row.userId] ?? row.userId}</span>
+                          <span>{new Date(row.startedAt).toLocaleString()}</span>
+                        </div>
+                        {row.notes && (
+                          <p className="mt-2 text-sm text-foreground/80 whitespace-pre-wrap">{row.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    No activity logged yet.
+                  </div>
+                )}
               </div>
             </div>
           </div>

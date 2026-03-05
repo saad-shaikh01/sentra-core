@@ -100,14 +100,34 @@ export class EngagementsService {
     organizationId: string,
     query: QueryEngagementsDto,
   ): Promise<PmPaginatedResponse<EngagementSummary>> {
-    const { page = 1, limit = 20, status, ownerType, clientId, ownerBrandId, priority } = query;
+    const {
+      page = 1,
+      limit = 20,
+      name,
+      search,
+      status,
+      ownerType,
+      clientId,
+      ownerBrandId,
+      priority,
+    } = query;
+    const nameFilter = name ?? search;
     const { skip, take } = toPrismaPagination(page, limit);
 
     const cacheKey = this.cache.buildKey(
       organizationId,
       this.CACHE_RESOURCE,
       'list',
-      this.cache.hashQuery({ page, limit, status, ownerType, clientId, ownerBrandId, priority }),
+      this.cache.hashQuery({
+        page,
+        limit,
+        nameFilter,
+        status,
+        ownerType,
+        clientId,
+        ownerBrandId,
+        priority,
+      }),
     );
 
     const cached = await this.cache.get<PmPaginatedResponse<EngagementSummary>>(cacheKey);
@@ -115,6 +135,9 @@ export class EngagementsService {
 
     const where = {
       organizationId,
+      ...(nameFilter !== undefined && {
+        name: { contains: nameFilter, mode: 'insensitive' as const },
+      }),
       ...(status !== undefined && { status }),
       ...(ownerType !== undefined && { ownerType }),
       ...(clientId !== undefined && { clientId }),

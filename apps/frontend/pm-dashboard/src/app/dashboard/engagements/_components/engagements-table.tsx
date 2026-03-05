@@ -3,8 +3,7 @@
 import { useMemo } from 'react';
 import { DataTable, Column, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
-import { Eye, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
+import { Edit2, Archive } from 'lucide-react';
 
 export interface EnrichedEngagement {
   id: string;
@@ -24,9 +23,17 @@ interface EngagementsTableProps {
   engagements: EnrichedEngagement[];
   isLoading: boolean;
   isError?: boolean;
+  onEdit: (e: EnrichedEngagement) => void;
+  onArchive: (e: EnrichedEngagement) => void;
 }
 
-export function EngagementsTable({ engagements, isLoading, isError }: EngagementsTableProps) {
+export function EngagementsTable({
+  engagements,
+  isLoading,
+  isError,
+  onEdit,
+  onArchive,
+}: EngagementsTableProps) {
   const columns = useMemo<Column<EnrichedEngagement>[]>(() => [
     { 
       key: 'name', 
@@ -74,15 +81,24 @@ export function EngagementsTable({ engagements, isLoading, isError }: Engagement
             variant="ghost"
             size="icon"
             className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
-            disabled
-            title="Detail view coming soon"
+            onClick={() => onEdit(e)}
+            title="Edit"
           >
-            <Eye className="h-3.5 w-3.5" />
+            <Edit2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:bg-red-500/10 hover:text-red-400"
+            onClick={() => onArchive(e)}
+            title="Archive"
+          >
+            <Archive className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),
     },
-  ], []);
+  ], [onArchive, onEdit]);
 
   return (
     <DataTable

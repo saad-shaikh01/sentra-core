@@ -4,12 +4,14 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useUser } from '@/hooks/use-auth';
+import { UserRole } from '@sentra-core/types';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  allowedRoles?: UserRole[];
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { data: user, isLoading, isError } = useUser();
   const router = useRouter();
 
@@ -39,6 +41,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     return null;
+  }
+
+  if (allowedRoles && allowedRoles.length > 0) {
+    const hasAccess = allowedRoles.includes(user.role);
+
+    if (!hasAccess) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="text-center space-y-3 max-w-md">
+            <h1 className="text-xl font-bold">PM Module Access Restricted</h1>
+            <p className="text-sm text-muted-foreground">
+              Your current role does not have access to the PM workspace.
+            </p>
+          </div>
+        </div>
+      );
+    }
   }
 
   return (

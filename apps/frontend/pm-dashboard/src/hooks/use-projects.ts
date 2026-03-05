@@ -10,6 +10,8 @@ export const projectsKeys = {
   lists:   () => [...projectsKeys.all, 'list'] as const,
   list:    (params: object) => [...projectsKeys.lists(), params] as const,
   detail:  (id: string)     => [...projectsKeys.all, 'detail', id] as const,
+  board:   (id: string)     => [...projectsKeys.all, 'board', id] as const,
+  activity:(id: string, params: object) => [...projectsKeys.all, 'activity', id, params] as const,
   stages:  (id: string)     => [...projectsKeys.all, 'stages', id] as const,
   tasks:   (stageId: string) => [...projectsKeys.all, 'tasks', stageId] as const,
 };
@@ -29,6 +31,28 @@ export function useProject(id: string) {
     queryFn:  () => api.getProject(id),
     enabled:  !!id,
     staleTime: 60_000,
+  });
+}
+
+export function useProjectBoard(id: string) {
+  return useQuery({
+    queryKey: projectsKeys.board(id),
+    queryFn: () => api.getProjectBoard(id),
+    enabled: !!id,
+    staleTime: 15_000,
+  });
+}
+
+export function useProjectActivity(
+  id: string,
+  params?: Record<string, unknown>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: projectsKeys.activity(id, params ?? {}),
+    queryFn: () => api.getProjectActivity(id, params),
+    enabled: !!id && enabled,
+    staleTime: 30_000,
   });
 }
 
@@ -55,6 +79,19 @@ export function useUpdateProject() {
       toast.success('Project updated');
     },
     onError: (e: Error) => toast.error('Failed to update project', e.message),
+  });
+}
+
+export function useArchiveProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.archiveProject(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: projectsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectsKeys.detail(id) });
+      toast.success('Project archived');
+    },
+    onError: (e: Error) => toast.error('Failed to archive project', e.message),
   });
 }
 

@@ -29,6 +29,7 @@ import { UpdateStageDto } from './dto/update-stage.dto';
 import { StageLeadDto } from './dto/stage-lead.dto';
 import { BlockStageDto } from './dto/block-stage.dto';
 import { PmDepartmentCode, PmStageStatus } from '../../common/enums/pm.enums';
+import { CreateStageDto } from './dto/create-stage.dto';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,6 +92,46 @@ export class StagesService {
     private readonly cache: PmCacheService,
     private readonly performance: PerformanceService,
   ) {}
+
+  // -------------------------------------------------------------------------
+  // Create stage in a project (manual)
+  // -------------------------------------------------------------------------
+
+  async create(
+    organizationId: string,
+    projectId: string,
+    dto: CreateStageDto,
+  ) {
+    await this.assertProjectExists(organizationId, projectId);
+
+    const max = await this.prisma.pmProjectStage.aggregate({
+      where: { organizationId, projectId },
+      _max: { sortOrder: true },
+    });
+    const sortOrder = (max._max.sortOrder ?? -1) + 1;
+
+    const stage = await this.prisma.pmProjectStage.create({
+      data: {
+        organizationId,
+        projectId,
+        templateStageId: null,
+        name: dto.name,
+        description: dto.description ?? null,
+        departmentCode: dto.departmentCode,
+        status: dto.status ?? 'PENDING',
+        sortOrder,
+        ownerLeadId: dto.ownerLeadId ?? null,
+        clientReviewMode: dto.clientReviewMode ?? 'NONE',
+        requiresStageApproval: dto.requiresStageApproval ?? false,
+        requiresQcByDefault: dto.requiresQcByDefault ?? false,
+        isOptional: dto.isOptional ?? false,
+        dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+      },
+    });
+
+    await this.cache.invalidateOrgResource(organizationId, this.CACHE_RESOURCE);
+    return stage;
+  }
 
   // -------------------------------------------------------------------------
   // List stages for a project (paginated)

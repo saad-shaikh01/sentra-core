@@ -19,6 +19,7 @@ import {
   ListTodo,
   FileBox,
   ClipboardCheck,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'Dashboard',   href: '/dashboard',             icon: LayoutDashboard },
   { name: 'My Tasks',    href: '/dashboard/my-tasks',    icon: CheckSquare },
   { name: 'QC Reviews',  href: '/dashboard/qc-reviews',  icon: ClipboardCheck },
+  { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
   { name: 'Stage Queue', href: '/dashboard/stage-queue', icon: ListTodo },
   { name: 'Engagements', href: '/dashboard/engagements', icon: Layers },
   { name: 'Projects',    href: '/dashboard/projects',    icon: Briefcase },
