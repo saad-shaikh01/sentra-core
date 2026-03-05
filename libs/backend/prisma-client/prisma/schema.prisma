@@ -76,6 +76,28 @@ enum PlanType {
   ENTERPRISE
 }
 
+enum OrganizationOnboardingMode {
+  PUBLIC_OWNER_SIGNUP
+  INVITE_ONLY
+}
+
+enum AppCode {
+  SALES_DASHBOARD
+  PM_DASHBOARD
+  HRMS
+  CLIENT_PORTAL
+  COMM_SERVICE
+}
+
+enum DataScopeType {
+  OWN
+  TEAM
+  DEPARTMENT
+  BRAND
+  PROJECT
+  ALL
+}
+
 enum PmProjectOwnerType {
   CLIENT
   INTERNAL_BRAND
@@ -320,10 +342,11 @@ enum PmPerformancePeriodType {
 // ==========================================
 
 model Organization {
-  id           String   @id @default(uuid())
-  name         String // e.g., "Madcom Digital"
-  subscription String   @default("FREE") // "STARTER", "ENTERPRISE"
-  planType     PlanType @default(FREE)
+  id             String                     @id @default(uuid())
+  name           String // e.g., "Madcom Digital"
+  subscription   String                     @default("FREE") // "STARTER", "ENTERPRISE"
+  planType       PlanType                   @default(FREE)
+  onboardingMode OrganizationOnboardingMode @default(PUBLIC_OWNER_SIGNUP)
 
   brands      Brand[]
   users       User[]
@@ -331,6 +354,10 @@ model Organization {
   clients     Client[]
   sales       Sale[]
   invitations Invitation[]
+  appRoles    AppRole[]
+  userAppAccesses UserAppAccess[]
+  userAppRoles UserAppRole[]
+  userScopeGrants UserScopeGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -385,6 +412,10 @@ model User {
 
   // Permissions & Access
   accessScope BrandAccess[]
+  appAccesses UserAppAccess[]
+  appRoles    UserAppRole[]
+  scopeGrants UserScopeGrant[]
+  createdAppRoles AppRole[] @relation("AppRoleCreatedBy")
   emailConfig UserEmailConfig? // Gmail Integration
 
   assignedLeads  Lead[]
@@ -418,7 +449,7 @@ model BrandAccess {
 model Invitation {
   id        String           @id @default(uuid())
   email     String
-  role      UserRole         @default(FRONTSELL_AGENT)
+  role      UserRole?
   token     String           @unique // Unique token for invitation link
   status    InvitationStatus @default(PENDING)
   expiresAt DateTime
@@ -427,12 +458,165 @@ model Invitation {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   invitedById String // The user who sent the invitation
+  bundles    InvitationBundle[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, email])
   @@index([token])
+}
+
+model AppRegistry {
+  id          String   @id @default(uuid())
+  code        AppCode  @unique
+  name        String
+  baseUrl     String?
+  description String?
+  isActive    Boolean  @default(true)
+
+  permissionCatalog PermissionCatalog[]
+  appRoles          AppRole[]
+  userAppAccesses   UserAppAccess[]
+  userAppRoles      UserAppRole[]
+  userScopeGrants   UserScopeGrant[]
+  invitationBundles InvitationBundle[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PermissionCatalog {
+  id          String @id @default(uuid())
+  appId       String
+  key         String
+  label       String
+  description String?
+  isActive    Boolean @default(true)
+
+  app      AppRegistry         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  roleLinks AppRolePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([appId, key])
+  @@index([appId, isActive])
+}
+
+model AppRole {
+  id             String  @id @default(uuid())
+  organizationId String
+  appId          String
+  name           String
+  slug           String
+  description    String?
+  isSystem       Boolean @default(false)
+  isActive       Boolean @default(true)
+  createdById    String?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  app          AppRegistry        @relation(fields: [appId], references: [id], onDelete: Cascade)
+  createdBy    User?              @relation("AppRoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  permissions  AppRolePermission[]
+  users        UserAppRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, appId, slug])
+  @@index([organizationId, appId, isActive])
+}
+
+model AppRolePermission {
+  id           String @id @default(uuid())
+  appRoleId    String
+  permissionId String
+
+  appRole    AppRole          @relation(fields: [appRoleId], references: [id], onDelete: Cascade)
+  permission PermissionCatalog @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([appRoleId, permissionId])
+  @@index([permissionId])
+}
+
+model UserAppAccess {
+  id             String  @id @default(uuid())
+  organizationId String
+  userId         String
+  appId          String
+  isEnabled      Boolean @default(true)
+  isDefault      Boolean @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app          AppRegistry  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, userId, appId])
+  @@index([userId, isEnabled])
+  @@index([organizationId, appId, isEnabled])
+}
+
+model UserAppRole {
+  id             String  @id @default(uuid())
+  organizationId String
+  userId         String
+  appId          String
+  appRoleId      String
+  isPrimary      Boolean @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app          AppRegistry  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appRole      AppRole      @relation(fields: [appRoleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, userId, appId, appRoleId])
+  @@index([organizationId, userId, appId])
+}
+
+model UserScopeGrant {
+  id             String        @id @default(uuid())
+  organizationId String
+  userId         String
+  appId          String
+  resourceKey    String
+  scopeType      DataScopeType
+  scopeValues    Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app          AppRegistry  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, userId, appId])
+  @@index([appId, resourceKey, scopeType])
+}
+
+model InvitationBundle {
+  id           String @id @default(uuid())
+  invitationId String
+  appId        String
+  roleIds      Json?
+  scopeGrants  Json?
+
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  app        AppRegistry @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([invitationId, appId])
+  @@index([invitationId])
 }
 
 // ==========================================

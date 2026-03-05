@@ -3,10 +3,18 @@
 import { Bell, Search, Command } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { usePathname } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 
 export function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: apps = [] } = useQuery({
+    queryKey: ['auth', 'apps'],
+    queryFn: () => api.getAvailableApps(),
+  });
 
   // Simple breadcrumb logic
   const segments = pathname.split('/').filter(Boolean);
@@ -46,6 +54,32 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center gap-2">
+          {apps.length > 1 && (
+            <Select
+              value="SALES_DASHBOARD"
+              onValueChange={(v) => {
+                if (v === 'SALES_DASHBOARD') {
+                  router.push('/dashboard');
+                  return;
+                }
+                const target = apps.find((a) => a.appCode === v);
+                if (target?.baseUrl && typeof window !== 'undefined') {
+                  window.location.href = `${target.baseUrl}/dashboard`;
+                }
+              }}
+            >
+              <SelectTrigger className="w-[170px] h-10 bg-white/[0.03] border-white/10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {apps.map((app) => (
+                  <SelectItem key={app.appCode} value={app.appCode}>
+                    {app.appName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-white/10 relative">
             <Bell className="h-5 w-5 text-muted-foreground" />
             <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-primary rounded-full border-2 border-black" />

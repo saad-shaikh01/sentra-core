@@ -3,6 +3,7 @@ import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailClientModule } from '@sentra-core/mail-client';
+import { IamModule } from '../iam';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy, JwtRefreshStrategy } from './strategies';
@@ -22,6 +23,7 @@ import { AccessTokenGuard, RefreshTokenGuard, RolesGuard } from './guards';
       }),
     }),
     MailClientModule,
+    IamModule,
   ],
   controllers: [AuthController],
   providers: [

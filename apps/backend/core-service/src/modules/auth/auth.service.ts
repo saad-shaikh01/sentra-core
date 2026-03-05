@@ -4,15 +4,24 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { MailClientService } from '@sentra-core/mail-client';
-import { UserRole, JwtPayload, IAuthTokens, ILoginResponse, ISignupResponse } from '@sentra-core/types';
+import {
+  OrganizationOnboardingMode,
+  UserRole,
+  JwtPayload,
+  IAuthTokens,
+  ILoginResponse,
+  ISignupResponse,
+} from '@sentra-core/types';
 import { v4 as uuidv4 } from 'uuid';
 import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
+import { IamService } from '../iam';
 
 @Injectable()
 export class AuthService {
@@ -21,7 +30,15 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private mailService: MailClientService,
+    private iamService: IamService,
   ) {}
+
+  private isPublicOwnerSignupEnabled(): boolean {
+    const value = this.configService
+      .get<string>('ALLOW_PUBLIC_OWNER_SIGNUP', 'true')
+      .toLowerCase();
+    return value === '1' || value === 'true' || value === 'yes';
+  }
 
   async login(dto: LoginDto): Promise<ILoginResponse> {
     const user = await this.prisma.user.findUnique({
@@ -45,6 +62,7 @@ export class AuthService {
 
     const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
 
     return {
       ...tokens,
@@ -62,11 +80,19 @@ export class AuthService {
         organization: user.organization,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        appAccess,
       },
+      appAccess,
     };
   }
 
   async signup(dto: SignupDto): Promise<ISignupResponse> {
+    if (!this.isPublicOwnerSignupEnabled()) {
+      throw new ForbiddenException(
+        'Public owner signup is disabled. Ask organization admin for an invitation.',
+      );
+    }
+
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -75,12 +101,23 @@ export class AuthService {
       throw new ConflictException('Email already exists');
     }
 
+    const existingOrg = await this.prisma.organization.findFirst({
+      where: { name: dto.organizationName },
+      select: { id: true },
+    });
+    if (existingOrg) {
+      throw new ConflictException(
+        'Organization already exists. Team members must join via invitation.',
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
         data: {
           name: dto.organizationName,
+          onboardingMode: OrganizationOnboardingMode.PUBLIC_OWNER_SIGNUP,
         },
       });
 
@@ -98,6 +135,11 @@ export class AuthService {
       return { user, organization };
     });
 
+    await this.iamService.bootstrapOwnerEntitlements(
+      result.organization.id,
+      result.user.id,
+    );
+
     const tokens = await this.getTokens(
       result.user.id,
       result.user.email,
@@ -105,6 +147,10 @@ export class AuthService {
       result.user.role,
     );
     await this.updateRefreshToken(result.user.id, tokens.refreshToken);
+    const appAccess = await this.iamService.getUserAppAccess(
+      result.organization.id,
+      result.user.id,
+    );
 
     await this.mailService.sendMail({
       to: result.user.email,
@@ -132,8 +178,10 @@ export class AuthService {
         organization: result.organization,
         createdAt: result.user.createdAt,
         updatedAt: result.user.updatedAt,
+        appAccess,
       },
       organization: result.organization,
+      appAccess,
     };
   }
 
@@ -230,6 +278,10 @@ export class AuthService {
     });
 
     return { message: 'Logged out successfully' };
+  }
+
+  async getAvailableApps(userId: string, orgId: string) {
+    return this.iamService.getUserAppAccess(orgId, userId);
   }
 
   private async getTokens(

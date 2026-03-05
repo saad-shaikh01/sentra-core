@@ -49,6 +49,12 @@ const settingsNavigation = [
     icon: Building2,
     roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[],
   },
+  {
+    name: 'Access',
+    href: '/dashboard/settings/access',
+    icon: Users,
+    roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[],
+  },
 ];
 
 export function Sidebar() {

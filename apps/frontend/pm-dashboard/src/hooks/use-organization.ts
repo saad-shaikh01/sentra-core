@@ -48,7 +48,13 @@ export function useRemoveMember() {
 export function useInvitations() {
   return useQuery<IInvitation[]>({
     queryKey: organizationKeys.invitations(),
-    queryFn: () => api.getPendingInvitations(),
+    queryFn: async () => {
+      try {
+        return await api.getIamInvitations();
+      } catch {
+        return api.getPendingInvitations();
+      }
+    },
   });
 }
 
@@ -57,8 +63,16 @@ export function useSendInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ email, role }: { email: string; role: string }) =>
-      api.sendInvitation(email, role),
+    mutationFn: async ({ email, role }: { email: string; role: string }) => {
+      try {
+        return await api.sendIamInvitation({
+          email,
+          appBundles: [{ appCode: 'PM_DASHBOARD' }],
+        });
+      } catch {
+        return api.sendInvitation(email, role);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations() });
     },
@@ -70,7 +84,13 @@ export function useCancelInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (invitationId: string) => api.cancelInvitation(invitationId),
+    mutationFn: async (invitationId: string) => {
+      try {
+        return await api.cancelIamInvitation(invitationId);
+      } catch {
+        return api.cancelInvitation(invitationId);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations() });
     },

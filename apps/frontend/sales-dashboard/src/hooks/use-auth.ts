@@ -6,6 +6,39 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { IUserProfile } from '@sentra-core/types';
 
+const CURRENT_APP_CODE = 'SALES_DASHBOARD';
+
+type AppAccessItem = {
+  appCode: string;
+  appName: string;
+  baseUrl?: string;
+  isDefault: boolean;
+};
+
+function routeAfterAuth(router: ReturnType<typeof useRouter>, appAccess?: AppAccessItem[]) {
+  if (!appAccess || appAccess.length === 0) {
+    router.push('/dashboard');
+    return;
+  }
+
+  const sorted = [...appAccess].sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
+  if (sorted.length === 1) {
+    const [single] = sorted;
+    if (single.appCode === CURRENT_APP_CODE) {
+      router.push('/dashboard');
+      return;
+    }
+    if (single.baseUrl && typeof window !== 'undefined') {
+      window.location.href = `${single.baseUrl}/dashboard`;
+      return;
+    }
+    router.push('/app-picker');
+    return;
+  }
+
+  router.push('/app-picker');
+}
+
 // Query keys
 export const authKeys = {
   all: ['auth'] as const,
@@ -54,11 +87,12 @@ export function useLogin() {
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       const response = await api.login(email, password);
       api.setTokens(response.accessToken, response.refreshToken);
-      return response.user;
+      const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
+      return { user: response.user, appAccess };
     },
-    onSuccess: (user) => {
+    onSuccess: ({ user, appAccess }) => {
       queryClient.setQueryData(authKeys.user(), user);
-      router.push('/dashboard');
+      routeAfterAuth(router, appAccess);
     },
   });
 }
@@ -77,11 +111,12 @@ export function useSignup() {
     }) => {
       const response = await api.signup(data);
       api.setTokens(response.accessToken, response.refreshToken);
-      return response.user;
+      const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
+      return { user: response.user, appAccess };
     },
-    onSuccess: (user) => {
+    onSuccess: ({ user, appAccess }) => {
       queryClient.setQueryData(authKeys.user(), user);
-      router.push('/dashboard');
+      routeAfterAuth(router, appAccess);
     },
   });
 }
@@ -119,11 +154,12 @@ export function useAcceptInvitation() {
     mutationFn: async (data: { token: string; name: string; password: string }) => {
       const response = await api.acceptInvitation(data);
       api.setTokens(response.accessToken, response.refreshToken);
-      return response.user;
+      const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
+      return { user: response.user, appAccess };
     },
-    onSuccess: (user) => {
+    onSuccess: ({ user, appAccess }) => {
       queryClient.setQueryData(authKeys.user(), user);
-      router.push('/dashboard');
+      routeAfterAuth(router, appAccess);
     },
   });
 }

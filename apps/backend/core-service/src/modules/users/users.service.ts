@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { IUserProfile, UserRole } from '@sentra-core/types';
 import { UpdateProfileDto } from './dto';
+import { IamService } from '../iam';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private iamService: IamService,
+  ) {}
 
   async getMe(userId: string): Promise<IUserProfile> {
     const user = await this.prisma.user.findUnique({
@@ -16,6 +20,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
 
     return {
       id: user.id,
@@ -31,6 +36,7 @@ export class UsersService {
       organization: user.organization,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      appAccess,
     };
   }
 
@@ -46,6 +52,7 @@ export class UsersService {
       },
       include: { organization: true },
     });
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
 
     return {
       id: user.id,
@@ -61,6 +68,7 @@ export class UsersService {
       organization: user.organization,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      appAccess,
     };
   }
 }

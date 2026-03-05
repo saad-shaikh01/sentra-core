@@ -4,6 +4,16 @@ interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
 }
 
+export type AppBundleInput = {
+  appCode: 'SALES_DASHBOARD' | 'PM_DASHBOARD' | 'HRMS' | 'CLIENT_PORTAL' | 'COMM_SERVICE';
+  roleIds?: string[];
+  scopeGrants?: Array<{
+    resourceKey: string;
+    scopeType: 'OWN' | 'TEAM' | 'DEPARTMENT' | 'BRAND' | 'PROJECT' | 'ALL';
+    scopeValues?: Record<string, unknown>;
+  }>;
+};
+
 class ApiClient {
   private baseUrl: string;
 
@@ -143,8 +153,13 @@ class ApiClient {
     return this.fetch<{
       id: string;
       email: string;
-      role: string;
+      role?: string | null;
       organizationName: string;
+      bundles?: Array<{
+        appCode: string;
+        roleIds?: string[];
+        scopeGrants?: unknown[];
+      }>;
     }>(`/auth/invite?token=${token}`, { skipAuth: true });
   }
 
@@ -158,6 +173,15 @@ class ApiClient {
       body: JSON.stringify(data),
       skipAuth: true,
     });
+  }
+
+  async getAvailableApps() {
+    return this.fetch<Array<{
+      appCode: string;
+      appName: string;
+      baseUrl?: string;
+      isDefault: boolean;
+    }>>('/auth/apps');
   }
 
   // User endpoints
@@ -204,13 +228,50 @@ class ApiClient {
     });
   }
 
+  async sendIamInvitation(dto: {
+    email: string;
+    appBundles: AppBundleInput[];
+    expiresInDays?: number;
+  }) {
+    return this.fetch<any>('/iam/invitations', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
   async getPendingInvitations() {
     return this.fetch<any[]>('/organization/invitations');
+  }
+
+  async getIamInvitations() {
+    return this.fetch<any[]>('/iam/invitations');
   }
 
   async cancelInvitation(invitationId: string) {
     return this.fetch<{ message: string }>(`/organization/invitations/${invitationId}`, {
       method: 'DELETE',
+    });
+  }
+
+  async resendIamInvitation(invitationId: string) {
+    return this.fetch<any>(`/iam/invitations/${invitationId}/resend`, {
+      method: 'POST',
+    });
+  }
+
+  async cancelIamInvitation(invitationId: string) {
+    return this.fetch<{ message: string }>(`/iam/invitations/${invitationId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateUserEntitlements(
+    userId: string,
+    dto: { appBundles: AppBundleInput[]; defaultAppCode?: AppBundleInput['appCode'] },
+  ) {
+    return this.fetch<any>(`/iam/users/${userId}/entitlements`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
     });
   }
 

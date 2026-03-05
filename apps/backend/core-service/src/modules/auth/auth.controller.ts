@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   UseGuards,
@@ -62,5 +63,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   logout(@CurrentUser('sub') userId: string): Promise<{ message: string }> {
     return this.authService.logout(userId);
+  }
+
+  @Get('apps')
+  getApps(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('orgId') orgId: string,
+  ) {
+    return this.authService.getAvailableApps(userId, orgId);
   }
 }

@@ -7,6 +7,9 @@ import 'dotenv/config';
 import {
   PrismaClient,
   UserRole,
+  AppCode,
+  DataScopeType,
+  OrganizationOnboardingMode,
   LeadStatus,
   SaleStatus,
   InvoiceStatus,
@@ -51,6 +54,7 @@ async function main() {
     data: {
       name: 'Madcom Digital',
       subscription: 'PRO',
+      onboardingMode: OrganizationOnboardingMode.PUBLIC_OWNER_SIGNUP,
     },
   });
   console.log(`✅  Organization: ${org.name} (${org.id})`);
@@ -100,8 +104,300 @@ async function main() {
     },
   });
 
-  const users = [owner, sarah, alex, mike];
+  const pmLead = await prisma.user.create({
+    data: {
+      name: 'Hira Malik',
+      email: 'hira@madcom.com',
+      password: hash('PmLead@123'),
+      role: UserRole.PROJECT_MANAGER,
+      jobTitle: 'PM Lead',
+      organizationId: org.id,
+    },
+  });
+
+  const pmMember = await prisma.user.create({
+    data: {
+      name: 'Umair Siddiqui',
+      email: 'umair@madcom.com',
+      password: hash('PmTeam@123'),
+      role: UserRole.PROJECT_MANAGER,
+      jobTitle: 'PM Team Member',
+      organizationId: org.id,
+    },
+  });
+
+  const users = [owner, sarah, alex, mike, pmLead, pmMember];
   console.log(`✅  Users (${users.length}): ${users.map((u) => u.email).join(', ')}`);
+
+  // ── 2.1 IAM App Registry + Roles + Access ────────────────────────────────
+  const salesApp = await prisma.appRegistry.create({
+    data: {
+      code: AppCode.SALES_DASHBOARD,
+      name: 'Sales Dashboard',
+      baseUrl: 'http://localhost:4200',
+      description: 'Sales pipeline and confidential client data',
+    },
+  });
+
+  const pmApp = await prisma.appRegistry.create({
+    data: {
+      code: AppCode.PM_DASHBOARD,
+      name: 'PM Dashboard',
+      baseUrl: 'http://localhost:4201',
+      description: 'Project delivery and task execution',
+    },
+  });
+
+  const salesPermissionKeys = [
+    'app.user.invite',
+    'app.access.grant',
+    'app.role.assign',
+    'sales.lead.read',
+    'sales.lead.write',
+    'sales.client.read',
+    'sales.client.write',
+    'sales.export.secure',
+  ];
+  const pmPermissionKeys = [
+    'app.user.invite',
+    'app.access.grant',
+    'app.role.assign',
+    'pm.project.read',
+    'pm.project.write',
+    'pm.task.assign',
+    'pm.task.execute',
+    'pm.qc.review',
+  ];
+
+  for (const key of salesPermissionKeys) {
+    await prisma.permissionCatalog.create({
+      data: {
+        appId: salesApp.id,
+        key,
+        label: key,
+      },
+    });
+  }
+  for (const key of pmPermissionKeys) {
+    await prisma.permissionCatalog.create({
+      data: {
+        appId: pmApp.id,
+        key,
+        label: key,
+      },
+    });
+  }
+
+  const salesPerms = await prisma.permissionCatalog.findMany({
+    where: { appId: salesApp.id },
+  });
+  const pmPerms = await prisma.permissionCatalog.findMany({
+    where: { appId: pmApp.id },
+  });
+
+  const salesAdminRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: salesApp.id,
+      name: 'Sales Admin',
+      slug: 'sales_admin',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+  const salesManagerRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: salesApp.id,
+      name: 'Sales Manager',
+      slug: 'sales_manager',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+  const frontsellRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: salesApp.id,
+      name: 'Frontsell Agent',
+      slug: 'frontsell_agent',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+  const upsellRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: salesApp.id,
+      name: 'Upsell Agent',
+      slug: 'upsell_agent',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+
+  const pmAdminRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: pmApp.id,
+      name: 'PM Admin',
+      slug: 'pm_admin',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+  const pmLeadRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: pmApp.id,
+      name: 'PM Lead',
+      slug: 'pm_lead',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+  const pmTeamRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: pmApp.id,
+      name: 'PM Team Member',
+      slug: 'pm_team_member',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+  const pmQcRole = await prisma.appRole.create({
+    data: {
+      organizationId: org.id,
+      appId: pmApp.id,
+      name: 'PM QC',
+      slug: 'pm_qc',
+      isSystem: true,
+      createdById: owner.id,
+    },
+  });
+
+  const byKey = (rows: { id: string; key: string }[]) =>
+    Object.fromEntries(rows.map((r) => [r.key, r.id]));
+  const salesPermByKey = byKey(salesPerms);
+  const pmPermByKey = byKey(pmPerms);
+
+  const linkRolePerms = async (roleId: string, permIds: string[]) => {
+    for (const permissionId of permIds) {
+      await prisma.appRolePermission.create({
+        data: { appRoleId: roleId, permissionId },
+      });
+    }
+  };
+
+  await linkRolePerms(salesAdminRole.id, salesPerms.map((p) => p.id));
+  await linkRolePerms(salesManagerRole.id, [
+    salesPermByKey['app.user.invite'],
+    salesPermByKey['app.access.grant'],
+    salesPermByKey['app.role.assign'],
+    salesPermByKey['sales.lead.read'],
+    salesPermByKey['sales.lead.write'],
+    salesPermByKey['sales.client.read'],
+    salesPermByKey['sales.client.write'],
+  ]);
+  await linkRolePerms(frontsellRole.id, [
+    salesPermByKey['sales.lead.read'],
+    salesPermByKey['sales.lead.write'],
+    salesPermByKey['sales.client.read'],
+  ]);
+  await linkRolePerms(upsellRole.id, [
+    salesPermByKey['sales.lead.read'],
+    salesPermByKey['sales.client.read'],
+    salesPermByKey['sales.client.write'],
+  ]);
+
+  await linkRolePerms(pmAdminRole.id, pmPerms.map((p) => p.id));
+  await linkRolePerms(pmLeadRole.id, [
+    pmPermByKey['app.user.invite'],
+    pmPermByKey['app.access.grant'],
+    pmPermByKey['app.role.assign'],
+    pmPermByKey['pm.project.read'],
+    pmPermByKey['pm.project.write'],
+    pmPermByKey['pm.task.assign'],
+    pmPermByKey['pm.task.execute'],
+  ]);
+  await linkRolePerms(pmTeamRole.id, [
+    pmPermByKey['pm.project.read'],
+    pmPermByKey['pm.task.execute'],
+  ]);
+  await linkRolePerms(pmQcRole.id, [
+    pmPermByKey['pm.project.read'],
+    pmPermByKey['pm.qc.review'],
+  ]);
+
+  const grantAppAccess = async (
+    userId: string,
+    appId: string,
+    appRoleId: string,
+    isDefault = false,
+  ) => {
+    await prisma.userAppAccess.create({
+      data: {
+        organizationId: org.id,
+        userId,
+        appId,
+        isEnabled: true,
+        isDefault,
+      },
+    });
+    await prisma.userAppRole.create({
+      data: {
+        organizationId: org.id,
+        userId,
+        appId,
+        appRoleId,
+        isPrimary: true,
+      },
+    });
+  };
+
+  await grantAppAccess(owner.id, salesApp.id, salesAdminRole.id, true);
+  await grantAppAccess(owner.id, pmApp.id, pmAdminRole.id, false);
+  await grantAppAccess(sarah.id, salesApp.id, salesManagerRole.id, true);
+  await grantAppAccess(alex.id, salesApp.id, frontsellRole.id, true);
+  await grantAppAccess(mike.id, salesApp.id, upsellRole.id, true);
+  await grantAppAccess(pmLead.id, pmApp.id, pmLeadRole.id, true);
+  await grantAppAccess(pmMember.id, pmApp.id, pmTeamRole.id, true);
+
+  await prisma.userScopeGrant.createMany({
+    data: [
+      {
+        organizationId: org.id,
+        userId: sarah.id,
+        appId: salesApp.id,
+        resourceKey: 'sales.leads',
+        scopeType: DataScopeType.TEAM,
+      },
+      {
+        organizationId: org.id,
+        userId: alex.id,
+        appId: salesApp.id,
+        resourceKey: 'sales.leads',
+        scopeType: DataScopeType.OWN,
+      },
+      {
+        organizationId: org.id,
+        userId: pmLead.id,
+        appId: pmApp.id,
+        resourceKey: 'pm.tasks',
+        scopeType: DataScopeType.TEAM,
+      },
+      {
+        organizationId: org.id,
+        userId: pmMember.id,
+        appId: pmApp.id,
+        resourceKey: 'pm.tasks',
+        scopeType: DataScopeType.OWN,
+      },
+    ],
+  });
+
+  console.log('✅  IAM: app registry, permissions, app roles, user access + scopes');
 
   // ── 3. Brands ──────────────────────────────────────────────────────────────
   const pulpHouse = await prisma.brand.create({

@@ -64,6 +64,28 @@ export enum TransactionType {
   REFUND = 'REFUND',
 }
 
+export enum OrganizationOnboardingMode {
+  PUBLIC_OWNER_SIGNUP = 'PUBLIC_OWNER_SIGNUP',
+  INVITE_ONLY = 'INVITE_ONLY',
+}
+
+export enum AppCode {
+  SALES_DASHBOARD = 'SALES_DASHBOARD',
+  PM_DASHBOARD = 'PM_DASHBOARD',
+  HRMS = 'HRMS',
+  CLIENT_PORTAL = 'CLIENT_PORTAL',
+  COMM_SERVICE = 'COMM_SERVICE',
+}
+
+export enum DataScopeType {
+  OWN = 'OWN',
+  TEAM = 'TEAM',
+  DEPARTMENT = 'DEPARTMENT',
+  BRAND = 'BRAND',
+  PROJECT = 'PROJECT',
+  ALL = 'ALL',
+}
+
 // ==========================================
 // LEAD STATUS TRANSITIONS
 // ==========================================
@@ -105,6 +127,7 @@ export interface JwtPayload {
   email: string;
   orgId: string;
   role: UserRole;
+  appCodes?: AppCode[];
   iat?: number;
   exp?: number;
 }
@@ -132,6 +155,7 @@ export interface IUserProfile {
   email: string;
   name: string;
   role: UserRole;
+  appAccess?: IUserAppAccess[];
   avatarUrl?: string;
   jobTitle?: string;
   phone?: string;
@@ -161,6 +185,7 @@ export interface IOrganization {
   id: string;
   name: string;
   subscription: string;
+  onboardingMode?: OrganizationOnboardingMode;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -183,12 +208,44 @@ export interface IOrganizationMember {
 export interface IInvitation {
   id: string;
   email: string;
-  role: UserRole;
+  role?: UserRole;
   status: InvitationStatus;
   expiresAt: Date;
   organizationId: string;
   invitedById: string;
+  bundles?: IInvitationBundle[];
   createdAt: Date;
+}
+
+export interface IUserAppAccess {
+  appCode: AppCode;
+  appName: string;
+  baseUrl?: string;
+  isDefault: boolean;
+}
+
+export interface IUserAppRole {
+  appCode: AppCode;
+  roleId: string;
+  roleName: string;
+  roleSlug: string;
+}
+
+export interface IUserScopeGrant {
+  appCode: AppCode;
+  resourceKey: string;
+  scopeType: DataScopeType;
+  scopeValues?: unknown;
+}
+
+export interface IInvitationBundle {
+  appCode: AppCode;
+  roleIds?: string[];
+  scopeGrants?: Array<{
+    resourceKey: string;
+    scopeType: DataScopeType;
+    scopeValues?: unknown;
+  }>;
 }
 
 // ==========================================
@@ -202,11 +259,13 @@ export interface IAuthTokens {
 
 export interface ILoginResponse extends IAuthTokens {
   user: IUserProfile;
+  appAccess?: IUserAppAccess[];
 }
 
 export interface ISignupResponse extends IAuthTokens {
   user: IUserProfile;
   organization: IOrganization;
+  appAccess?: IUserAppAccess[];
 }
 
 // ==========================================

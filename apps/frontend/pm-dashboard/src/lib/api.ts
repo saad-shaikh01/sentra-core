@@ -15,6 +15,16 @@ interface FetchOptions extends RequestInit {
   service?: 'core' | 'pm';
 }
 
+export type AppBundleInput = {
+  appCode: 'SALES_DASHBOARD' | 'PM_DASHBOARD' | 'HRMS' | 'CLIENT_PORTAL' | 'COMM_SERVICE';
+  roleIds?: string[];
+  scopeGrants?: Array<{
+    resourceKey: string;
+    scopeType: 'OWN' | 'TEAM' | 'DEPARTMENT' | 'BRAND' | 'PROJECT' | 'ALL';
+    scopeValues?: Record<string, unknown>;
+  }>;
+};
+
 export interface PmSingleResponse<T> {
   data: T;
 }
@@ -27,8 +37,13 @@ export interface PmMutationResponse {
 export interface InvitationLookupResponse {
   id: string;
   email: string;
-  role: UserRole;
+  role?: UserRole | null;
   organizationName: string;
+  bundles?: Array<{
+    appCode: string;
+    roleIds?: string[];
+    scopeGrants?: unknown[];
+  }>;
 }
 
 export interface PmThread {
@@ -283,6 +298,15 @@ class ApiClient {
     });
   }
 
+  async getAvailableApps() {
+    return this.fetch<Array<{
+      appCode: string;
+      appName: string;
+      baseUrl?: string;
+      isDefault: boolean;
+    }>>('/auth/apps');
+  }
+
   async forgotPassword(email: string) {
     return this.fetch<{ message: string }>('/auth/forgot-password', {
       method: 'POST',
@@ -343,13 +367,50 @@ class ApiClient {
     });
   }
 
+  async sendIamInvitation(dto: {
+    email: string;
+    appBundles: AppBundleInput[];
+    expiresInDays?: number;
+  }) {
+    return this.fetch<any>('/iam/invitations', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
   async getPendingInvitations() {
     return this.fetch<IInvitation[]>('/organization/invitations');
+  }
+
+  async getIamInvitations() {
+    return this.fetch<any[]>('/iam/invitations');
   }
 
   async cancelInvitation(invitationId: string) {
     return this.fetch<{ message: string }>(`/organization/invitations/${invitationId}`, {
       method: 'DELETE',
+    });
+  }
+
+  async resendIamInvitation(invitationId: string) {
+    return this.fetch<any>(`/iam/invitations/${invitationId}/resend`, {
+      method: 'POST',
+    });
+  }
+
+  async cancelIamInvitation(invitationId: string) {
+    return this.fetch<{ message: string }>(`/iam/invitations/${invitationId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateUserEntitlements(
+    userId: string,
+    dto: { appBundles: AppBundleInput[]; defaultAppCode?: AppBundleInput['appCode'] },
+  ) {
+    return this.fetch<any>(`/iam/users/${userId}/entitlements`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
     });
   }
 

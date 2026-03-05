@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { UserRole } from '@sentra-core/types';
 
 // Query keys
 export const organizationKeys = {
@@ -47,7 +48,13 @@ export function useRemoveMember() {
 export function useInvitations() {
   return useQuery({
     queryKey: organizationKeys.invitations(),
-    queryFn: () => api.getPendingInvitations(),
+    queryFn: async () => {
+      try {
+        return await api.getIamInvitations();
+      } catch {
+        return api.getPendingInvitations();
+      }
+    },
   });
 }
 
@@ -56,8 +63,19 @@ export function useSendInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ email, role }: { email: string; role: string }) =>
-      api.sendInvitation(email, role),
+    mutationFn: async ({ email, role }: { email: string; role: string }) => {
+      const bundleAppCode =
+        role === UserRole.PROJECT_MANAGER ? 'PM_DASHBOARD' : 'SALES_DASHBOARD';
+
+      try {
+        return await api.sendIamInvitation({
+          email,
+          appBundles: [{ appCode: bundleAppCode }],
+        });
+      } catch {
+        return api.sendInvitation(email, role);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations() });
     },
@@ -69,7 +87,13 @@ export function useCancelInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (invitationId: string) => api.cancelInvitation(invitationId),
+    mutationFn: async (invitationId: string) => {
+      try {
+        return await api.cancelIamInvitation(invitationId);
+      } catch {
+        return api.cancelInvitation(invitationId);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations() });
     },

@@ -20,8 +20,9 @@ function AcceptInviteForm() {
 
   const [invitation, setInvitation] = useState<{
     email: string;
-    role: string;
+    role?: string | null;
     organizationName: string;
+    bundles?: Array<{ appCode: string }>;
   } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -93,6 +94,12 @@ function AcceptInviteForm() {
   const formatRole = (role: string) => {
     return role.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
   };
+
+  const inviteBadgeText = invitation?.role
+    ? formatRole(invitation.role)
+    : invitation?.bundles?.length
+      ? `Apps: ${invitation.bundles.map((b) => b.appCode.replace('_DASHBOARD', '')).join(', ')}`
+      : 'Multi-App Access';
 
   if (isLoading) {
     return (
@@ -180,7 +187,7 @@ function AcceptInviteForm() {
                 <CardDescription className="space-y-2">
                   <p>You&apos;ve been invited to join as:</p>
                   <Badge variant={getRoleBadgeVariant(invitation?.role || '')}>
-                    {formatRole(invitation?.role || '')}
+                    {inviteBadgeText}
                   </Badge>
                 </CardDescription>
               </motion.div>
