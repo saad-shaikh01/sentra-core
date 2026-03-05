@@ -18,6 +18,7 @@ import { InvoicesModule } from '../modules/invoices';
 import { AuthorizeNetModule } from '../modules/authorize-net';
 import { IamModule } from '../modules/iam';
 import { SentraCacheModule } from '../common';
+import { InternalContactsModule } from '../modules/internal-contacts/internal-contacts.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { SentraCacheModule } from '../common';
     SalesModule,
     InvoicesModule,
     IamModule,
+    InternalContactsModule,
   ],
   controllers: [AppController],
   providers: [

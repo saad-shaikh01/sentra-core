@@ -15,7 +15,8 @@
       "Bash(taskkill:*)",
       "Bash(python3:*)",
       "Bash(npx nx:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(rm:*)"
     ]
   }
 }

@@ -1,10 +1,105 @@
-import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+/**
+ * Comm Service Root Module
+ *
+ * Wiring rules:
+ * - ConfigModule is global — all modules can access env vars.
+ * - MongooseModule connects to MONGO_URI (comm archive store).
+ * - BullModule connects to Redis for sync job queues.
+ * - TokenEncryptionModule is global — available to all modules.
+ * - CommCacheModule is global — Redis/in-memory cache for reads.
+ * - OrgContextGuard: applied per-controller (not globally) since
+ *   health and OAuth callback endpoints bypass it.
+ */
+
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
+import { BullModule } from '@nestjs/bullmq';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { CommCacheModule } from '../common/cache/comm-cache.module';
+import { TokenEncryptionModule } from '../common/crypto/token-encryption.module';
+import { JwtContextMiddleware } from '../common/middleware/jwt-context.middleware';
+import { HealthModule } from '../modules/health/health.module';
+import { IdentitiesModule } from '../modules/identities/identities.module';
+import { SyncModule } from '../modules/sync/sync.module';
+import { ThreadsModule } from '../modules/threads/threads.module';
+import { EntityLinksModule } from '../modules/entity-links/entity-links.module';
+import { AuditModule } from '../modules/audit/audit.module';
+import { AttachmentsModule } from '../modules/attachments/attachments.module';
+import { MessagesModule } from '../modules/messages/messages.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    // Global config — reads .env at root
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+
+    // Rate limiting
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: config.get<number>('THROTTLE_TTL', 60000),
+            limit: config.get<number>('THROTTLE_LIMIT', 100),
+          },
+        ],
+      }),
+    }),
+
+    // MongoDB — comm archive store
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('MONGO_URI', 'mongodb://localhost:27017/sentra_comm'),
+      }),
+    }),
+
+    // BullMQ — sync job queues
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL', 'redis://localhost:6379');
+        const url = new URL(redisUrl);
+        return {
+          connection: {
+            host: url.hostname,
+            port: parseInt(url.port || '6379', 10),
+            password: url.password || undefined,
+          },
+        };
+      },
+    }),
+
+    // Global modules
+    CommCacheModule,
+    TokenEncryptionModule,
+
+    // Domain modules
+    HealthModule,
+    AuditModule,      // global — must come before modules that inject AuditService
+    IdentitiesModule,
+    SyncModule,
+    ThreadsModule,
+    EntityLinksModule,
+    AttachmentsModule,
+    MessagesModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(JwtContextMiddleware).forRoutes('*');
+  }
+}
