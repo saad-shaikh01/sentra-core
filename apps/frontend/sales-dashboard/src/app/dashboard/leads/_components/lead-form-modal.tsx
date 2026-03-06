@@ -20,6 +20,10 @@ interface LeadFormModalProps {
 
 interface FormValues {
   title: string;
+  name: string;
+  email: string;
+  phone: string;
+  website: string;
   source: string;
   brandId: string;
   assignedToId: string;
@@ -40,6 +44,10 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
     if (open) {
       reset({
         title: lead?.title ?? '',
+        name: lead?.name ?? '',
+        email: lead?.email ?? '',
+        phone: lead?.phone ?? '',
+        website: lead?.website ?? '',
         source: lead?.source ?? '',
         brandId: lead?.brandId ?? '',
         assignedToId: lead?.assignedToId ?? '',
@@ -53,6 +61,10 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const onSubmit = async (values: FormValues) => {
     const dto: Record<string, unknown> = {
       title: values.title,
+      ...(values.name && { name: values.name }),
+      ...(values.email && { email: values.email }),
+      ...(values.phone && { phone: values.phone }),
+      ...(values.website && { website: values.website }),
       ...(values.source && { source: values.source }),
       ...(values.brandId && { brandId: values.brandId }),
       ...(values.assignedToId && { assignedToId: values.assignedToId }),
@@ -77,6 +89,28 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           <Label>Title *</Label>
           <Input placeholder="Lead title" {...register('title', { required: 'Required' })} />
           {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Contact Name</Label>
+            <Input placeholder="e.g. John Doe" {...register('name')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <Input type="email" placeholder="john@example.com" {...register('email')} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Phone</Label>
+            <Input placeholder="+1..." {...register('phone')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Website</Label>
+            <Input placeholder="https://..." {...register('website')} />
+          </div>
         </div>
 
         <div className="space-y-1.5">

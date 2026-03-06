@@ -11,7 +11,7 @@ import {
 import { useMembers } from '@/hooks/use-organization';
 import { ILead, LeadStatus, LeadActivityType, LEAD_STATUS_TRANSITIONS } from '@sentra-core/types';
 import { ConvertLeadModal } from './convert-lead-modal';
-import { MessageSquare, RefreshCw, UserCheck, GitBranch, AlertCircle, Mail } from 'lucide-react';
+import { MessageSquare, RefreshCw, UserCheck, GitBranch, AlertCircle, Mail, Globe, Phone, User } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 
@@ -90,109 +90,163 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
             ) : null}
 
             {activeTab === 'details' && (
-              <>
-            {/* Info */}
-            <div className="grid grid-cols-2 gap-3">
-              <InfoCard label="Status" value={<StatusBadge status={lead.status} />} />
-              <InfoCard label="Source" value={<span className="text-sm">{lead.source ?? '—'}</span>} />
-              <InfoCard label="Created" value={<span className="text-sm">{new Date(lead.createdAt).toLocaleDateString()}</span>} />
-            </div>
-
-            {/* Status change */}
-            {allowedTransitions.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Change Status</h3>
-                <div className="flex gap-2 flex-wrap">
-                  {allowedTransitions.map((s) => (
-                    <Button
-                      key={s}
-                      variant="outline"
-                      size="sm"
-                      disabled={changeStatus.isPending}
-                      onClick={() => changeStatus.mutate({ id: lead.id, status: s })}
-                    >
-                      → {s}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Assign */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Assign To</h3>
-              <Select
-                value={lead.assignedToId ?? ''}
-                onValueChange={(v) => assignLead.mutate({ id: lead.id, assignedToId: v })}
-              >
-                <SelectTrigger className="bg-white/5 border-white/10">
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  {members?.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Convert */}
-            {lead.status !== LeadStatus.CLOSED && !lead.convertedClientId && (
-              <Button
-                variant="outline"
-                className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                onClick={() => setConvertOpen(true)}
-              >
-                Convert to Client
-              </Button>
-            )}
-
-            {/* Activity timeline */}
-            {activities?.length ? (
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Activity</h3>
-                <div className="space-y-2">
-                  {activities.map((a) => (
-                    <div key={a.id} className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                      <div className="mt-0.5 h-6 w-6 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground shrink-0">
-                        {activityIcons[a.type]}
+              <div className="space-y-6">
+                {/* Contact Info */}
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact Information</h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                          <User className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-medium">Name</p>
+                          <p className="text-sm font-medium">{lead.name ?? '—'}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-muted-foreground capitalize">{a.type.toLowerCase().replace(/_/g, ' ')}</p>
-                        {(a.data as { content?: string }).content && (
-                          <p className="text-sm mt-0.5">{(a.data as { content?: string }).content}</p>
-                        )}
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                          {timeAgo(a.createdAt)}
-                        </p>
+
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                          <Mail className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-medium">Email</p>
+                          <p className="text-sm font-medium truncate">{lead.email ?? '—'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                          <Phone className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-medium">Phone</p>
+                          <p className="text-sm font-medium">{lead.phone ?? '—'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400">
+                          <Globe className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-medium">Website</p>
+                          {lead.website ? (
+                            <a href={lead.website} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary hover:underline truncate block max-w-[150px]">
+                              {lead.website.replace(/^https?:\/\//, '')}
+                            </a>
+                          ) : (
+                            <p className="text-sm font-medium">—</p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                </div>
+
+                {/* Status & Source */}
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoCard label="Status" value={<StatusBadge status={lead.status} />} />
+                  <InfoCard label="Source" value={<span className="text-sm">{lead.source ?? '—'}</span>} />
+                </div>
+
+                {/* Status change */}
+                {allowedTransitions.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Change Status</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      {allowedTransitions.map((s) => (
+                        <Button
+                          key={s}
+                          variant="outline"
+                          size="sm"
+                          disabled={changeStatus.isPending}
+                          onClick={() => changeStatus.mutate({ id: lead.id, status: s })}
+                        >
+                          → {s}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Assign */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Assign To</h3>
+                  <Select
+                    value={lead.assignedToId ?? ''}
+                    onValueChange={(v) => assignLead.mutate({ id: lead.id, assignedToId: v })}
+                  >
+                    <SelectTrigger className="bg-white/5 border-white/10">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members?.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Convert */}
+                {lead.status !== LeadStatus.CLOSED && !lead.convertedClientId && (
+                  <Button
+                    variant="outline"
+                    className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                    onClick={() => setConvertOpen(true)}
+                  >
+                    Convert to Client
+                  </Button>
+                )}
+
+                {/* Activity timeline */}
+                {activities?.length ? (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Activity</h3>
+                    <div className="space-y-2">
+                      {activities.map((a) => (
+                        <div key={a.id} className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                          <div className="mt-0.5 h-6 w-6 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground shrink-0">
+                            {activityIcons[a.type]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-muted-foreground capitalize">{a.type.toLowerCase().replace(/_/g, ' ')}</p>
+                            {(a.data as { content?: string }).content && (
+                              <p className="text-sm mt-0.5">{(a.data as { content?: string }).content}</p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                              {timeAgo(a.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Add note */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Add Note</h3>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Write a note…"
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      className="bg-white/5 border-white/10"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddNote(); }}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleAddNote}
+                      disabled={!note.trim() || addNote.isPending}
+                    >
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ) : null}
-
-            {/* Add note */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Add Note</h3>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Write a note…"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="bg-white/5 border-white/10"
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddNote(); }}
-                />
-                <Button
-                  size="sm"
-                  onClick={handleAddNote}
-                  disabled={!note.trim() || addNote.isPending}
-                >
-                  Add
-                </Button>
-              </div>
-            </div>
-              </>
             )}
           </>
         ) : null}
@@ -202,7 +256,7 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
         <ConvertLeadModal
           open={convertOpen}
           onOpenChange={setConvertOpen}
-          leadId={lead.id}
+          lead={lead}
           onSuccess={onClose}
         />
       )}

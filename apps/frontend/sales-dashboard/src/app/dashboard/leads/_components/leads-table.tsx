@@ -27,6 +27,8 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
 
   const columns = useMemo<Column<EnrichedLead>[]>(() => [
     { key: 'title',        header: 'Title' },
+    { key: 'name',         header: 'Contact', render: (l) => l.name ?? '—' },
+    { key: 'email',        header: 'Email',   render: (l) => l.email ?? '—' },
     {
       key:    'status',
       header: 'Status',

@@ -304,6 +304,10 @@ export interface IBrand {
 export interface ILead {
   id: string;
   title: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
   status: LeadStatus;
   source?: string;
   data?: Record<string, unknown>;
@@ -311,10 +315,9 @@ export interface ILead {
   organizationId: string;
   assignedToId?: string;
   convertedClientId?: string;
-  followUpDate?: Date;
-  deletedAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  followUpDate?: Date | string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export interface ILeadActivity {

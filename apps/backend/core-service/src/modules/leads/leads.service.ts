@@ -45,6 +45,10 @@ export class LeadsService {
     const lead = await this.prisma.lead.create({
       data: {
         title: dto.title,
+        name: dto.name,
+        email: dto.email,
+        phone: dto.phone,
+        website: dto.website,
         source: dto.source,
         data: (dto.data as any) ?? undefined,
         status: LeadStatus.NEW,
@@ -65,20 +69,7 @@ export class LeadsService {
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
-    return {
-      id: lead.id,
-      title: lead.title,
-      status: lead.status as LeadStatus,
-      source: lead.source,
-      data: lead.data as Record<string, unknown>,
-      brandId: lead.brandId,
-      organizationId: lead.organizationId,
-      assignedToId: lead.assignedToId,
-      convertedClientId: lead.convertedClientId,
-      followUpDate: lead.followUpDate ?? undefined,
-      createdAt: lead.createdAt,
-      updatedAt: lead.updatedAt,
-    };
+    return this.mapToILead(lead);
   }
 
   async findAll(
@@ -139,7 +130,12 @@ export class LeadsService {
     }
 
     if (search) {
-      where.title = { contains: search, mode: 'insensitive' };
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     const [leads, total] = await Promise.all([
@@ -152,20 +148,7 @@ export class LeadsService {
       this.prisma.lead.count({ where }),
     ]);
 
-    const data: ILead[] = leads.map((lead) => ({
-      id: lead.id,
-      title: lead.title,
-      status: lead.status as LeadStatus,
-      source: lead.source,
-      data: lead.data as Record<string, unknown>,
-      brandId: lead.brandId,
-      organizationId: lead.organizationId,
-      assignedToId: lead.assignedToId,
-      convertedClientId: lead.convertedClientId,
-      followUpDate: lead.followUpDate ?? undefined,
-      createdAt: lead.createdAt,
-      updatedAt: lead.updatedAt,
-    }));
+    const data: ILead[] = leads.map((lead) => this.mapToILead(lead));
 
     const result = buildPaginationResponse(data, total, page, limit);
     await this.cache.set(cacheKey, result);
@@ -198,18 +181,7 @@ export class LeadsService {
     }
 
     const result = {
-      id: lead.id,
-      title: lead.title,
-      status: lead.status as LeadStatus,
-      source: lead.source,
-      data: lead.data as Record<string, unknown>,
-      brandId: lead.brandId,
-      organizationId: lead.organizationId,
-      assignedToId: lead.assignedToId,
-      convertedClientId: lead.convertedClientId,
-      followUpDate: lead.followUpDate ?? undefined,
-      createdAt: lead.createdAt,
-      updatedAt: lead.updatedAt,
+      ...this.mapToILead(lead),
       activities: lead.activities.map((a) => ({
         id: a.id,
         type: a.type as LeadActivityType,
@@ -251,27 +223,21 @@ export class LeadsService {
       where: { id },
       data: {
         title: dto.title,
+        name: dto.name,
+        email: dto.email,
+        phone: dto.phone,
+        website: dto.website,
         source: dto.source,
+        status: dto.status,
+        followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : undefined,
         data: (dto.data as any) ?? undefined,
+        assignedToId: dto.assignedToId,
       },
     });
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
-    return {
-      id: updated.id,
-      title: updated.title,
-      status: updated.status as LeadStatus,
-      source: updated.source,
-      data: updated.data as Record<string, unknown>,
-      brandId: updated.brandId,
-      organizationId: updated.organizationId,
-      assignedToId: updated.assignedToId,
-      convertedClientId: updated.convertedClientId,
-      followUpDate: updated.followUpDate ?? undefined,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    };
+    return this.mapToILead(updated);
   }
 
   async remove(id: string, orgId: string): Promise<{ message: string }> {
@@ -349,20 +315,7 @@ export class LeadsService {
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
-    return {
-      id: updated.id,
-      title: updated.title,
-      status: updated.status as LeadStatus,
-      source: updated.source,
-      data: updated.data as Record<string, unknown>,
-      brandId: updated.brandId,
-      organizationId: updated.organizationId,
-      assignedToId: updated.assignedToId,
-      convertedClientId: updated.convertedClientId,
-      followUpDate: updated.followUpDate ?? undefined,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    };
+    return this.mapToILead(updated);
   }
 
   async assign(
@@ -411,20 +364,7 @@ export class LeadsService {
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
-    return {
-      id: updated.id,
-      title: updated.title,
-      status: updated.status as LeadStatus,
-      source: updated.source,
-      data: updated.data as Record<string, unknown>,
-      brandId: updated.brandId,
-      organizationId: updated.organizationId,
-      assignedToId: updated.assignedToId,
-      convertedClientId: updated.convertedClientId,
-      followUpDate: updated.followUpDate ?? undefined,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    };
+    return this.mapToILead(updated);
   }
 
   async addNote(
@@ -523,20 +463,7 @@ export class LeadsService {
     await this.cache.delByPrefix(`leads:${orgId}:`);
     await this.cache.delByPrefix(`clients:${orgId}:`);
 
-    return {
-      id: result.id,
-      title: result.title,
-      status: result.status as LeadStatus,
-      source: result.source,
-      data: result.data as Record<string, unknown>,
-      brandId: result.brandId,
-      organizationId: result.organizationId,
-      assignedToId: result.assignedToId,
-      convertedClientId: result.convertedClientId,
-      followUpDate: result.followUpDate ?? undefined,
-      createdAt: result.createdAt,
-      updatedAt: result.updatedAt,
-    };
+    return this.mapToILead(result);
   }
 
   async capture(dto: CaptureLeadDto): Promise<{ id: string; message: string }> {
@@ -554,6 +481,10 @@ export class LeadsService {
     const lead = await this.prisma.lead.create({
       data: {
         title,
+        name: dto.name,
+        email: dto.email,
+        phone: dto.phone,
+        website: dto.website,
         source: dto.source,
         data: (dto.data as any) ?? undefined,
         status: LeadStatus.NEW,
@@ -592,5 +523,26 @@ export class LeadsService {
       userId: a.userId,
       createdAt: a.createdAt,
     }));
+  }
+
+  private mapToILead(lead: any): ILead {
+    return {
+      id: lead.id,
+      title: lead.title,
+      name: lead.name ?? undefined,
+      email: lead.email ?? undefined,
+      phone: lead.phone ?? undefined,
+      website: lead.website ?? undefined,
+      status: lead.status as LeadStatus,
+      source: lead.source ?? undefined,
+      data: (lead.data as Record<string, unknown>) ?? undefined,
+      brandId: lead.brandId,
+      organizationId: lead.organizationId,
+      assignedToId: lead.assignedToId ?? undefined,
+      convertedClientId: lead.convertedClientId ?? undefined,
+      followUpDate: lead.followUpDate ?? undefined,
+      createdAt: lead.createdAt,
+      updatedAt: lead.updatedAt,
+    };
   }
 }

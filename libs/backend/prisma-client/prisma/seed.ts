@@ -70,8 +70,29 @@ function hoursAgo(hours: number): Date {
 async function main() {
   console.log('🌱  Seeding Sentra Core database (Production Readiness Edition)...\n');
 
-  // Clean up existing data (optional but recommended for reset)
-  // await prisma.organization.deleteMany();
+  // ── 0. CLEANUP ───────────────────────────────────────────────────────────
+  // We delete in reverse order of dependencies
+  console.log('🧹  Cleaning up existing data...');
+  await prisma.invoice.deleteMany();
+  await prisma.saleItem.deleteMany();
+  await prisma.paymentTransaction.deleteMany();
+  await prisma.sale.deleteMany();
+  await prisma.client.deleteMany();
+  await prisma.leadActivity.deleteMany();
+  await prisma.lead.deleteMany();
+  await prisma.salesTeamManager.deleteMany();
+  await prisma.salesTeamMember.deleteMany();
+  await prisma.salesTeam.deleteMany();
+  await prisma.productPackage.deleteMany();
+  await prisma.userAppRole.deleteMany();
+  await prisma.userAppAccess.deleteMany();
+  await prisma.userScopeGrant.deleteMany();
+  await prisma.brandAccess.deleteMany();
+  await prisma.brand.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.organization.deleteMany();
+  // AppRegistry is usually static, but we can leave it or upsert it
+  console.log('✨  Cleanup complete.');
 
   // ── 1. Organization ──────────────────────────────────────────────────────
   const org = await prisma.organization.create({
@@ -282,6 +303,10 @@ async function main() {
   const activeLead = await prisma.lead.create({
     data: {
       title: 'Interested in Ghostwriting',
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+      phone: '+1-555-9000',
+      website: 'https://johndoe.com',
       status: LeadStatus.FOLLOW_UP,
       source: 'PPC',
       brandId: pulpHouse.id,
@@ -295,6 +320,9 @@ async function main() {
   const convertedLead = await prisma.lead.create({
     data: {
       title: 'Inquiry - Full Publishing',
+      name: 'Jane Smith',
+      email: 'jane.smith@example.com',
+      phone: '+1-555-8000',
       status: LeadStatus.CLOSED,
       source: 'Direct',
       brandId: urbanQuill.id,

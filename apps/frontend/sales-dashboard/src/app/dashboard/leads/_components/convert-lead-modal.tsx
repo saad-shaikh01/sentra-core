@@ -1,16 +1,18 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { FormModal } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConvertLead } from '@/hooks/use-leads';
+import { ILead } from '@sentra-core/types';
 
 interface ConvertLeadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  leadId: string;
+  lead: ILead;
   onSuccess?: () => void;
 }
 
@@ -22,13 +24,25 @@ interface FormValues {
   phone: string;
 }
 
-export function ConvertLeadModal({ open, onOpenChange, leadId, onSuccess }: ConvertLeadModalProps) {
+export function ConvertLeadModal({ open, onOpenChange, lead, onSuccess }: ConvertLeadModalProps) {
   const convertLead = useConvertLead();
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>();
 
+  useEffect(() => {
+    if (open && lead) {
+      reset({
+        email: lead.email ?? '',
+        companyName: lead.title, // Use title as default company name
+        contactName: lead.name ?? '',
+        phone: lead.phone ?? '',
+        password: '', // Always empty for security
+      });
+    }
+  }, [open, lead, reset]);
+
   const onSubmit = async (values: FormValues) => {
     await convertLead.mutateAsync({
-      id: leadId,
+      id: lead.id,
       email: values.email,
       password: values.password,
       companyName: values.companyName,

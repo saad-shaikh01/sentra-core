@@ -2,6 +2,8 @@ import {
   IsString,
   IsOptional,
   IsUUID,
+  IsEmail,
+  IsUrl,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -12,6 +14,22 @@ export class CaptureLeadDto {
   @MinLength(2)
   @MaxLength(200)
   title?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsUrl()
+  website?: string;
 
   @IsString()
   @MinLength(1)
