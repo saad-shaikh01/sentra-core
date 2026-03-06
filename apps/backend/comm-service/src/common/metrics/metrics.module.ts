@@ -8,7 +8,7 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { MetricsService } from './metrics.service';
-import { COMM_SYNC_QUEUE } from '../../modules/sync/sync.service';
+import { COMM_SYNC_QUEUE } from '../../modules/sync/sync.constants';
 
 @Global()
 @Module({

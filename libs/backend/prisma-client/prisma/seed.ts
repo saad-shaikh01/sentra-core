@@ -114,33 +114,71 @@ async function main() {
       password: 'Agent@123',
       role: UserRole.UPSELL_AGENT,
       jobTitle: 'Upsell Specialist',
-      organizationId: org.id,
     },
-  });
-
-  const pmLead = await prisma.user.create({
-    data: {
+    {
       name: 'Hira Malik',
       email: 'hira@madcom.com',
-      password: hash('PmLead@123'),
+      password: 'PmLead@123',
       role: UserRole.PROJECT_MANAGER,
-      jobTitle: 'PM Lead',
-      organizationId: org.id,
+      jobTitle: 'Publishing Lead',
     },
-  });
-
-  const pmMember = await prisma.user.create({
-    data: {
+    {
+      name: 'Fatima Noor',
+      email: 'fatima@madcom.com',
+      password: 'PmLead@123',
+      role: UserRole.PROJECT_MANAGER,
+      jobTitle: 'Design Lead',
+    },
+    {
+      name: 'Usman Tariq',
+      email: 'usman@madcom.com',
+      password: 'PmTeam@123',
+      role: UserRole.PROJECT_MANAGER,
+      jobTitle: 'Content Editor',
+    },
+    {
+      name: 'Zoya Ahmed',
+      email: 'zoya@madcom.com',
+      password: 'PmTeam@123',
+      role: UserRole.PROJECT_MANAGER,
+      jobTitle: 'Graphic Designer',
+    },
+    {
       name: 'Umair Siddiqui',
       email: 'umair@madcom.com',
-      password: hash('PmTeam@123'),
+      password: 'PmQc@123',
       role: UserRole.PROJECT_MANAGER,
-      jobTitle: 'PM Team Member',
-      organizationId: org.id,
+      jobTitle: 'QC Specialist',
     },
-  });
+  ];
 
-  const users = [owner, sarah, alex, mike, pmLead, pmMember];
+  const users: Awaited<ReturnType<typeof prisma.user.create>>[] = [];
+  for (const seedUser of seedUsers) {
+    users.push(
+      await prisma.user.create({
+        data: {
+          name: seedUser.name,
+          email: seedUser.email,
+          password: hash(seedUser.password),
+          role: seedUser.role,
+          jobTitle: seedUser.jobTitle,
+          organizationId: org.id,
+        },
+      }),
+    );
+  }
+
+  const userByEmail = new Map(users.map((user) => [user.email, user]));
+  const owner = userByEmail.get('admin@madcom.com')!;
+  const admin = userByEmail.get('nadia@madcom.com')!;
+  const sarah = userByEmail.get('sarah@madcom.com')!;
+  const alex = userByEmail.get('alex@madcom.com')!;
+  const mike = userByEmail.get('mike@madcom.com')!;
+  const pmLeadPublishing = userByEmail.get('hira@madcom.com')!;
+  const pmLeadDesign = userByEmail.get('fatima@madcom.com')!;
+  const pmEditor = userByEmail.get('usman@madcom.com')!;
+  const pmDesigner = userByEmail.get('zoya@madcom.com')!;
+  const pmQc = userByEmail.get('umair@madcom.com')!;
   console.log(`✅  Users (${users.length}): ${users.map((u) => u.email).join(', ')}`);
 
   // ── 2.1 IAM App Registry + Roles + Access ────────────────────────────────
@@ -372,11 +410,16 @@ async function main() {
 
   await grantAppAccess(owner.id, salesApp.id, salesAdminRole.id, true);
   await grantAppAccess(owner.id, pmApp.id, pmAdminRole.id, false);
+  await grantAppAccess(admin.id, salesApp.id, salesAdminRole.id, true);
+  await grantAppAccess(admin.id, pmApp.id, pmAdminRole.id, false);
   await grantAppAccess(sarah.id, salesApp.id, salesManagerRole.id, true);
   await grantAppAccess(alex.id, salesApp.id, frontsellRole.id, true);
   await grantAppAccess(mike.id, salesApp.id, upsellRole.id, true);
-  await grantAppAccess(pmLead.id, pmApp.id, pmLeadRole.id, true);
-  await grantAppAccess(pmMember.id, pmApp.id, pmTeamRole.id, true);
+  await grantAppAccess(pmLeadPublishing.id, pmApp.id, pmLeadRole.id, true);
+  await grantAppAccess(pmLeadDesign.id, pmApp.id, pmLeadRole.id, true);
+  await grantAppAccess(pmEditor.id, pmApp.id, pmTeamRole.id, true);
+  await grantAppAccess(pmDesigner.id, pmApp.id, pmTeamRole.id, true);
+  await grantAppAccess(pmQc.id, pmApp.id, pmQcRole.id, true);
 
   await prisma.userScopeGrant.createMany({
     data: [
@@ -396,17 +439,38 @@ async function main() {
       },
       {
         organizationId: org.id,
-        userId: pmLead.id,
+        userId: pmLeadPublishing.id,
         appId: pmApp.id,
         resourceKey: 'pm.tasks',
         scopeType: DataScopeType.TEAM,
       },
       {
         organizationId: org.id,
-        userId: pmMember.id,
+        userId: pmEditor.id,
         appId: pmApp.id,
         resourceKey: 'pm.tasks',
         scopeType: DataScopeType.OWN,
+      },
+      {
+        organizationId: org.id,
+        userId: pmLeadDesign.id,
+        appId: pmApp.id,
+        resourceKey: 'pm.tasks',
+        scopeType: DataScopeType.TEAM,
+      },
+      {
+        organizationId: org.id,
+        userId: pmDesigner.id,
+        appId: pmApp.id,
+        resourceKey: 'pm.tasks',
+        scopeType: DataScopeType.OWN,
+      },
+      {
+        organizationId: org.id,
+        userId: pmQc.id,
+        appId: pmApp.id,
+        resourceKey: 'pm.tasks',
+        scopeType: DataScopeType.TEAM,
       },
     ],
   });

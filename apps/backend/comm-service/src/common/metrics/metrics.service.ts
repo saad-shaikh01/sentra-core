@@ -21,7 +21,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { COMM_SYNC_QUEUE } from '../../modules/sync/sync.service';
+import { COMM_SYNC_QUEUE } from '../../modules/sync/sync.constants';
 
 interface Counter {
   value: number;

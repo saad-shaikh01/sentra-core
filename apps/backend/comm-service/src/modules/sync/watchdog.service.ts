@@ -158,6 +158,7 @@ export class WatchdogService implements OnModuleInit, OnModuleDestroy {
     this.gateway?.emitToOrg(identity.organizationId, 'identity:error', {
       identityId: String(identity._id),
       email: identity.email,
+      error: 'Gmail authentication token has been revoked. Please reconnect this account.',
       errorMessage: 'Gmail authentication token has been revoked. Please reconnect this account.',
     });
 

@@ -6,15 +6,12 @@
  */
 
 import { Controller, Get, Logger, OnModuleInit } from '@nestjs/common';
-import { InjectConnection } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Connection } from 'mongoose';
 import { CommCacheService } from '../../common/cache/comm-cache.service';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
-import { MongooseModule } from '@nestjs/mongoose';
-import { CommIdentitySchema } from '../../schemas/comm-identity.schema';
 
 @Controller('health')
 export class HealthController implements OnModuleInit {
@@ -61,16 +58,21 @@ export class HealthController implements OnModuleInit {
     // Identity sync status
     const identities = await this.identityModel
       .find({ isActive: true })
-      .select('email syncState organizationId')
-      .limit(50)
+      .select('syncState')
       .exec();
 
-    const identityStatus = identities.map((id) => ({
-      id: String(id._id),
-      email: id.email,
-      syncStatus: id.syncState?.initialSyncDone ? 'active' : 'pending',
-      lastSyncAt: id.syncState?.lastSyncAt ?? null,
-    }));
+    const identityStatus = identities.reduce(
+      (summary, identity) => {
+        summary.total += 1;
+        const status = identity.syncState?.status ?? 'active';
+        if (status === 'error') summary.error += 1;
+        else if (status === 'paused') summary.paused += 1;
+        else if (identity.syncState?.initialSyncDone) summary.active += 1;
+        else summary.pending += 1;
+        return summary;
+      },
+      { total: 0, active: 0, pending: 0, error: 0, paused: 0 },
+    );
 
     return {
       status: 'ok',

@@ -18,9 +18,10 @@ import { Job } from 'bullmq';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
 import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.schema';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
-import { SyncService, COMM_SYNC_QUEUE } from './sync.service';
+import { SyncService } from './sync.service';
 import { GmailApiService } from './gmail-api.service';
 import { MetricsService } from '../../common/metrics/metrics.service';
+import { COMM_SYNC_QUEUE } from './sync.constants';
 
 @Processor(COMM_SYNC_QUEUE)
 export class SyncProcessor extends WorkerHost {

@@ -14,11 +14,13 @@ import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
 import { CommAttachment, CommAttachmentDocument } from '../../schemas/comm-attachment.schema';
+import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.schema';
 import { GmailApiService } from './gmail-api.service';
-import { COMM_ATTACHMENT_QUEUE } from './sync.service';
+import { COMM_ATTACHMENT_QUEUE } from './sync.constants';
 
 interface ArchiveAttachmentJob {
   organizationId: string;
+  identityId: string;
   gmailMessageId: string;
   attachmentId: string;
   filename: string;
@@ -35,6 +37,8 @@ export class AttachmentProcessor extends WorkerHost {
     private readonly identityModel: Model<CommIdentityDocument>,
     @InjectModel(CommAttachment.name)
     private readonly attachmentModel: Model<CommAttachmentDocument>,
+    @InjectModel(CommMessage.name)
+    private readonly messageModel: Model<CommMessageDocument>,
     private readonly gmailApi: GmailApiService,
     private readonly config: ConfigService,
   ) {
@@ -56,15 +60,14 @@ export class AttachmentProcessor extends WorkerHost {
       return; // S3 not configured, skip silently
     }
 
-    const { organizationId, gmailMessageId, attachmentId, filename } = job.data;
+    const { organizationId, identityId, gmailMessageId, attachmentId, filename } = job.data;
 
-    // Find identity for this org to get Gmail client
     const identity = await this.identityModel
-      .findOne({ organizationId, isActive: true })
+      .findOne({ _id: identityId, organizationId, isActive: true })
       .exec();
 
     if (!identity) {
-      this.logger.warn(`No active identity for org ${organizationId}`);
+      this.logger.warn(`No active identity ${identityId} for org ${organizationId}`);
       return;
     }
 
@@ -98,6 +101,20 @@ export class AttachmentProcessor extends WorkerHost {
           },
         },
         { upsert: true },
+      );
+
+      await this.messageModel.updateOne(
+        {
+          organizationId,
+          gmailMessageId,
+          'attachments.gmailAttachmentId': attachmentId,
+        },
+        {
+          $set: {
+            'attachments.$.s3Key': s3Key,
+            'attachments.$.archivedAt': new Date(),
+          },
+        },
       );
 
       this.logger.debug(`Archived attachment ${filename} for message ${gmailMessageId}`);

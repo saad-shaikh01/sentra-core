@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CommSchemasModule } from '../../schemas/comm-schemas.module';
+import { SyncModule } from '../sync/sync.module';
 import { ThreadsController } from './threads.controller';
 import { ThreadsService } from './threads.service';
 
 @Module({
-  imports: [CommSchemasModule],
+  imports: [CommSchemasModule, SyncModule],
   controllers: [ThreadsController],
   providers: [ThreadsService],
   exports: [ThreadsService],

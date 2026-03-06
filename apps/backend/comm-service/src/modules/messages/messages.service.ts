@@ -13,17 +13,20 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.schema';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
+import { CommEntityLink, CommEntityLinkDocument } from '../../schemas/comm-entity-link.schema';
 import { IdentitiesService } from '../identities/identities.service';
 import { GmailApiService } from '../sync/gmail-api.service';
 import { AuditService } from '../audit/audit.service';
 import { SendMessageDto, ReplyDto, ForwardDto } from './dto/send-message.dto';
 import { CommGateway } from '../gateway/comm.gateway';
 import { MetricsService } from '../../common/metrics/metrics.service';
+import { buildCommPaginationResponse, toMongoosePagination } from '../../common/helpers/pagination.helper';
+import { ListMessagesQueryDto } from './dto/list-messages.dto';
 
 @Injectable()
 export class MessagesService {
@@ -36,12 +39,75 @@ export class MessagesService {
     private readonly threadModel: Model<CommThreadDocument>,
     @InjectModel(CommIdentity.name)
     private readonly identityModel: Model<CommIdentityDocument>,
+    @InjectModel(CommEntityLink.name)
+    private readonly entityLinkModel: Model<CommEntityLinkDocument>,
     private readonly identitiesService: IdentitiesService,
     private readonly gmailApi: GmailApiService,
     private readonly audit: AuditService,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly metrics?: MetricsService,
   ) {}
+
+  async listMessages(organizationId: string, query: ListMessagesQueryDto) {
+    const { page = 1, limit = 20, threadId, entityType, entityId } = query;
+    const filter: Record<string, unknown> = { organizationId };
+    let sort: { sentAt: 1 | -1 } = { sentAt: -1 };
+
+    if (threadId) {
+      const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
+      if (!thread) {
+        throw new NotFoundException(`Thread ${threadId} not found`);
+      }
+      filter.gmailThreadId = thread.gmailThreadId;
+      sort = { sentAt: 1 };
+    }
+
+    if (entityType && entityId) {
+      const linkedThreads = await this.threadModel
+        .find({
+          organizationId,
+          'entityLinks.entityType': entityType,
+          'entityLinks.entityId': entityId,
+        })
+        .select('gmailThreadId')
+        .lean()
+        .exec();
+
+      const gmailThreadIds = linkedThreads.map((thread) => thread.gmailThreadId);
+      if (gmailThreadIds.length === 0) {
+        return buildCommPaginationResponse([], 0, page, limit);
+      }
+
+      if (typeof filter.gmailThreadId === 'string') {
+        if (!gmailThreadIds.includes(filter.gmailThreadId)) {
+          return buildCommPaginationResponse([], 0, page, limit);
+        }
+      } else {
+        filter.gmailThreadId = { $in: gmailThreadIds };
+      }
+    }
+
+    const { skip } = toMongoosePagination(page, limit);
+    const [data, total] = await Promise.all([
+      this.messageModel
+        .find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.messageModel.countDocuments(filter),
+    ]);
+
+    return buildCommPaginationResponse(data, total, page, limit);
+  }
+
+  async getMessage(organizationId: string, id: string): Promise<CommMessageDocument> {
+    const message = await this.findMessageByIdOrGmailId(organizationId, id);
+    if (!message) {
+      throw new NotFoundException(`Message ${id} not found`);
+    }
+    return message;
+  }
 
   async sendMessage(
     organizationId: string,
@@ -50,15 +116,21 @@ export class MessagesService {
   ): Promise<CommMessageDocument> {
     const identity = await this.getIdentityForSend(organizationId, dto.identityId);
     const fromAddress = this.resolveFromAlias(identity, dto.fromAlias);
+    const body = this.resolveMessageBody(dto.bodyHtml, dto.bodyText);
+    const subject = dto.subject?.trim();
+
+    if (!subject) {
+      throw new UnprocessableEntityException('Subject is required');
+    }
 
     const rawMime = await this.buildMime({
       from: fromAddress,
       to: dto.to,
       cc: dto.cc,
       bcc: dto.bcc,
-      subject: dto.subject,
-      html: dto.bodyHtml,
-      text: dto.bodyText,
+      subject,
+      html: body.bodyHtml,
+      text: body.bodyText,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
@@ -82,9 +154,9 @@ export class MessagesService {
           to: dto.to.map((e) => ({ email: e })),
           cc: (dto.cc ?? []).map((e) => ({ email: e })),
           bcc: (dto.bcc ?? []).map((e) => ({ email: e })),
-          subject: dto.subject,
-          bodyHtml: dto.bodyHtml,
-          bodyText: dto.bodyText,
+          subject,
+          bodyHtml: body.bodyHtml,
+          bodyText: body.bodyText,
           attachments: [],
           isRead: true,
           isSentByIdentity: true,
@@ -94,7 +166,10 @@ export class MessagesService {
       { upsert: true, new: true },
     );
 
-    await this.upsertThread(organizationId, identity, gmailThreadId, dto.subject, message!);
+    const thread = await this.upsertThread(organizationId, identity, gmailThreadId, subject, message!);
+    if (dto.entityType && dto.entityId) {
+      await this.linkThreadToEntity(organizationId, userId, gmailThreadId, dto.entityType, dto.entityId);
+    }
 
     await this.audit.log({
       organizationId,
@@ -102,17 +177,21 @@ export class MessagesService {
       action: 'MESSAGE_SENT',
       entityType: 'message',
       entityId: gmailMessageId,
-      metadata: { to: dto.to, subject: dto.subject },
+      metadata: { to: dto.to, subject },
     });
 
     this.metrics?.incrementMessagesSent(dto.identityId);
     this.gateway?.emitToOrg(organizationId, 'message:sent', {
+      threadId: String(thread._id),
+      gmailThreadId,
+      direction: 'outbound',
       message: {
+        id: String(message!._id),
         gmailMessageId,
         gmailThreadId,
         from: { email: fromAddress },
         to: dto.to,
-        subject: dto.subject,
+        subject,
         identityId: dto.identityId,
       },
     });
@@ -126,14 +205,13 @@ export class MessagesService {
     messageId: string,
     dto: ReplyDto,
   ): Promise<CommMessageDocument> {
-    const original = await this.messageModel
-      .findOne({ _id: messageId, organizationId })
-      .exec();
+    const original = await this.findMessageByIdOrGmailId(organizationId, messageId);
 
     if (!original) throw new NotFoundException(`Message ${messageId} not found`);
 
     const identity = await this.getIdentityForSend(organizationId, dto.identityId);
-    const fromAddress = this.resolveFromAlias(identity, undefined);
+    const fromAddress = this.resolveFromAlias(identity, dto.fromAlias);
+    const body = this.resolveMessageBody(dto.bodyHtml, dto.bodyText);
 
     const replyToEmail = original.isSentByIdentity
       ? original.to[0]?.email ?? original.from.email
@@ -144,8 +222,8 @@ export class MessagesService {
       to: [replyToEmail],
       cc: dto.cc,
       subject: `Re: ${original.subject ?? ''}`,
-      html: dto.bodyHtml,
-      text: dto.bodyText,
+      html: body.bodyHtml,
+      text: body.bodyText,
       inReplyTo: original.gmailMessageId,
       references: original.gmailMessageId,
       threadId: original.gmailThreadId,
@@ -172,8 +250,8 @@ export class MessagesService {
           cc: (dto.cc ?? []).map((e) => ({ email: e })),
           bcc: [],
           subject: `Re: ${original.subject ?? ''}`,
-          bodyHtml: dto.bodyHtml,
-          bodyText: dto.bodyText,
+          bodyHtml: body.bodyHtml,
+          bodyText: body.bodyText,
           attachments: [],
           isRead: true,
           isSentByIdentity: true,
@@ -193,7 +271,11 @@ export class MessagesService {
     });
 
     this.gateway?.emitToOrg(organizationId, 'message:sent', {
+      threadId: await this.getThreadIdForGmailThread(organizationId, original.gmailThreadId),
+      gmailThreadId: original.gmailThreadId,
+      direction: 'outbound',
       message: {
+        id: String(message!._id),
         gmailMessageId,
         gmailThreadId: original.gmailThreadId,
         from: { email: fromAddress },
@@ -211,17 +293,20 @@ export class MessagesService {
     messageId: string,
     dto: ForwardDto,
   ): Promise<CommMessageDocument> {
-    const original = await this.messageModel
-      .findOne({ _id: messageId, organizationId })
-      .exec();
+    const original = await this.findMessageByIdOrGmailId(organizationId, messageId);
 
     if (!original) throw new NotFoundException(`Message ${messageId} not found`);
 
     const identity = await this.getIdentityForSend(organizationId, dto.identityId);
     const fromAddress = this.resolveFromAlias(identity, undefined);
+    const introHtml = dto.bodyHtml
+      ? dto.bodyHtml
+      : dto.bodyText
+        ? this.renderPlainTextAsHtml(dto.bodyText)
+        : '';
 
     const quotedBody = `
-      <div>${dto.bodyHtml ?? ''}</div>
+      <div>${introHtml}</div>
       <br/>
       <div style="border-left: 2px solid #ccc; padding-left: 8px; color: #666;">
         <p><strong>From:</strong> ${original.from.email}</p>
@@ -235,6 +320,7 @@ export class MessagesService {
       to: dto.to,
       subject: `Fwd: ${original.subject ?? ''}`,
       html: quotedBody,
+      text: dto.bodyText,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
@@ -278,8 +364,13 @@ export class MessagesService {
       metadata: { originalMessageId: messageId, to: dto.to },
     });
 
+    const thread = await this.threadModel.findOne({ organizationId, gmailThreadId }).exec();
     this.gateway?.emitToOrg(organizationId, 'message:sent', {
+      threadId: thread ? String(thread._id) : undefined,
+      gmailThreadId,
+      direction: 'outbound',
       message: {
+        id: String(message!._id),
         gmailMessageId,
         gmailThreadId,
         from: { email: fromAddress },
@@ -321,13 +412,30 @@ export class MessagesService {
     return defaultAlias?.email ?? identity.email;
   }
 
+  private resolveMessageBody(bodyHtml?: string, bodyText?: string): {
+    bodyHtml?: string;
+    bodyText?: string;
+  } {
+    const normalizedHtml = bodyHtml?.trim();
+    const normalizedText = bodyText?.trim();
+
+    if (!normalizedHtml && !normalizedText) {
+      throw new UnprocessableEntityException('Message body is required');
+    }
+
+    return {
+      bodyHtml: normalizedHtml ?? (normalizedText ? this.renderPlainTextAsHtml(normalizedText) : undefined),
+      bodyText: normalizedText ?? (normalizedHtml ? this.stripHtml(normalizedHtml) : undefined),
+    };
+  }
+
   private async buildMime(opts: {
     from: string;
     to: string[];
     cc?: string[];
     bcc?: string[];
     subject: string;
-    html: string;
+    html?: string;
     text?: string;
     inReplyTo?: string;
     references?: string;
@@ -337,11 +445,11 @@ export class MessagesService {
       from: opts.from,
       to: opts.to.join(', '),
       subject: opts.subject,
-      html: opts.html,
     };
 
     if (opts.cc?.length) mailOptions.cc = opts.cc.join(', ');
     if (opts.bcc?.length) mailOptions.bcc = opts.bcc.join(', ');
+    if (opts.html) mailOptions.html = opts.html;
     if (opts.text) mailOptions.text = opts.text;
 
     const headers: Record<string, string> = {};
@@ -366,8 +474,8 @@ export class MessagesService {
     gmailThreadId: string,
     subject: string | undefined,
     message: CommMessageDocument,
-  ): Promise<void> {
-    await this.threadModel.findOneAndUpdate(
+  ): Promise<CommThreadDocument> {
+    return (await this.threadModel.findOneAndUpdate(
       { organizationId, gmailThreadId },
       {
         $setOnInsert: {
@@ -381,7 +489,100 @@ export class MessagesService {
         $max: { lastMessageAt: message.sentAt ?? new Date() },
         $set: { snippet: subject },
       },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ).exec())!;
+  }
+
+  private async findMessageByIdOrGmailId(
+    organizationId: string,
+    messageId: string,
+  ): Promise<CommMessageDocument | null> {
+    const query = Types.ObjectId.isValid(messageId)
+      ? {
+          organizationId,
+          $or: [{ _id: new Types.ObjectId(messageId) }, { gmailMessageId: messageId }],
+        }
+      : { organizationId, gmailMessageId: messageId };
+
+    return this.messageModel.findOne(query).exec();
+  }
+
+  private async findThreadByIdOrGmailThreadId(
+    organizationId: string,
+    threadId: string,
+  ): Promise<CommThreadDocument | null> {
+    const query = Types.ObjectId.isValid(threadId)
+      ? {
+          organizationId,
+          $or: [{ _id: new Types.ObjectId(threadId) }, { gmailThreadId: threadId }],
+        }
+      : { organizationId, gmailThreadId: threadId };
+
+    return this.threadModel.findOne(query).exec();
+  }
+
+  private async getThreadIdForGmailThread(
+    organizationId: string,
+    gmailThreadId: string,
+  ): Promise<string | undefined> {
+    const thread = await this.threadModel
+      .findOne({ organizationId, gmailThreadId })
+      .select('_id')
+      .exec();
+    return thread ? String(thread._id) : undefined;
+  }
+
+  private async linkThreadToEntity(
+    organizationId: string,
+    userId: string,
+    gmailThreadId: string,
+    entityType: string,
+    entityId: string,
+  ): Promise<void> {
+    await this.threadModel.updateOne(
+      { organizationId, gmailThreadId },
+      {
+        $addToSet: {
+          entityLinks: {
+            entityType,
+            entityId,
+            linkedBy: 'MANUAL',
+            linkedAt: new Date(),
+          },
+        },
+      },
+    );
+
+    await this.entityLinkModel.findOneAndUpdate(
+      { organizationId, gmailThreadId, entityType, entityId },
+      {
+        $setOnInsert: {
+          organizationId,
+          gmailThreadId,
+          entityType,
+          entityId,
+          linkedBy: 'MANUAL',
+          linkedByUserId: userId,
+        } satisfies Partial<CommEntityLink>,
+      },
       { upsert: true },
     );
+  }
+
+  private renderPlainTextAsHtml(text: string): string {
+    return this.escapeHtml(text).replace(/\n/g, '<br/>');
+  }
+
+  private stripHtml(html: string): string {
+    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 }

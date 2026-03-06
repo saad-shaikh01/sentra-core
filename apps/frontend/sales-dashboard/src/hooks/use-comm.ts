@@ -82,8 +82,19 @@ export function useEntityTimeline(entityType: string, entityId: string, params?:
     queryKey: commKeys.timeline(entityType, entityId, params),
     queryFn: async () => {
       const res = await api.getEntityTimeline(entityType, entityId, params as Record<string, unknown>);
-      const items = res?.data ?? res ?? [];
-      return items as CommMessageSummary[];
+      const items = res?.data ?? [];
+      return items.map((message: CommMessage) => ({
+        id: message.id,
+        threadId: message.threadId,
+        gmailThreadId: message.gmailThreadId,
+        direction: message.isSentByIdentity ? 'outbound' : 'inbound',
+        isSentByIdentity: message.isSentByIdentity,
+        from: message.from,
+        subject: message.subject,
+        snippet: message.bodyText?.slice(0, 160) ?? message.subject,
+        sentAt: message.sentAt,
+        hasAttachments: (message.attachments?.length ?? 0) > 0,
+      })) as CommMessageSummary[];
     },
     enabled: !!entityType && !!entityId,
   });
@@ -96,8 +107,11 @@ export function useSendMessage() {
       const idempotencyKey = crypto.randomUUID();
       return api.sendCommMessage(dto as unknown as Record<string, unknown>, idempotencyKey);
     },
-    onSuccess: () => {
+    onSuccess: (_data, dto) => {
       queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      if (dto.entityType && dto.entityId) {
+        queryClient.invalidateQueries({ queryKey: commKeys.timeline(dto.entityType, dto.entityId) });
+      }
       toast.success('Email sent');
     },
     onError: (e: Error) => toast.error('Failed to send email', e.message),
@@ -112,7 +126,7 @@ export function useReplyToMessage() {
       return api.replyToCommMessage(messageId, dto as unknown as Record<string, unknown>, idempotencyKey);
     },
     onSuccess: (_data, { dto }) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.all });
       if ((dto as any).threadId) {
         queryClient.invalidateQueries({ queryKey: commKeys.thread((dto as any).threadId) });
       }
@@ -130,7 +144,7 @@ export function useForwardMessage() {
       return api.forwardCommMessage(messageId, dto as unknown as Record<string, unknown>, idempotencyKey);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.all });
       toast.success('Email forwarded');
     },
     onError: (e: Error) => toast.error('Failed to forward email', e.message),

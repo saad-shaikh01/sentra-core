@@ -22,9 +22,8 @@ import { GmailApiService } from './gmail-api.service';
 import { gmail_v1 } from 'googleapis';
 import { CommGateway } from '../gateway/comm.gateway';
 import { WatchRenewalService } from './watch-renewal.service';
-
-export const COMM_SYNC_QUEUE = 'comm-sync';
-export const COMM_ATTACHMENT_QUEUE = 'comm-attachment';
+import { COMM_ATTACHMENT_QUEUE, COMM_SYNC_QUEUE } from './sync.constants';
+import { EntityLinksService } from '../entity-links/entity-links.service';
 
 @Injectable()
 export class SyncService implements OnModuleInit, OnModuleDestroy {
@@ -47,6 +46,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     private readonly gmailApi: GmailApiService,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly watchRenewal?: WatchRenewalService,
+    private readonly entityLinksService?: EntityLinksService,
   ) {}
 
   onModuleInit() {
@@ -186,8 +186,6 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
             {
               attempts: 3,
               backoff: { type: 'exponential', delay: 2000 },
-              // Rate limit backfill: 10 messages/min
-              delay: processed > 0 ? Math.floor(processed / 10) * 60_000 : 0,
             },
           );
           processed++;
@@ -196,6 +194,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
           if (processed % 50 === 0) {
             this.gateway?.emitToOrg(identity.organizationId, 'sync:progress', {
               identityId: String(identity._id),
+              synced: processed,
               processed,
               total: totalEstimate,
             });
@@ -291,12 +290,19 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     );
 
     // Upsert thread
-    await this.upsertThread(identity, raw, parsed);
+    const thread = await this.upsertThread(identity, raw, parsed);
+    if (parsed.gmailThreadId) {
+      await this.entityLinksService?.autoLinkThreads(identity.organizationId, [parsed.gmailThreadId]);
+    }
 
     // Emit realtime event for newly inbound messages
     if (isNew && !parsed.isSentByIdentity) {
       this.gateway?.emitToOrg(identity.organizationId, 'message:new', {
+        threadId: String(thread._id),
+        gmailThreadId: parsed.gmailThreadId,
+        direction: 'inbound',
         message: {
+          id: gmailMessageId,
           gmailMessageId,
           gmailThreadId: parsed.gmailThreadId,
           from: parsed.from,
@@ -315,6 +321,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         if (att.gmailAttachmentId) {
           await this.attachmentQueue.add('archive-attachment', {
             organizationId: identity.organizationId,
+            identityId: String(identity._id),
             gmailMessageId,
             attachmentId: att.gmailAttachmentId,
             filename: att.filename,
@@ -414,14 +421,14 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     identity: CommIdentityDocument,
     raw: gmail_v1.Schema$Message,
     parsed: Partial<CommMessage>,
-  ): Promise<void> {
+  ): Promise<CommThreadDocument> {
     const participants = [
       parsed.from,
       ...(parsed.to ?? []),
       ...(parsed.cc ?? []),
     ].filter((p): p is { email: string; name?: string } => Boolean(p?.email));
 
-    await this.threadModel.findOneAndUpdate(
+    return (await this.threadModel.findOneAndUpdate(
       { organizationId: identity.organizationId, gmailThreadId: raw.threadId! },
       {
         $setOnInsert: {
@@ -441,7 +448,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
           hasUnread: !parsed.isRead,
         },
       },
-      { upsert: true },
-    );
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ).exec())!;
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { CommEntityLink, CommEntityLinkDocument } from '../../schemas/comm-entity-link.schema';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { InternalContactsClient } from '../../common/http/internal-contacts.client';
@@ -23,9 +23,10 @@ export class EntityLinksService {
     userId: string,
     dto: CreateEntityLinkDto,
   ): Promise<CommEntityLinkDocument> {
+    const gmailThreadId = await this.resolveGmailThreadId(organizationId, dto);
     const existing = await this.entityLinkModel.findOne({
       organizationId,
-      gmailThreadId: dto.gmailThreadId,
+      gmailThreadId,
       entityType: dto.entityType,
       entityId: dto.entityId,
     });
@@ -38,14 +39,14 @@ export class EntityLinksService {
       organizationId,
       entityType: dto.entityType,
       entityId: dto.entityId,
-      gmailThreadId: dto.gmailThreadId,
+      gmailThreadId,
       linkedBy: 'MANUAL',
       linkedByUserId: userId,
     });
 
     // Sync to thread's entityLinks array
     const thread = await this.threadModel.findOneAndUpdate(
-      { organizationId, gmailThreadId: dto.gmailThreadId },
+      { organizationId, gmailThreadId },
       {
         $addToSet: {
           entityLinks: {
@@ -65,13 +66,13 @@ export class EntityLinksService {
         entityType: dto.entityType,
         entityId: dto.entityId,
         threadId: String(thread._id),
-        gmailThreadId: dto.gmailThreadId,
+        gmailThreadId,
       });
       this.gateway?.emitToEntity(dto.entityType, dto.entityId, 'link:created', {
         entityType: dto.entityType,
         entityId: dto.entityId,
         threadId: String(thread._id),
-        gmailThreadId: dto.gmailThreadId,
+        gmailThreadId,
       });
     }
 
@@ -125,8 +126,7 @@ export class EntityLinksService {
     entityType: string,
     entityId: string,
   ): Promise<void> {
-    // Resolve the MongoDB thread doc to get gmailThreadId
-    const thread = await this.threadModel.findOne({ _id: threadId, organizationId }).exec();
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
@@ -150,13 +150,13 @@ export class EntityLinksService {
     this.gateway?.emitToOrg(organizationId, 'link:removed', {
       entityType,
       entityId,
-      threadId,
+      threadId: String(thread._id),
       gmailThreadId: thread.gmailThreadId,
     });
     this.gateway?.emitToEntity(entityType, entityId, 'link:removed', {
       entityType,
       entityId,
-      threadId,
+      threadId: String(thread._id),
       gmailThreadId: thread.gmailThreadId,
     });
   }
@@ -246,5 +246,40 @@ export class EntityLinksService {
         );
       }
     }
+  }
+
+  private async resolveGmailThreadId(
+    organizationId: string,
+    dto: CreateEntityLinkDto,
+  ): Promise<string> {
+    if (dto.gmailThreadId) {
+      return dto.gmailThreadId;
+    }
+
+    if (!dto.threadId) {
+      throw new NotFoundException('threadId or gmailThreadId is required');
+    }
+
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, dto.threadId);
+
+    if (!thread) {
+      throw new NotFoundException(`Thread ${dto.threadId} not found`);
+    }
+
+    return thread.gmailThreadId;
+  }
+
+  private async findThreadByIdOrGmailThreadId(
+    organizationId: string,
+    threadId: string,
+  ): Promise<Pick<CommThreadDocument, '_id' | 'gmailThreadId'> | null> {
+    const query = Types.ObjectId.isValid(threadId)
+      ? {
+          organizationId,
+          $or: [{ _id: new Types.ObjectId(threadId) }, { gmailThreadId: threadId }],
+        }
+      : { organizationId, gmailThreadId: threadId };
+
+    return this.threadModel.findOne(query).select('_id gmailThreadId').exec();
   }
 }

@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.schema';
+import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
 import { buildCommPaginationResponse, toMongoosePagination } from '../../common/helpers/pagination.helper';
 import { ListThreadsQueryDto, ListMessagesQueryDto } from './dto/threads.dto';
+import { GmailApiService } from '../sync/gmail-api.service';
+import { CommGateway } from '../gateway/comm.gateway';
 
 @Injectable()
 export class ThreadsService {
@@ -13,6 +16,10 @@ export class ThreadsService {
     private readonly threadModel: Model<CommThreadDocument>,
     @InjectModel(CommMessage.name)
     private readonly messageModel: Model<CommMessageDocument>,
+    @InjectModel(CommIdentity.name)
+    private readonly identityModel: Model<CommIdentityDocument>,
+    private readonly gmailApi: GmailApiService,
+    @Optional() private readonly gateway?: CommGateway,
   ) {}
 
   async listThreads(organizationId: string, query: ListThreadsQueryDto) {
@@ -62,9 +69,7 @@ export class ThreadsService {
   }
 
   async getThread(organizationId: string, threadId: string) {
-    const thread = await this.threadModel
-      .findOne({ _id: threadId, organizationId })
-      .exec();
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
 
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
@@ -80,9 +85,7 @@ export class ThreadsService {
   }
 
   async listMessages(organizationId: string, threadId: string, query: ListMessagesQueryDto) {
-    const thread = await this.threadModel
-      .findOne({ _id: threadId, organizationId })
-      .exec();
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
 
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
@@ -108,32 +111,82 @@ export class ThreadsService {
   }
 
   async archiveThread(organizationId: string, threadId: string): Promise<void> {
-    const result = await this.threadModel.findOneAndUpdate(
-      { _id: threadId, organizationId },
-      { $set: { isArchived: true } },
-    );
-    if (!result) {
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
+    if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
+
+    const identity = await this.getThreadIdentity(organizationId, thread.identityId);
+    const gmail = await this.gmailApi.getGmailClient(identity);
+
+    await gmail.users.threads.modify({
+      userId: 'me',
+      id: thread.gmailThreadId,
+      requestBody: {
+        removeLabelIds: ['INBOX'],
+      },
+    });
+
+    await this.threadModel.findByIdAndUpdate(thread._id, { $set: { isArchived: true } });
+    this.gateway?.emitToOrg(organizationId, 'thread:updated', { threadId: String(thread._id) });
   }
 
   async markThreadRead(organizationId: string, threadId: string): Promise<void> {
-    const thread = await this.threadModel
-      .findOne({ _id: threadId, organizationId })
-      .exec();
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
 
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
+
+    const identity = await this.getThreadIdentity(organizationId, thread.identityId);
+    const gmail = await this.gmailApi.getGmailClient(identity);
+
+    await gmail.users.threads.modify({
+      userId: 'me',
+      id: thread.gmailThreadId,
+      requestBody: {
+        removeLabelIds: ['UNREAD'],
+      },
+    });
 
     await Promise.all([
       this.messageModel.updateMany(
         { organizationId, gmailThreadId: thread.gmailThreadId },
         { $set: { isRead: true } },
       ),
-      this.threadModel.findByIdAndUpdate(threadId, {
+      this.threadModel.findByIdAndUpdate(thread._id, {
         $set: { hasUnread: false },
       }),
     ]);
+    this.gateway?.emitToOrg(organizationId, 'thread:updated', { threadId: String(thread._id) });
+  }
+
+  private async getThreadIdentity(
+    organizationId: string,
+    identityId: string,
+  ): Promise<CommIdentityDocument> {
+    const identity = await this.identityModel
+      .findOne({ _id: identityId, organizationId, isActive: true })
+      .exec();
+
+    if (!identity) {
+      throw new NotFoundException(`Identity ${identityId} not found for thread`);
+    }
+
+    return identity;
+  }
+
+  private async findThreadByIdOrGmailThreadId(
+    organizationId: string,
+    threadId: string,
+  ): Promise<CommThreadDocument | null> {
+    const query = Types.ObjectId.isValid(threadId)
+      ? {
+          organizationId,
+          $or: [{ _id: new Types.ObjectId(threadId) }, { gmailThreadId: threadId }],
+        }
+      : { organizationId, gmailThreadId: threadId };
+
+    return this.threadModel.findOne(query).exec();
   }
 }

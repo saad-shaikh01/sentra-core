@@ -109,7 +109,11 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(error.message || `HTTP ${response.status}`);
+      const message =
+        error?.error?.message ||
+        error?.message ||
+        `HTTP ${response.status}`;
+      throw new Error(message);
     }
 
     if (response.status === 204) return {} as T;
@@ -521,7 +525,7 @@ class ApiClient {
   async getEntityTimeline(entityType: string, entityId: string, params?: Record<string, unknown>) {
     const allParams = { entityType, entityId, ...(params ?? {}) };
     const qs = '?' + new URLSearchParams(allParams as Record<string, string>).toString();
-    return this.fetch<any>(`/threads${qs}`, { service: 'comm' });
+    return this.fetch<any>(`/messages${qs}`, { service: 'comm' });
   }
 
   // Comm — Entity Links

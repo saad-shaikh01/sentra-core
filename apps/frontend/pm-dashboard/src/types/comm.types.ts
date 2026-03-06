@@ -140,3 +140,10 @@ export interface ReplyDto {
   bodyHtml?: string;
   cc?: string[];
 }
+
+export interface ForwardDto {
+  identityId: string;
+  to: string[];
+  bodyText?: string;
+  bodyHtml?: string;
+}

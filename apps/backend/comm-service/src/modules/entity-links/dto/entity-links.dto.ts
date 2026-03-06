@@ -1,9 +1,14 @@
-import { IsString, IsIn } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { CommPaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class CreateEntityLinkDto {
+  @IsOptional()
   @IsString()
-  gmailThreadId: string;
+  threadId?: string;
+
+  @IsOptional()
+  @IsString()
+  gmailThreadId?: string;
 
   @IsString()
   entityType: string;

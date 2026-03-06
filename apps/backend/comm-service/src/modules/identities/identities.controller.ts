@@ -9,17 +9,26 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-response';
 import { IdentitiesService } from './identities.service';
 import { OAuthCallbackQueryDto } from './dto/identities.dto';
+import { SyncService } from '../sync/sync.service';
 
 @Controller('identities')
 export class IdentitiesController {
-  constructor(private readonly service: IdentitiesService) {}
+  constructor(
+    private readonly service: IdentitiesService,
+    @Inject(forwardRef(() => SyncService))
+    private readonly syncService: SyncService,
+    private readonly config: ConfigService,
+  ) {}
 
   /**
    * Initiate Gmail OAuth flow.
@@ -45,11 +54,21 @@ export class IdentitiesController {
     @Res() res: Response,
   ) {
     if (query.error) {
-      return res.redirect(`/?oauth_error=${query.error}`);
+      return res.redirect(this.buildSettingsRedirect({ error: query.error }));
     }
 
-    await this.service.handleOAuthCallback(query.code, query.state);
-    return res.redirect(`/?oauth_success=true`);
+    if (!query.code || !query.state) {
+      return res.redirect(this.buildSettingsRedirect({ error: 'missing_oauth_parameters' }));
+    }
+
+    try {
+      const identity = await this.service.handleOAuthCallback(query.code, query.state);
+      await this.syncService.triggerInitialSync(String(identity._id));
+      return res.redirect(this.buildSettingsRedirect({ success: true, identityId: String(identity._id) }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'oauth_callback_failed';
+      return res.redirect(this.buildSettingsRedirect({ error: message }));
+    }
   }
 
   @UseGuards(OrgContextGuard)
@@ -100,5 +119,28 @@ export class IdentitiesController {
   ) {
     await this.service.deleteIdentity(ctx.organizationId, id);
     return COMM_MUTATION_OK;
+  }
+
+  private buildSettingsRedirect(params: {
+    success?: boolean;
+    identityId?: string;
+    error?: string;
+  }): string {
+    const frontendBase =
+      this.config.get<string>('SALES_DASHBOARD_URL') ??
+      this.config.get<string>('FRONTEND_URL') ??
+      'http://localhost:4200';
+
+    const url = new URL('/dashboard/settings/gmail', frontendBase);
+    if (params.success) {
+      url.searchParams.set('success', '1');
+    }
+    if (params.identityId) {
+      url.searchParams.set('identityId', params.identityId);
+    }
+    if (params.error) {
+      url.searchParams.set('error', params.error);
+    }
+    return url.toString();
   }
 }

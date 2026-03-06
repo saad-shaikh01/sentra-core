@@ -19,6 +19,12 @@ const COMM_WS_URL = process.env.NEXT_PUBLIC_COMM_WS_URL || 'http://localhost:300
 export function useCommSocket() {
   const queryClient = useQueryClient();
 
+  const resolveThreadId = (data: any): string | undefined =>
+    data?.threadId ?? data?.message?.threadId ?? data?.message?.gmailThreadId;
+
+  const resolveIdentityError = (data: any): string =>
+    data?.error ?? data?.errorMessage ?? 'Mail sync error';
+
   useEffect(() => {
     if (!COMM_ENABLED) return;
 
@@ -52,43 +58,46 @@ export function useCommSocket() {
       useUIStore.getState().setCommConnectionStatus('error');
     });
 
-    socket.on('message:new', (data: { threadId?: string; direction?: string }) => {
+    socket.on('message:new', (data: any) => {
+      const threadId = resolveThreadId(data);
       queryClient.invalidateQueries({ queryKey: commKeys.threads() });
-      if (data.threadId) {
-        queryClient.invalidateQueries({ queryKey: commKeys.thread(data.threadId) });
-        queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId: data.threadId }) });
+      if (threadId) {
+        queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
+        queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
       }
-      if (data.direction === 'inbound') {
-        useUIStore.getState().incrementCommUnread();
+      useUIStore.getState().incrementCommUnread();
+    });
+
+    socket.on('message:sent', (data: any) => {
+      const threadId = resolveThreadId(data);
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      if (threadId) {
+        queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
+        queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
       }
     });
 
-    socket.on('message:sent', (data: { threadId?: string }) => {
+    socket.on('thread:updated', (data: any) => {
+      const threadId = resolveThreadId(data);
       queryClient.invalidateQueries({ queryKey: commKeys.threads() });
-      if (data.threadId) {
-        queryClient.invalidateQueries({ queryKey: commKeys.thread(data.threadId) });
-        queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId: data.threadId }) });
+      if (threadId) {
+        queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       }
     });
 
-    socket.on('thread:updated', (data: { threadId?: string }) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
-      if (data.threadId) {
-        queryClient.invalidateQueries({ queryKey: commKeys.thread(data.threadId) });
-      }
-    });
-
-    socket.on('sync:progress', (data: { identityId: string; synced: number; total: number }) => {
-      useUIStore.getState().setCommSyncProgress(data.identityId, data.synced, data.total);
-      if (data.synced >= data.total) {
+    socket.on('sync:progress', (data: any) => {
+      const synced = data?.synced ?? data?.processed ?? 0;
+      const total = data?.total ?? 0;
+      useUIStore.getState().setCommSyncProgress(data.identityId, synced, total);
+      if (total > 0 && synced >= total) {
         useUIStore.getState().clearCommSyncProgress(data.identityId);
         queryClient.invalidateQueries({ queryKey: commKeys.identities() });
         queryClient.invalidateQueries({ queryKey: commKeys.threads() });
       }
     });
 
-    socket.on('identity:error', (data: { identityId: string; error: string }) => {
-      useUIStore.getState().setCommIdentityError(data.identityId, data.error);
+    socket.on('identity:error', (data: any) => {
+      useUIStore.getState().setCommIdentityError(data.identityId, resolveIdentityError(data));
       queryClient.invalidateQueries({ queryKey: commKeys.identities() });
     });
 

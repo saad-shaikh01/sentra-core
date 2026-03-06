@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, GoneException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -40,9 +40,7 @@ export class AttachmentsService {
     messageId: string,
     attachmentIndex: number,
   ): Promise<{ url: string; filename: string }> {
-    const message = await this.messageModel
-      .findOne({ _id: messageId, organizationId })
-      .exec();
+    const message = await this.findMessageByIdOrGmailId(organizationId, messageId);
 
     if (!message) {
       throw new NotFoundException(`Message ${messageId} not found`);
@@ -69,7 +67,7 @@ export class AttachmentsService {
     }
 
     const identity = await this.identityModel
-      .findOne({ organizationId, isActive: true })
+      .findOne({ _id: message.identityId, organizationId, isActive: true })
       .exec();
 
     if (!identity) {
@@ -130,5 +128,19 @@ export class AttachmentsService {
     }));
 
     return { s3Key, filename: file.originalname, size: file.size, mimeType: file.mimetype };
+  }
+
+  private async findMessageByIdOrGmailId(
+    organizationId: string,
+    messageId: string,
+  ): Promise<CommMessageDocument | null> {
+    const query = Types.ObjectId.isValid(messageId)
+      ? {
+          organizationId,
+          $or: [{ _id: new Types.ObjectId(messageId) }, { gmailMessageId: messageId }],
+        }
+      : { organizationId, gmailMessageId: messageId };
+
+    return this.messageModel.findOne(query).exec();
   }
 }

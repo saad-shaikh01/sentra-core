@@ -5,11 +5,13 @@ export class InitiateOAuthDto {
 }
 
 export class OAuthCallbackQueryDto {
+  @IsOptional()
   @IsString()
-  code: string;
+  code?: string;
 
+  @IsOptional()
   @IsString()
-  state: string;
+  state?: string;
 
   @IsOptional()
   @IsString()

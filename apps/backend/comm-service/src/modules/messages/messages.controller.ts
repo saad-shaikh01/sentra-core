@@ -1,8 +1,10 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   Param,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -12,11 +14,29 @@ import { wrapSingle } from '../../common/response/comm-api-response';
 import { MessagesService } from './messages.service';
 import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 import { SendMessageDto, ReplyDto, ForwardDto } from './dto/send-message.dto';
+import { ListMessagesQueryDto } from './dto/list-messages.dto';
 
 @UseGuards(OrgContextGuard)
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly service: MessagesService) {}
+
+  @Get()
+  async listMessages(
+    @GetOrgContext() ctx: OrgContext,
+    @Query() query: ListMessagesQueryDto,
+  ) {
+    return this.service.listMessages(ctx.organizationId, query);
+  }
+
+  @Get(':id')
+  async getMessage(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const message = await this.service.getMessage(ctx.organizationId, id);
+    return wrapSingle(message);
+  }
 
   @Post('send')
   @UseInterceptors(IdempotencyInterceptor)
@@ -29,6 +49,7 @@ export class MessagesController {
   }
 
   @Post(':id/reply')
+  @UseInterceptors(IdempotencyInterceptor)
   async replyToMessage(
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
@@ -39,6 +60,7 @@ export class MessagesController {
   }
 
   @Post(':id/forward')
+  @UseInterceptors(IdempotencyInterceptor)
   async forwardMessage(
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
