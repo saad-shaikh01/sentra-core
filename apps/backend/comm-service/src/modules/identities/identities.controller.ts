@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Delete,
   Param,
   Query,
@@ -26,9 +27,12 @@ export class IdentitiesController {
    */
   @UseGuards(OrgContextGuard)
   @Get('oauth/initiate')
-  initiateOAuth(@GetOrgContext() ctx: OrgContext) {
-    const url = this.service.initiateOAuth(ctx.organizationId, ctx.userId);
-    return wrapSingle({ authUrl: url });
+  initiateOAuth(
+    @GetOrgContext() ctx: OrgContext,
+    @Query('brandId') brandId?: string,
+  ) {
+    const url = this.service.initiateOAuth(ctx.organizationId, ctx.userId, brandId);
+    return wrapSingle({ redirectUrl: url });
   }
 
   /**
@@ -55,6 +59,17 @@ export class IdentitiesController {
     return { data: identities };
   }
 
+  // Must be declared before :id to avoid route conflict
+  @UseGuards(OrgContextGuard)
+  @Get(':id/labels')
+  async getLabels(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const labels = await this.service.getLabels(ctx.organizationId, id);
+    return { data: labels };
+  }
+
   @UseGuards(OrgContextGuard)
   @Get(':id')
   async getIdentity(
@@ -63,6 +78,17 @@ export class IdentitiesController {
   ) {
     const identity = await this.service.getIdentity(ctx.organizationId, id);
     return wrapSingle(identity);
+  }
+
+  @UseGuards(OrgContextGuard)
+  @Patch(':id/default')
+  @HttpCode(HttpStatus.OK)
+  async setDefault(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    await this.service.setDefault(ctx.organizationId, id);
+    return COMM_MUTATION_OK;
   }
 
   @UseGuards(OrgContextGuard)

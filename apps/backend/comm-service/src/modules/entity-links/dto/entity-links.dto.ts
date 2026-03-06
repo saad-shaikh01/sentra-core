@@ -12,6 +12,17 @@ export class CreateEntityLinkDto {
   entityId: string;
 }
 
+export class DeleteEntityLinkByEntityDto {
+  @IsString()
+  threadId: string;
+
+  @IsString()
+  entityType: string;
+
+  @IsString()
+  entityId: string;
+}
+
 export class ListEntityLinksQueryDto extends CommPaginationQueryDto {
   @IsString()
   entityType: string;

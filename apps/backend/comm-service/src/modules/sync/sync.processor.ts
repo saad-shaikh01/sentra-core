@@ -20,6 +20,7 @@ import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.sch
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { SyncService, COMM_SYNC_QUEUE } from './sync.service';
 import { GmailApiService } from './gmail-api.service';
+import { MetricsService } from '../../common/metrics/metrics.service';
 
 @Processor(COMM_SYNC_QUEUE)
 export class SyncProcessor extends WorkerHost {
@@ -34,23 +35,32 @@ export class SyncProcessor extends WorkerHost {
     private readonly threadModel: Model<CommThreadDocument>,
     private readonly syncService: SyncService,
     private readonly gmailApi: GmailApiService,
+    private readonly metrics: MetricsService,
   ) {
     super();
   }
 
   async process(job: Job): Promise<void> {
-    switch (job.name) {
-      case 'initial-sync':
-        await this.handleInitialSync(job);
-        break;
-      case 'incremental-sync':
-        await this.handleIncrementalSync(job);
-        break;
-      case 'process-message':
-        await this.handleProcessMessage(job);
-        break;
-      default:
-        this.logger.warn(`Unknown job name: ${job.name}`);
+    const start = Date.now();
+    try {
+      switch (job.name) {
+        case 'initial-sync':
+          await this.handleInitialSync(job);
+          break;
+        case 'incremental-sync':
+          await this.handleIncrementalSync(job);
+          break;
+        case 'process-message':
+          await this.handleProcessMessage(job);
+          break;
+        default:
+          this.logger.warn(`Unknown job name: ${job.name}`);
+      }
+    } catch (err) {
+      this.metrics.incrementSyncError(job.name);
+      throw err;
+    } finally {
+      this.metrics.recordSyncDuration(job.name, (Date.now() - start) / 1000);
     }
   }
 
@@ -94,6 +104,7 @@ export class SyncProcessor extends WorkerHost {
     if (!identity) return;
 
     await this.syncService.processMessage(identity, job.data.messageId);
+    this.metrics.incrementMessagesProcessed(job.data.identityId);
   }
 
   /**

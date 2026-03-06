@@ -19,4 +19,5 @@ export class OAuthCallbackQueryDto {
 export interface OAuthStatePayload {
   organizationId: string;
   userId: string;
+  brandId?: string;
 }

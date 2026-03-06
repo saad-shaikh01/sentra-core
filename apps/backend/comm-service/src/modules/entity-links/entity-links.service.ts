@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CommEntityLink, CommEntityLinkDocument } from '../../schemas/comm-entity-link.schema';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { InternalContactsClient } from '../../common/http/internal-contacts.client';
 import { CreateEntityLinkDto } from './dto/entity-links.dto';
+import { CommGateway } from '../gateway/comm.gateway';
 
 @Injectable()
 export class EntityLinksService {
@@ -14,6 +15,7 @@ export class EntityLinksService {
     @InjectModel(CommThread.name)
     private readonly threadModel: Model<CommThreadDocument>,
     private readonly contactsClient: InternalContactsClient,
+    @Optional() private readonly gateway?: CommGateway,
   ) {}
 
   async createLink(
@@ -42,7 +44,7 @@ export class EntityLinksService {
     });
 
     // Sync to thread's entityLinks array
-    await this.threadModel.findOneAndUpdate(
+    const thread = await this.threadModel.findOneAndUpdate(
       { organizationId, gmailThreadId: dto.gmailThreadId },
       {
         $addToSet: {
@@ -54,7 +56,24 @@ export class EntityLinksService {
           },
         },
       },
+      { new: true },
     );
+
+    // Emit realtime events
+    if (thread) {
+      this.gateway?.emitToOrg(organizationId, 'link:created', {
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        threadId: String(thread._id),
+        gmailThreadId: dto.gmailThreadId,
+      });
+      this.gateway?.emitToEntity(dto.entityType, dto.entityId, 'link:created', {
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        threadId: String(thread._id),
+        gmailThreadId: dto.gmailThreadId,
+      });
+    }
 
     return link;
   }
@@ -70,7 +89,7 @@ export class EntityLinksService {
     }
 
     // Remove from thread's entityLinks array
-    await this.threadModel.findOneAndUpdate(
+    const thread = await this.threadModel.findOneAndUpdate(
       { organizationId, gmailThreadId: link.gmailThreadId },
       {
         $pull: {
@@ -80,7 +99,66 @@ export class EntityLinksService {
           },
         },
       },
+      { new: false },
     );
+
+    // Emit realtime events
+    if (thread) {
+      this.gateway?.emitToOrg(organizationId, 'link:removed', {
+        entityType: link.entityType,
+        entityId: link.entityId,
+        threadId: String(thread._id),
+        gmailThreadId: link.gmailThreadId,
+      });
+      this.gateway?.emitToEntity(link.entityType, link.entityId, 'link:removed', {
+        entityType: link.entityType,
+        entityId: link.entityId,
+        threadId: String(thread._id),
+        gmailThreadId: link.gmailThreadId,
+      });
+    }
+  }
+
+  async deleteLinkByEntity(
+    organizationId: string,
+    threadId: string,
+    entityType: string,
+    entityId: string,
+  ): Promise<void> {
+    // Resolve the MongoDB thread doc to get gmailThreadId
+    const thread = await this.threadModel.findOne({ _id: threadId, organizationId }).exec();
+    if (!thread) {
+      throw new NotFoundException(`Thread ${threadId} not found`);
+    }
+
+    const link = await this.entityLinkModel.findOneAndDelete({
+      organizationId,
+      gmailThreadId: thread.gmailThreadId,
+      entityType,
+      entityId,
+    });
+
+    if (!link) {
+      throw new NotFoundException(`Entity link not found`);
+    }
+
+    await this.threadModel.findOneAndUpdate(
+      { organizationId, gmailThreadId: thread.gmailThreadId },
+      { $pull: { entityLinks: { entityType, entityId } } },
+    );
+
+    this.gateway?.emitToOrg(organizationId, 'link:removed', {
+      entityType,
+      entityId,
+      threadId,
+      gmailThreadId: thread.gmailThreadId,
+    });
+    this.gateway?.emitToEntity(entityType, entityId, 'link:removed', {
+      entityType,
+      entityId,
+      threadId,
+      gmailThreadId: thread.gmailThreadId,
+    });
   }
 
   async listLinks(

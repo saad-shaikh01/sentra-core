@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar';
 import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { ConfirmModal, Toaster } from '@/components/shared';
+import { CommEventsWatcher } from '@/components/shared/comm/comm-events-watcher';
 import { UserRole } from '@sentra-core/types';
 
 export default function DashboardLayout({
@@ -32,6 +33,7 @@ export default function DashboardLayout({
         </div>
         <ConfirmModal />
         <Toaster />
+        <CommEventsWatcher />
       </SpotlightBackground>
     </ProtectedRoute>
   );

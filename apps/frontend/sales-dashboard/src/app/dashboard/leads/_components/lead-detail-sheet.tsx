@@ -11,8 +11,9 @@ import {
 import { useMembers } from '@/hooks/use-organization';
 import { ILead, LeadStatus, LeadActivityType, LEAD_STATUS_TRANSITIONS } from '@sentra-core/types';
 import { ConvertLeadModal } from './convert-lead-modal';
-import { MessageSquare, RefreshCw, UserCheck, GitBranch, AlertCircle } from 'lucide-react';
+import { MessageSquare, RefreshCw, UserCheck, GitBranch, AlertCircle, Mail } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
+import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 
 interface LeadDetailSheetProps {
   leadId: string | null;
@@ -37,6 +38,7 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
 
   const [note, setNote] = useState('');
   const [convertOpen, setConvertOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'emails'>('details');
 
   const allowedTransitions = lead ? LEAD_STATUS_TRANSITIONS[lead.status] : [];
 
@@ -65,6 +67,30 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
           </div>
         ) : lead ? (
           <>
+            {/* Tab switcher */}
+            <div className="flex border-b border-white/10 -mt-2 mb-2">
+              {(['details', 'emails'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-all border-b-2 capitalize ${
+                    activeTab === tab
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {tab === 'emails' && <Mail className="h-3.5 w-3.5" />}
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'emails' && leadId ? (
+              <EntityEmailTimeline entityType="lead" entityId={leadId} />
+            ) : null}
+
+            {activeTab === 'details' && (
+              <>
             {/* Info */}
             <div className="grid grid-cols-2 gap-3">
               <InfoCard label="Status" value={<StatusBadge status={lead.status} />} />
@@ -166,6 +192,8 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
                 </Button>
               </div>
             </div>
+              </>
+            )}
           </>
         ) : null}
       </DetailSheet>

@@ -20,6 +20,7 @@ import {
   FileBox,
   ClipboardCheck,
   Bell,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -29,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { RoleGuard } from '@/components/role-guard';
 import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
 import { UserRole } from '@sentra-core/types';
+import { COMM_ENABLED } from '@/lib/feature-flags';
 
 const navigation = [
   { name: 'Dashboard',   href: '/dashboard',             icon: LayoutDashboard },
@@ -55,6 +57,7 @@ const settingsNavigation = [
     icon: Users,
     roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[],
   },
+  ...(COMM_ENABLED ? [{ name: 'Gmail', href: '/dashboard/settings/gmail', icon: Mail }] : []),
 ];
 
 export function Sidebar() {

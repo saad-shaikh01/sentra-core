@@ -19,6 +19,8 @@ import {
   ListTodo,
   FileBox,
   ClipboardCheck,
+  Inbox,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -28,9 +30,11 @@ import { Button } from '@/components/ui/button';
 import { RoleGuard } from '@/components/role-guard';
 import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
 import { UserRole } from '@sentra-core/types';
+import { COMM_ENABLED } from '@/lib/feature-flags';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  ...(COMM_ENABLED ? [{ name: 'Inbox', href: '/dashboard/inbox', icon: Inbox }] : []),
   { name: 'Brands',    href: '/dashboard/brands',   icon: Layers },
   { name: 'Leads',     href: '/dashboard/leads',    icon: Users },
   { name: 'Clients',   href: '/dashboard/clients',  icon: Building2 },
@@ -52,6 +56,7 @@ const settingsNavigation = [
     icon: Users,
     roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[],
   },
+  ...(COMM_ENABLED ? [{ name: 'Gmail', href: '/dashboard/settings/gmail', icon: Mail }] : []),
 ];
 
 export function Sidebar() {
@@ -60,6 +65,7 @@ export function Sidebar() {
   const logoutMutation = useLogout();
   const sidebarOpen = useSidebarOpen();
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const commUnreadCount = useUIStore((state) => state.commUnreadCount);
 
   const getRoleBadgeVariant = (role: string) => {
     const variants: Record<string, any> = {
@@ -152,9 +158,15 @@ export function Sidebar() {
                     initial={{ opacity: 0, x: -5 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -5 }}
+                    className="flex-1"
                   >
                     {item.name}
                   </motion.span>
+                )}
+                {item.href === '/dashboard/inbox' && commUnreadCount > 0 && (
+                  <span className="ml-auto shrink-0 h-5 min-w-5 px-1 rounded-full bg-primary text-[10px] font-bold text-white flex items-center justify-center leading-none">
+                    {commUnreadCount > 99 ? '99+' : commUnreadCount}
+                  </span>
                 )}
                 {isActive && (
                   <motion.div

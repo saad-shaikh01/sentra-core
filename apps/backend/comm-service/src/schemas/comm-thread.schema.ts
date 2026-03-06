@@ -44,6 +44,9 @@ export class CommThread {
   @Prop({ default: false })
   hasUnread: boolean;
 
+  @Prop({ default: false })
+  isArchived: boolean;
+
   @Prop()
   snippet?: string;
 }
@@ -52,4 +55,7 @@ export const CommThreadSchema = SchemaFactory.createForClass(CommThread);
 
 CommThreadSchema.index({ organizationId: 1, gmailThreadId: 1 }, { unique: true });
 CommThreadSchema.index({ organizationId: 1, lastMessageAt: -1 });
+CommThreadSchema.index({ organizationId: 1, isArchived: 1, lastMessageAt: -1 });
+CommThreadSchema.index({ organizationId: 1, identityId: 1, lastMessageAt: -1 });
+CommThreadSchema.index({ organizationId: 1, hasUnread: 1, lastMessageAt: -1 });
 CommThreadSchema.index({ organizationId: 1, 'entityLinks.entityType': 1, 'entityLinks.entityId': 1 });

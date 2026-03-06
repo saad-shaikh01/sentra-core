@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
 import { IdentitiesService } from '../identities/identities.service';
 import { TokenEncryptionService } from '../../common/crypto/token-encryption.service';
+import { MetricsService } from '../../common/metrics/metrics.service';
 
 @Injectable()
 export class GmailApiService {
@@ -25,6 +26,7 @@ export class GmailApiService {
     private readonly identitiesService: IdentitiesService,
     private readonly encryption: TokenEncryptionService,
     private readonly config: ConfigService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async getAuthenticatedClient(identity: CommIdentityDocument): Promise<OAuth2Client> {
@@ -57,8 +59,10 @@ export class GmailApiService {
               tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
             },
           });
+          this.metrics.incrementTokenRefresh(String(identity._id), 'success');
         } catch (err) {
           this.logger.error(`Failed to persist refreshed token for identity ${identity._id}: ${err}`);
+          this.metrics.incrementTokenRefresh(String(identity._id), 'error');
         }
       }
     });
@@ -140,6 +144,36 @@ export class GmailApiService {
   async getCurrentHistoryId(gmail: gmail_v1.Gmail): Promise<string> {
     const profile = await gmail.users.getProfile({ userId: 'me' });
     return profile.data.historyId!;
+  }
+
+  /**
+   * Register or renew a Gmail push watch for an identity.
+   * Must be renewed before ~7 days (Google max) — we renew every 6 days.
+   */
+  async registerGmailWatch(identity: CommIdentityDocument): Promise<{ expiration: string; historyId: string }> {
+    const topicName = this.config.get<string>('GOOGLE_PUBSUB_TOPIC');
+    if (!topicName) {
+      this.logger.warn('GOOGLE_PUBSUB_TOPIC not set — skipping Gmail watch registration');
+      return { expiration: '', historyId: '' };
+    }
+
+    const gmail = await this.getGmailClient(identity);
+    const resp = await gmail.users.watch({
+      userId: 'me',
+      requestBody: {
+        topicName,
+        labelIds: ['INBOX'],
+      },
+    });
+
+    this.logger.log(
+      `Gmail watch registered for identity ${identity._id}: expires ${resp.data.expiration}`,
+    );
+
+    return {
+      expiration: resp.data.expiration ?? '',
+      historyId: resp.data.historyId ?? '',
+    };
   }
 
   /**

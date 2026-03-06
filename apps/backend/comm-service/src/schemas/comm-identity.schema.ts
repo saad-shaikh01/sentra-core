@@ -14,6 +14,8 @@ export class SyncState {
   lastSyncAt?: Date;
   initialSyncDone: boolean;
   fullBackfillDone: boolean;
+  status: 'active' | 'error' | 'paused';
+  lastError?: string;
 }
 
 @Schema({ collection: 'comm_identities', timestamps: true })
@@ -43,7 +45,13 @@ export class CommIdentity {
   @Prop({ type: [Object], default: [] })
   sendAsAliases: SendAsAlias[];
 
-  @Prop({ type: Object, default: { initialSyncDone: false, fullBackfillDone: false } })
+  @Prop()
+  brandId?: string;
+
+  @Prop({ default: false })
+  isDefault: boolean;
+
+  @Prop({ type: Object, default: { initialSyncDone: false, fullBackfillDone: false, status: 'active' } })
   syncState: SyncState;
 
   @Prop({ default: true })

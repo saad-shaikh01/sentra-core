@@ -1,9 +1,11 @@
 'use client';
 
 import { DetailSheet, StatusBadge } from '@/components/shared';
+import { useState } from 'react';
 import { useClient } from '@/hooks/use-clients';
 import { IClient, ISale } from '@sentra-core/types';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Mail } from 'lucide-react';
+import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 
 interface ClientDetailSheetProps {
   clientId: string | null;
@@ -12,6 +14,7 @@ interface ClientDetailSheetProps {
 
 export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps) {
   const { data: client, isLoading, isError } = useClient(clientId ?? '');
+  const [activeTab, setActiveTab] = useState<'details' | 'emails'>('details');
 
   return (
     <DetailSheet
@@ -33,6 +36,28 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
         </div>
       ) : client ? (
         <>
+          {/* Tab switcher */}
+          <div className="flex border-b border-white/10 -mt-2 mb-2">
+            {(['details', 'emails'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-all border-b-2 capitalize ${
+                  activeTab === tab
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab === 'emails' && <Mail className="h-3.5 w-3.5" />}
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'emails' && clientId ? (
+            <EntityEmailTimeline entityType="client" entityId={clientId} />
+          ) : activeTab === 'details' && (
+          <>
           <div className="grid grid-cols-2 gap-4">
             <InfoCard label="Company" value={client.companyName} />
             <InfoCard label="Contact" value={client.contactName ?? '—'} />
@@ -66,6 +91,8 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
               </div>
             </div>
           ) : null}
+          </>
+          )}
         </>
       ) : null}
     </DetailSheet>

@@ -9,10 +9,11 @@ import {
 
 const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:3001/api';
 const PM_API_URL   = process.env.NEXT_PUBLIC_PM_API_URL   || 'http://localhost:3003/api/pm';
+const COMM_API_URL = process.env.NEXT_PUBLIC_COMM_API_URL || 'http://localhost:3002/api/comm';
 
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
-  service?: 'core' | 'pm';
+  service?: 'core' | 'pm' | 'comm';
 }
 
 export type AppBundleInput = {
@@ -137,10 +138,12 @@ export interface PmActivityLog {
 class ApiClient {
   private coreUrl: string;
   private pmUrl: string;
+  private commUrl: string;
 
-  constructor(coreUrl: string, pmUrl: string) {
+  constructor(coreUrl: string, pmUrl: string, commUrl: string = COMM_API_URL) {
     this.coreUrl = coreUrl;
     this.pmUrl   = pmUrl;
+    this.commUrl = commUrl;
   }
 
   private unwrapData<T>(payload: PmSingleResponse<T> | T): T {
@@ -201,7 +204,7 @@ class ApiClient {
 
   async fetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
     const { skipAuth = false, service = 'core', ...fetchOptions } = options;
-    const baseUrl = service === 'pm' ? this.pmUrl : this.coreUrl;
+    const baseUrl = service === 'pm' ? this.pmUrl : service === 'comm' ? this.commUrl : this.coreUrl;
     
     // Normalize endpoint: ensure it doesn't double-prefix /pm
     let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -840,6 +843,108 @@ class ApiClient {
       service: 'pm',
     });
   }
+
+  // Comm — Identities
+  async listIdentities() {
+    return this.fetch<any>('/identities', { service: 'comm' });
+  }
+
+  async initiateOAuth(brandId?: string) {
+    const qs = brandId ? `?brandId=${encodeURIComponent(brandId)}` : '';
+    return this.fetch<{ redirectUrl: string }>(`/identities/oauth/initiate${qs}`, { service: 'comm' });
+  }
+
+  async disconnectIdentity(id: string) {
+    return this.fetch<void>(`/identities/${id}`, { method: 'DELETE', service: 'comm' });
+  }
+
+  async setDefaultIdentity(id: string) {
+    return this.fetch<void>(`/identities/${id}/default`, { method: 'PATCH', service: 'comm' });
+  }
+
+  // Comm — Threads
+  async listCommThreads(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/threads${qs}`, { service: 'comm' });
+  }
+
+  async getCommThread(id: string) {
+    return this.fetch<any>(`/threads/${id}`, { service: 'comm' });
+  }
+
+  async archiveCommThread(id: string) {
+    return this.fetch<void>(`/threads/${id}/archive`, { method: 'PATCH', service: 'comm' });
+  }
+
+  async markCommThreadRead(id: string) {
+    return this.fetch<void>(`/threads/${id}/read`, { method: 'PATCH', service: 'comm' });
+  }
+
+  // Comm — Messages
+  async listCommMessages(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/messages${qs}`, { service: 'comm' });
+  }
+
+  async getCommMessage(id: string) {
+    return this.fetch<any>(`/messages/${id}`, { service: 'comm' });
+  }
+
+  async sendCommMessage(dto: Record<string, unknown>, idempotencyKey: string) {
+    return this.fetch<any>('/messages/send', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      headers: { 'Idempotency-Key': idempotencyKey },
+      service: 'comm',
+    });
+  }
+
+  async replyToCommMessage(id: string, dto: Record<string, unknown>, idempotencyKey: string) {
+    return this.fetch<any>(`/messages/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      headers: { 'Idempotency-Key': idempotencyKey },
+      service: 'comm',
+    });
+  }
+
+  async forwardCommMessage(id: string, dto: Record<string, unknown>, idempotencyKey: string) {
+    return this.fetch<any>(`/messages/${id}/forward`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      headers: { 'Idempotency-Key': idempotencyKey },
+      service: 'comm',
+    });
+  }
+
+  // Comm — Timeline
+  async getEntityTimeline(entityType: string, entityId: string, params?: Record<string, unknown>) {
+    const allParams = { entityType, entityId, ...(params ?? {}) };
+    const qs = '?' + new URLSearchParams(allParams as Record<string, string>).toString();
+    return this.fetch<any>(`/threads${qs}`, { service: 'comm' });
+  }
+
+  // Comm — Entity Links
+  async linkCommThread(threadId: string, entityType: string, entityId: string) {
+    return this.fetch<void>('/entity-links', {
+      method: 'POST',
+      body: JSON.stringify({ threadId, entityType, entityId }),
+      service: 'comm',
+    });
+  }
+
+  async unlinkCommThread(threadId: string, entityType: string, entityId: string) {
+    return this.fetch<void>('/entity-links/by-entity', {
+      method: 'DELETE',
+      body: JSON.stringify({ threadId, entityType, entityId }),
+      service: 'comm',
+    });
+  }
+
+  // Comm — Attachments
+  async getCommAttachmentUrl(messageId: string, attachmentIndex: number) {
+    return this.fetch<{ url: string; filename: string }>(`/messages/${messageId}/attachments/${attachmentIndex}`, { service: 'comm' });
+  }
 }
 
-export const api = new ApiClient(CORE_API_URL, PM_API_URL);
+export const api = new ApiClient(CORE_API_URL, PM_API_URL, COMM_API_URL);

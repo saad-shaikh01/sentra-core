@@ -18,6 +18,7 @@ import {
   List,
   History,
   Plus,
+  Mail,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,8 +33,11 @@ import { toast } from '@/hooks/use-toast';
 import { StageCard } from './_components/stage-card';
 import { ProjectKanbanBoard } from './_components/project-kanban-board';
 import { TaskDetailDrawer } from '../../my-tasks/_components/task-detail-drawer';
+import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
+import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
+import { useProjectClientEmail } from '@/hooks/use-comm';
 
-type SideTab = 'threads' | 'files' | 'approvals' | 'activity';
+type SideTab = 'threads' | 'files' | 'approvals' | 'activity' | 'emails';
 type WorkflowView = 'list' | 'kanban';
 
 export default function ProjectDetailPage() {
@@ -49,6 +53,8 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<SideTab>('threads');
   const [workflowView, setWorkflowView] = useState<WorkflowView>('list');
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const { data: clientEmail } = useProjectClientEmail(id);
   const [approvalTargetType, setApprovalTargetType] = useState<'CLIENT' | 'INTERNAL_APPROVER'>('CLIENT');
   const [approvalTargetEmail, setApprovalTargetEmail] = useState('');
   const [approvalTargetUserId, setApprovalTargetUserId] = useState('');
@@ -149,6 +155,16 @@ export default function ProjectDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {project.clientId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white/5 border-white/10"
+              onClick={() => setComposeOpen(true)}
+            >
+              <Mail className="h-4 w-4 mr-2" /> Email Client
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -241,7 +257,7 @@ export default function ProjectDetailPage() {
 
         <div className="space-y-6">
           <div className="flex items-center gap-2 border-b border-white/10 pb-px">
-            {(['threads', 'files', 'approvals', 'activity'] as SideTab[]).map((tab) => (
+            {(['threads', 'emails', 'files', 'approvals', 'activity'] as SideTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -251,6 +267,7 @@ export default function ProjectDetailPage() {
               >
                 <div className="flex items-center gap-2">
                   {tab === 'threads' && <MessageSquare className="h-4 w-4" />}
+                  {tab === 'emails' && <Mail className="h-4 w-4" />}
                   {tab === 'files' && <FileIcon className="h-4 w-4" />}
                   {tab === 'approvals' && <ShieldCheck className="h-4 w-4" />}
                   {tab === 'activity' && <History className="h-4 w-4" />}
@@ -263,6 +280,23 @@ export default function ProjectDetailPage() {
           <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden shadow-xl min-h-[400px]">
             {activeTab === 'threads' && (
               <ThreadPane projectId={id} scopeType="PROJECT" scopeId={id} className="border-none rounded-none" />
+            )}
+
+            {activeTab === 'emails' && (
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Project Emails</h3>
+                  {project.clientId && (
+                    <button
+                      onClick={() => setComposeOpen(true)}
+                      className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <Mail className="h-3.5 w-3.5" /> Email Client
+                    </button>
+                  )}
+                </div>
+                <EntityEmailTimeline entityType="project" entityId={id} />
+              </div>
             )}
 
             {activeTab === 'files' && (
@@ -393,6 +427,15 @@ export default function ProjectDetailPage() {
       </div>
 
       <TaskDetailDrawer taskId={detailTaskId} onClose={() => setDetailTaskId(null)} />
+
+      <ComposeDrawer
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        defaultTo={clientEmail ?? ''}
+        defaultEntityType="project"
+        defaultEntityId={id}
+        defaultSubject={`[Project: ${project.name}] `}
+      />
     </div>
   );
 }

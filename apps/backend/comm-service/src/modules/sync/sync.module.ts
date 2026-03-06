@@ -7,6 +7,9 @@ import { SyncService, COMM_SYNC_QUEUE, COMM_ATTACHMENT_QUEUE } from './sync.serv
 import { SyncProcessor } from './sync.processor';
 import { AttachmentProcessor } from './attachment.processor';
 import { SyncController } from './sync.controller';
+import { PubsubController } from './pubsub.controller';
+import { WatchRenewalService } from './watch-renewal.service';
+import { WatchdogService } from './watchdog.service';
 
 @Module({
   imports: [
@@ -17,8 +20,15 @@ import { SyncController } from './sync.controller';
       { name: COMM_ATTACHMENT_QUEUE },
     ),
   ],
-  controllers: [SyncController],
-  providers: [GmailApiService, SyncService, SyncProcessor, AttachmentProcessor],
+  controllers: [SyncController, PubsubController],
+  providers: [
+    GmailApiService,
+    SyncService,
+    SyncProcessor,
+    AttachmentProcessor,
+    WatchRenewalService,
+    WatchdogService,
+  ],
   exports: [SyncService, GmailApiService],
 })
 export class SyncModule {}

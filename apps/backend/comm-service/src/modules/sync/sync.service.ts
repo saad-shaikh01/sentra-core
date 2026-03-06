@@ -9,7 +9,7 @@
  *   Incremental: Repeatable job every 2min using history.list
  */
 
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -20,6 +20,8 @@ import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.sch
 import { CommSyncJob, CommSyncJobDocument } from '../../schemas/comm-sync-job.schema';
 import { GmailApiService } from './gmail-api.service';
 import { gmail_v1 } from 'googleapis';
+import { CommGateway } from '../gateway/comm.gateway';
+import { WatchRenewalService } from './watch-renewal.service';
 
 export const COMM_SYNC_QUEUE = 'comm-sync';
 export const COMM_ATTACHMENT_QUEUE = 'comm-attachment';
@@ -43,6 +45,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     @InjectQueue(COMM_ATTACHMENT_QUEUE)
     private readonly attachmentQueue: Queue,
     private readonly gmailApi: GmailApiService,
+    @Optional() private readonly gateway?: CommGateway,
+    @Optional() private readonly watchRenewal?: WatchRenewalService,
   ) {}
 
   onModuleInit() {
@@ -67,7 +71,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
     );
 
-    // Persist sync job record
+    // Persist sync job record and register Gmail watch
     const identity = await this.identityModel.findById(identityId).exec();
     if (identity) {
       await this.syncJobModel.create({
@@ -77,6 +81,11 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         status: 'pending',
         bullJobId: String(bullJob.id),
       });
+
+      // Register Gmail push watch for this identity (non-blocking, failures tolerated)
+      if (this.watchRenewal) {
+        void this.watchRenewal.registerWatchForIdentity(identity);
+      }
     }
 
     this.logger.log(`Enqueued initial sync for identity ${identityId}`);
@@ -157,12 +166,17 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     let pageToken: string | undefined;
     let processed = 0;
 
+    // Count total messages first for progress reporting
+    let totalEstimate = 0;
+
     do {
       const { messages, nextPageToken } = await this.gmailApi.listMessages(gmail, {
         after,
         pageToken,
         maxResults: 100,
       });
+
+      totalEstimate += messages.length;
 
       for (const msg of messages) {
         if (msg.id) {
@@ -177,6 +191,15 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
             },
           );
           processed++;
+
+          // Emit progress every 50 messages
+          if (processed % 50 === 0) {
+            this.gateway?.emitToOrg(identity.organizationId, 'sync:progress', {
+              identityId: String(identity._id),
+              processed,
+              total: totalEstimate,
+            });
+          }
         }
       }
 
@@ -259,6 +282,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     const raw = await this.gmailApi.getMessage(gmail, gmailMessageId);
     const parsed = this.parseGmailMessage(raw, identity);
 
+    const isNew = !(await this.messageModel.exists({ organizationId: identity.organizationId, gmailMessageId }));
+
     await this.messageModel.findOneAndUpdate(
       { organizationId: identity.organizationId, gmailMessageId },
       { $setOnInsert: parsed },
@@ -267,6 +292,21 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
 
     // Upsert thread
     await this.upsertThread(identity, raw, parsed);
+
+    // Emit realtime event for newly inbound messages
+    if (isNew && !parsed.isSentByIdentity) {
+      this.gateway?.emitToOrg(identity.organizationId, 'message:new', {
+        message: {
+          gmailMessageId,
+          gmailThreadId: parsed.gmailThreadId,
+          from: parsed.from,
+          subject: parsed.subject,
+          snippet: parsed.bodyText?.slice(0, 200) ?? '',
+          sentAt: parsed.sentAt,
+          identityId: parsed.identityId,
+        },
+      });
+    }
 
     // Queue attachment archival if S3 is configured
     const s3Bucket = process.env.S3_BUCKET;

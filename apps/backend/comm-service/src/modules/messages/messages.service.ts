@@ -9,6 +9,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -21,6 +22,8 @@ import { IdentitiesService } from '../identities/identities.service';
 import { GmailApiService } from '../sync/gmail-api.service';
 import { AuditService } from '../audit/audit.service';
 import { SendMessageDto, ReplyDto, ForwardDto } from './dto/send-message.dto';
+import { CommGateway } from '../gateway/comm.gateway';
+import { MetricsService } from '../../common/metrics/metrics.service';
 
 @Injectable()
 export class MessagesService {
@@ -36,6 +39,8 @@ export class MessagesService {
     private readonly identitiesService: IdentitiesService,
     private readonly gmailApi: GmailApiService,
     private readonly audit: AuditService,
+    @Optional() private readonly gateway?: CommGateway,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async sendMessage(
@@ -98,6 +103,18 @@ export class MessagesService {
       entityType: 'message',
       entityId: gmailMessageId,
       metadata: { to: dto.to, subject: dto.subject },
+    });
+
+    this.metrics?.incrementMessagesSent(dto.identityId);
+    this.gateway?.emitToOrg(organizationId, 'message:sent', {
+      message: {
+        gmailMessageId,
+        gmailThreadId,
+        from: { email: fromAddress },
+        to: dto.to,
+        subject: dto.subject,
+        identityId: dto.identityId,
+      },
     });
 
     return message!;
@@ -175,6 +192,16 @@ export class MessagesService {
       metadata: { originalMessageId: messageId },
     });
 
+    this.gateway?.emitToOrg(organizationId, 'message:sent', {
+      message: {
+        gmailMessageId,
+        gmailThreadId: original.gmailThreadId,
+        from: { email: fromAddress },
+        subject: `Re: ${original.subject ?? ''}`,
+        identityId: dto.identityId,
+      },
+    });
+
     return message!;
   }
 
@@ -249,6 +276,17 @@ export class MessagesService {
       entityType: 'message',
       entityId: gmailMessageId,
       metadata: { originalMessageId: messageId, to: dto.to },
+    });
+
+    this.gateway?.emitToOrg(organizationId, 'message:sent', {
+      message: {
+        gmailMessageId,
+        gmailThreadId,
+        from: { email: fromAddress },
+        to: dto.to,
+        subject: `Fwd: ${original.subject ?? ''}`,
+        identityId: dto.identityId,
+      },
     });
 
     return message!;

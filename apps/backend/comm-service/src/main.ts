@@ -13,10 +13,22 @@
 
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app/app.module';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // WebSocket adapter for /comm namespace
+  app.useWebSocketAdapter(new IoAdapter(app));
+
+  // COMM-BE-022: Standardized error responses
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  // COMM-BE-021: Structured request logging
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   app.useGlobalPipes(
     new ValidationPipe({

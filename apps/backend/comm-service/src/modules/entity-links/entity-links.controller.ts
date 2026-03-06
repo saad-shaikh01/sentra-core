@@ -14,7 +14,7 @@ import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-response';
 import { EntityLinksService } from './entity-links.service';
-import { CreateEntityLinkDto, ListEntityLinksQueryDto } from './dto/entity-links.dto';
+import { CreateEntityLinkDto, DeleteEntityLinkByEntityDto, ListEntityLinksQueryDto } from './dto/entity-links.dto';
 
 @UseGuards(OrgContextGuard)
 @Controller('entity-links')
@@ -28,6 +28,17 @@ export class EntityLinksController {
   ) {
     const link = await this.service.createLink(ctx.organizationId, ctx.userId, dto);
     return wrapSingle(link);
+  }
+
+  // Must be declared before :linkId to avoid route conflict
+  @Delete('by-entity')
+  @HttpCode(HttpStatus.OK)
+  async deleteLinkByEntity(
+    @GetOrgContext() ctx: OrgContext,
+    @Body() dto: DeleteEntityLinkByEntityDto,
+  ) {
+    await this.service.deleteLinkByEntity(ctx.organizationId, dto.threadId, dto.entityType, dto.entityId);
+    return COMM_MUTATION_OK;
   }
 
   @Delete(':linkId')

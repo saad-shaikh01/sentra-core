@@ -16,31 +16,46 @@ export class ThreadsService {
   ) {}
 
   async listThreads(organizationId: string, query: ListThreadsQueryDto) {
-    const { page = 1, limit = 20, entityType, entityId, search } = query;
-    const filter: Record<string, any> = { organizationId };
+    const { page = 1, limit = 20, entityType, entityId, search, filter, identityId } = query;
+    const mongoFilter: Record<string, any> = { organizationId };
 
     if (entityType && entityId) {
-      filter['entityLinks.entityType'] = entityType;
-      filter['entityLinks.entityId'] = entityId;
+      mongoFilter['entityLinks.entityType'] = entityType;
+      mongoFilter['entityLinks.entityId'] = entityId;
+    }
+
+    if (identityId) {
+      mongoFilter.identityId = identityId;
     }
 
     if (search) {
-      filter['$or'] = [
+      mongoFilter['$or'] = [
         { subject: { $regex: search, $options: 'i' } },
         { snippet: { $regex: search, $options: 'i' } },
         { 'participants.email': { $regex: search, $options: 'i' } },
       ];
     }
 
+    // Apply filter tab
+    if (filter === 'unread') {
+      mongoFilter.hasUnread = true;
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'archived') {
+      mongoFilter.isArchived = true;
+    } else {
+      // 'all', 'sent', or undefined — exclude archived by default
+      mongoFilter.isArchived = { $ne: true };
+    }
+
     const { skip } = toMongoosePagination(page, limit);
     const [data, total] = await Promise.all([
       this.threadModel
-        .find(filter)
+        .find(mongoFilter)
         .sort({ lastMessageAt: -1 })
         .skip(skip)
         .limit(limit)
         .exec(),
-      this.threadModel.countDocuments(filter),
+      this.threadModel.countDocuments(mongoFilter),
     ]);
 
     return buildCommPaginationResponse(data, total, page, limit);
@@ -90,6 +105,16 @@ export class ThreadsService {
     ]);
 
     return buildCommPaginationResponse(data, total, page, limit);
+  }
+
+  async archiveThread(organizationId: string, threadId: string): Promise<void> {
+    const result = await this.threadModel.findOneAndUpdate(
+      { _id: threadId, organizationId },
+      { $set: { isArchived: true } },
+    );
+    if (!result) {
+      throw new NotFoundException(`Thread ${threadId} not found`);
+    }
   }
 
   async markThreadRead(organizationId: string, threadId: string): Promise<void> {

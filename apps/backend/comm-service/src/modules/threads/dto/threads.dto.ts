@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsIn } from 'class-validator';
 import { CommPaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class ListThreadsQueryDto extends CommPaginationQueryDto {
@@ -13,6 +13,18 @@ export class ListThreadsQueryDto extends CommPaginationQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsIn(['all', 'unread', 'sent', 'archived'])
+  filter?: 'all' | 'unread' | 'sent' | 'archived';
+
+  @IsOptional()
+  @IsString()
+  identityId?: string;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
 }
 
 export class ListMessagesQueryDto extends CommPaginationQueryDto {}

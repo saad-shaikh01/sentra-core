@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+export type CommConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
 interface UIState {
   sidebarOpen: boolean;
   inviteModalOpen: boolean;
@@ -9,6 +11,9 @@ interface UIState {
     description: string;
     onConfirm: () => void;
   } | null;
+  commConnectionStatus: CommConnectionStatus;
+  commSyncProgress: Record<string, { synced: number; total: number }>;
+  commIdentityErrors: Record<string, string>;
 }
 
 interface UIActions {
@@ -18,6 +23,11 @@ interface UIActions {
   closeInviteModal: () => void;
   openConfirmDialog: (data: UIState['confirmDialogData']) => void;
   closeConfirmDialog: () => void;
+  setCommConnectionStatus: (status: CommConnectionStatus) => void;
+  setCommSyncProgress: (identityId: string, synced: number, total: number) => void;
+  clearCommSyncProgress: (identityId: string) => void;
+  setCommIdentityError: (identityId: string, error: string) => void;
+  clearCommIdentityError: (identityId: string) => void;
 }
 
 export const useUIStore = create<UIState & UIActions>((set) => ({
@@ -26,6 +36,9 @@ export const useUIStore = create<UIState & UIActions>((set) => ({
   inviteModalOpen: false,
   confirmDialogOpen: false,
   confirmDialogData: null,
+  commConnectionStatus: 'disconnected',
+  commSyncProgress: {},
+  commIdentityErrors: {},
 
   // Actions
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -34,6 +47,23 @@ export const useUIStore = create<UIState & UIActions>((set) => ({
   closeInviteModal: () => set({ inviteModalOpen: false }),
   openConfirmDialog: (data) => set({ confirmDialogOpen: true, confirmDialogData: data }),
   closeConfirmDialog: () => set({ confirmDialogOpen: false, confirmDialogData: null }),
+  setCommConnectionStatus: (status) => set({ commConnectionStatus: status }),
+  setCommSyncProgress: (identityId, synced, total) =>
+    set((s) => ({ commSyncProgress: { ...s.commSyncProgress, [identityId]: { synced, total } } })),
+  clearCommSyncProgress: (identityId) =>
+    set((s) => {
+      const next = { ...s.commSyncProgress };
+      delete next[identityId];
+      return { commSyncProgress: next };
+    }),
+  setCommIdentityError: (identityId, error) =>
+    set((s) => ({ commIdentityErrors: { ...s.commIdentityErrors, [identityId]: error } })),
+  clearCommIdentityError: (identityId) =>
+    set((s) => {
+      const next = { ...s.commIdentityErrors };
+      delete next[identityId];
+      return { commIdentityErrors: next };
+    }),
 }));
 
 // Selectors for performance optimization

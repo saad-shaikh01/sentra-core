@@ -16,7 +16,9 @@
       "Bash(python3:*)",
       "Bash(npx nx:*)",
       "Bash(node:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(xargs grep:*)"
     ]
   }
 }

@@ -45,6 +45,16 @@ export class ThreadsController {
     return this.service.listMessages(ctx.organizationId, threadId, query);
   }
 
+  @Patch(':threadId/archive')
+  @HttpCode(HttpStatus.OK)
+  async archiveThread(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('threadId') threadId: string,
+  ) {
+    await this.service.archiveThread(ctx.organizationId, threadId);
+    return COMM_MUTATION_OK;
+  }
+
   @Patch(':threadId/read')
   @HttpCode(HttpStatus.OK)
   async markThreadRead(

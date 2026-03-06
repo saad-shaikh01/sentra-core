@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar';
 import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { ConfirmModal, Toaster } from '@/components/shared';
+import { CommEventsWatcher } from '@/components/shared/comm/comm-events-watcher';
 
 export default function DashboardLayout({
   children,
@@ -25,6 +26,7 @@ export default function DashboardLayout({
         </div>
         <ConfirmModal />
         <Toaster />
+        <CommEventsWatcher />
       </SpotlightBackground>
     </ProtectedRoute>
   );

@@ -34,11 +34,12 @@ export class IdentitiesService {
 
   /**
    * Generate OAuth2 authorization URL.
-   * Encodes orgId + userId in state param to survive the OAuth redirect.
+   * Encodes orgId + userId (+ optional brandId) in state param to survive the OAuth redirect.
    */
-  initiateOAuth(organizationId: string, userId: string): string {
+  initiateOAuth(organizationId: string, userId: string, brandId?: string): string {
     const oauth2Client = this.createOAuth2Client();
-    const state = Buffer.from(JSON.stringify({ organizationId, userId } satisfies OAuthStatePayload)).toString('base64url');
+    const payload: OAuthStatePayload = { organizationId, userId, ...(brandId ? { brandId } : {}) };
+    const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
     return oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -63,7 +64,7 @@ export class IdentitiesService {
       throw new BadRequestException('Invalid OAuth state parameter');
     }
 
-    const { organizationId, userId } = statePayload;
+    const { organizationId, userId, brandId } = statePayload;
     const oauth2Client = this.createOAuth2Client();
 
     const { tokens } = await oauth2Client.getToken(code);
@@ -90,6 +91,10 @@ export class IdentitiesService {
     const encryptedRefreshToken = this.encryption.encrypt(tokens.refresh_token, organizationId);
     const tokenExpiresAt = tokens.expiry_date ? new Date(tokens.expiry_date) : undefined;
 
+    // Determine if this will be the first (and thus default) identity for the org
+    const existingCount = await this.identityModel.countDocuments({ organizationId, isActive: true });
+    const shouldBeDefault = existingCount === 0;
+
     // Upsert identity
     const identity = await this.identityModel.findOneAndUpdate(
       { organizationId, email },
@@ -103,9 +108,11 @@ export class IdentitiesService {
           tokenExpiresAt,
           sendAsAliases,
           isActive: true,
+          ...(brandId ? { brandId } : {}),
+          ...(shouldBeDefault ? { isDefault: true } : {}),
         },
         $setOnInsert: {
-          syncState: { initialSyncDone: false, fullBackfillDone: false },
+          syncState: { initialSyncDone: false, fullBackfillDone: false, status: 'active' },
         },
       },
       { upsert: true, new: true },
@@ -119,8 +126,78 @@ export class IdentitiesService {
     return this.identityModel
       .find({ organizationId, isActive: true })
       .select('-encryptedAccessToken -encryptedRefreshToken')
-      .sort({ createdAt: -1 })
+      .sort({ isDefault: -1, createdAt: -1 })
       .exec();
+  }
+
+  /**
+   * Returns the default identity for a given brand, falling back to the org-wide default,
+   * then the oldest active identity.
+   */
+  async getDefaultIdentityForBrand(
+    organizationId: string,
+    brandId?: string,
+  ): Promise<CommIdentityDocument | null> {
+    const identities = await this.identityModel
+      .find({ organizationId, isActive: true })
+      .sort({ isDefault: -1, createdAt: 1 })
+      .exec();
+
+    if (!identities.length) return null;
+
+    if (brandId) {
+      const brandDefault = identities.find((i) => i.brandId === brandId && i.isDefault);
+      if (brandDefault) return brandDefault;
+      const brandAny = identities.find((i) => i.brandId === brandId);
+      if (brandAny) return brandAny;
+    }
+
+    return identities.find((i) => i.isDefault) ?? identities[0];
+  }
+
+  /**
+   * Resolve the best sender identity when replying to a thread.
+   * Prefers the identity that originally sent/received the thread.
+   */
+  /**
+   * Fetch Gmail labels for the given identity.
+   * Returns user-created labels only (excludes system labels).
+   */
+  async getLabels(organizationId: string, id: string): Promise<{ id: string; name: string }[]> {
+    const identity = await this.identityModel.findOne({ _id: id, organizationId, isActive: true });
+    if (!identity) {
+      throw new NotFoundException(`Identity ${id} not found`);
+    }
+
+    const { accessToken, refreshToken, tokenExpiresAt } = await this.getDecryptedCredentials(identity);
+    const oauth2Client = this.createOAuth2Client();
+    oauth2Client.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expiry_date: tokenExpiresAt?.getTime(),
+    });
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const resp = await gmail.users.labels.list({ userId: 'me' });
+    return (resp.data.labels ?? [])
+      .filter((l) => l.type === 'user')
+      .map((l) => ({ id: l.id!, name: l.name! }));
+  }
+
+  async resolveIdentityForReply(
+    organizationId: string,
+    threadIdentityId: string,
+  ): Promise<CommIdentityDocument | null> {
+    // Try the identity that owns the thread first
+    const threadIdentity = await this.identityModel.findOne({
+      _id: threadIdentityId,
+      organizationId,
+      isActive: true,
+    });
+    if (threadIdentity) return threadIdentity;
+
+    // Fall back to org-wide default
+    return this.getDefaultIdentityForBrand(organizationId);
   }
 
   async getIdentity(organizationId: string, id: string): Promise<CommIdentityDocument> {
@@ -133,6 +210,16 @@ export class IdentitiesService {
       throw new NotFoundException(`Identity ${id} not found`);
     }
     return identity;
+  }
+
+  async setDefault(organizationId: string, id: string): Promise<void> {
+    const identity = await this.identityModel.findOne({ _id: id, organizationId, isActive: true });
+    if (!identity) {
+      throw new NotFoundException(`Identity ${id} not found`);
+    }
+    // Clear all defaults in org, then set this one
+    await this.identityModel.updateMany({ organizationId }, { $set: { isDefault: false } });
+    await this.identityModel.findByIdAndUpdate(id, { $set: { isDefault: true } });
   }
 
   async deleteIdentity(organizationId: string, id: string): Promise<void> {

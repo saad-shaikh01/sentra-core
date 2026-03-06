@@ -19,8 +19,11 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { CommCacheModule } from '../common/cache/comm-cache.module';
 import { TokenEncryptionModule } from '../common/crypto/token-encryption.module';
+import { MetricsModule } from '../common/metrics/metrics.module';
 import { JwtContextMiddleware } from '../common/middleware/jwt-context.middleware';
+import { RequestIdMiddleware } from '../common/middleware/request-id.middleware';
 import { HealthModule } from '../modules/health/health.module';
+import { MetricsRouteModule } from '../modules/metrics/metrics.module';
 import { IdentitiesModule } from '../modules/identities/identities.module';
 import { SyncModule } from '../modules/sync/sync.module';
 import { ThreadsModule } from '../modules/threads/threads.module';
@@ -28,6 +31,7 @@ import { EntityLinksModule } from '../modules/entity-links/entity-links.module';
 import { AuditModule } from '../modules/audit/audit.module';
 import { AttachmentsModule } from '../modules/attachments/attachments.module';
 import { MessagesModule } from '../modules/messages/messages.module';
+import { GatewayModule } from '../modules/gateway/gateway.module';
 
 @Module({
   imports: [
@@ -80,9 +84,12 @@ import { MessagesModule } from '../modules/messages/messages.module';
     // Global modules
     CommCacheModule,
     TokenEncryptionModule,
+    MetricsModule,
+    GatewayModule,
 
     // Domain modules
     HealthModule,
+    MetricsRouteModule,
     AuditModule,      // global — must come before modules that inject AuditService
     IdentitiesModule,
     SyncModule,
@@ -100,6 +107,7 @@ import { MessagesModule } from '../modules/messages/messages.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
     consumer.apply(JwtContextMiddleware).forRoutes('*');
   }
 }
