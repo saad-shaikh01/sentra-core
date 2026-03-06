@@ -14,6 +14,7 @@ import { MailClientService } from '@sentra-core/mail-client';
 import {
   OrganizationOnboardingMode,
   UserRole,
+  AppCode,
   JwtPayload,
   IAuthTokens,
   ILoginResponse,
@@ -60,9 +61,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
     const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
+    const appCodes = appAccess.map((a) => a.appCode as AppCode);
+    const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role, appCodes);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
 
     return {
       ...tokens,
@@ -140,17 +142,19 @@ export class AuthService {
       result.user.id,
     );
 
+    const appAccess = await this.iamService.getUserAppAccess(
+      result.organization.id,
+      result.user.id,
+    );
+    const appCodes = appAccess.map((a) => a.appCode as AppCode);
     const tokens = await this.getTokens(
       result.user.id,
       result.user.email,
       result.organization.id,
       result.user.role,
+      appCodes,
     );
     await this.updateRefreshToken(result.user.id, tokens.refreshToken);
-    const appAccess = await this.iamService.getUserAppAccess(
-      result.organization.id,
-      result.user.id,
-    );
 
     await this.mailService.sendMail({
       to: result.user.email,
@@ -265,7 +269,9 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role);
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
+    const appCodes = appAccess.map((a) => a.appCode as AppCode);
+    const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role, appCodes);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
@@ -289,12 +295,14 @@ export class AuthService {
     email: string,
     orgId: string,
     role: string,
+    appCodes: AppCode[] = [],
   ): Promise<IAuthTokens> {
-    const payload = {
+    const payload: JwtPayload = {
       sub: userId,
       email,
       orgId,
       role: role as UserRole,
+      appCodes,
     };
 
     const [accessToken, refreshToken] = await Promise.all([

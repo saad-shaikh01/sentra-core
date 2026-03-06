@@ -12,13 +12,19 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { InvoicesService } from './invoices.service';
-import { Roles, CurrentUser } from '../auth/decorators';
+import { Roles, CurrentUser, Public } from '../auth/decorators';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
 import { UserRole, IInvoice, IPaginatedResponse } from '@sentra-core/types';
 
 @Controller('invoices')
 export class InvoicesController {
   constructor(private invoicesService: InvoicesService) {}
+
+  @Get('public/:id')
+  @Public()
+  findPublic(@Param('id') id: string) {
+    return this.invoicesService.findPublic(id);
+  }
 
   @Post()
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.PROJECT_MANAGER)

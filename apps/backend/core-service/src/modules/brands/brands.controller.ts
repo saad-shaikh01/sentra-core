@@ -7,15 +7,28 @@ import {
   Param,
   Body,
   Query,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { BrandsService } from './brands.service';
-import { Roles, CurrentUser } from '../auth/decorators';
+import { Roles, CurrentUser, Public } from '../auth/decorators';
 import { CreateBrandDto, UpdateBrandDto, QueryBrandsDto } from './dto';
 import { UserRole, IBrand, IPaginatedResponse } from '@sentra-core/types';
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/x-icon'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 @Controller('brands')
 export class BrandsController {
   constructor(private brandsService: BrandsService) {}
+
+  @Get('public/by-domain')
+  @Public()
+  findByDomain(@Query('domain') domain: string): Promise<Partial<IBrand>> {
+    return this.brandsService.findPublicByDomain(domain);
+  }
 
   @Post()
   @Roles(UserRole.OWNER, UserRole.ADMIN)
@@ -52,6 +65,30 @@ export class BrandsController {
     return this.brandsService.update(id, orgId, dto);
   }
 
+  @Post(':id/upload/logo')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadLogo(
+    @Param('id') id: string,
+    @CurrentUser('orgId') orgId: string,
+    @UploadedFile() file: any,
+  ): Promise<IBrand> {
+    this.validateImageFile(file);
+    return this.brandsService.uploadAsset(id, orgId, 'logo', file);
+  }
+
+  @Post(':id/upload/favicon')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFavicon(
+    @Param('id') id: string,
+    @CurrentUser('orgId') orgId: string,
+    @UploadedFile() file: any,
+  ): Promise<IBrand> {
+    this.validateImageFile(file);
+    return this.brandsService.uploadAsset(id, orgId, 'favicon', file);
+  }
+
   @Delete(':id')
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   remove(
@@ -59,5 +96,15 @@ export class BrandsController {
     @CurrentUser('orgId') orgId: string,
   ): Promise<{ message: string }> {
     return this.brandsService.remove(id, orgId);
+  }
+
+  private validateImageFile(file: any): void {
+    if (!file) throw new BadRequestException('File is required');
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(`Invalid file type. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`);
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      throw new BadRequestException('File too large. Maximum 5 MB');
+    }
   }
 }

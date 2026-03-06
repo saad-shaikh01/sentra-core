@@ -5,16 +5,19 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import {
   LeadStatus,
   LeadActivityType,
+  UserRole,
   LEAD_STATUS_TRANSITIONS,
   ILead,
   ILeadActivity,
   IPaginatedResponse,
 } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
+import { TeamsService } from '../teams';
 import {
   CreateLeadDto,
   UpdateLeadDto,
@@ -23,6 +26,7 @@ import {
   AssignLeadDto,
   AddNoteDto,
   ConvertLeadDto,
+  CaptureLeadDto,
 } from './dto';
 
 @Injectable()
@@ -30,6 +34,7 @@ export class LeadsService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
+    private teams: TeamsService,
   ) {}
 
   async create(
@@ -70,6 +75,7 @@ export class LeadsService {
       organizationId: lead.organizationId,
       assignedToId: lead.assignedToId,
       convertedClientId: lead.convertedClientId,
+      followUpDate: lead.followUpDate ?? undefined,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
     };
@@ -78,6 +84,8 @@ export class LeadsService {
   async findAll(
     orgId: string,
     query: QueryLeadsDto,
+    userId: string,
+    role: UserRole,
   ): Promise<IPaginatedResponse<ILead>> {
     const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
     const cacheKey = `leads:${orgId}:list:${queryHash}`;
@@ -87,7 +95,19 @@ export class LeadsService {
 
     const { page, limit, status, source, assignedToId, brandId, dateFrom, dateTo, search } = query;
 
-    const where: any = { organizationId: orgId };
+    const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
+    const where: Prisma.LeadWhereInput = { organizationId: orgId, deletedAt: null };
+
+    // Data visibility scoping
+    if (agentRoles.includes(role)) {
+      where.assignedToId = userId;
+    } else if (role === UserRole.SALES_MANAGER) {
+      // Managers see their own agents' leads
+      const memberIds = await this.teams.getMemberIds(userId, orgId);
+      if (memberIds.length > 0) {
+        where.assignedToId = { in: [...memberIds, userId] };
+      }
+    }
 
     if (status) {
       where.status = status;
@@ -98,7 +118,10 @@ export class LeadsService {
     }
 
     if (assignedToId) {
-      where.assignedToId = assignedToId;
+      // Only allow admins/managers to override the agent scope
+      if (!agentRoles.includes(role)) {
+        where.assignedToId = assignedToId;
+      }
     }
 
     if (brandId) {
@@ -108,10 +131,10 @@ export class LeadsService {
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) {
-        where.createdAt.gte = new Date(dateFrom);
+        (where.createdAt as Prisma.DateTimeFilter).gte = new Date(dateFrom);
       }
       if (dateTo) {
-        where.createdAt.lte = new Date(dateTo);
+        (where.createdAt as Prisma.DateTimeFilter).lte = new Date(dateTo);
       }
     }
 
@@ -139,6 +162,7 @@ export class LeadsService {
       organizationId: lead.organizationId,
       assignedToId: lead.assignedToId,
       convertedClientId: lead.convertedClientId,
+      followUpDate: lead.followUpDate ?? undefined,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
     }));
@@ -165,7 +189,7 @@ export class LeadsService {
       },
     });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -183,6 +207,7 @@ export class LeadsService {
       organizationId: lead.organizationId,
       assignedToId: lead.assignedToId,
       convertedClientId: lead.convertedClientId,
+      followUpDate: lead.followUpDate ?? undefined,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
       activities: lead.activities.map((a) => ({
@@ -214,7 +239,7 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -243,6 +268,7 @@ export class LeadsService {
       organizationId: updated.organizationId,
       assignedToId: updated.assignedToId,
       convertedClientId: updated.convertedClientId,
+      followUpDate: updated.followUpDate ?? undefined,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     };
@@ -251,7 +277,7 @@ export class LeadsService {
   async remove(id: string, orgId: string): Promise<{ message: string }> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -259,8 +285,10 @@ export class LeadsService {
       throw new ForbiddenException('Lead belongs to another organization');
     }
 
-    await this.prisma.leadActivity.deleteMany({ where: { leadId: id } });
-    await this.prisma.lead.delete({ where: { id } });
+    await this.prisma.lead.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
@@ -275,7 +303,7 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -292,15 +320,28 @@ export class LeadsService {
       );
     }
 
+    if (dto.status === LeadStatus.FOLLOW_UP && !dto.followUpDate) {
+      throw new BadRequestException(
+        'followUpDate is required when transitioning to FOLLOW_UP status',
+      );
+    }
+
     const updated = await this.prisma.lead.update({
       where: { id },
-      data: { status: dto.status },
+      data: {
+        status: dto.status,
+        followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : undefined,
+      },
     });
 
     await this.prisma.leadActivity.create({
       data: {
         type: LeadActivityType.STATUS_CHANGE,
-        data: { from: currentStatus, to: dto.status },
+        data: {
+          from: currentStatus,
+          to: dto.status,
+          followUpDate: dto.followUpDate ?? null,
+        },
         leadId: id,
         userId,
       },
@@ -318,6 +359,7 @@ export class LeadsService {
       organizationId: updated.organizationId,
       assignedToId: updated.assignedToId,
       convertedClientId: updated.convertedClientId,
+      followUpDate: updated.followUpDate ?? undefined,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     };
@@ -331,7 +373,7 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -379,6 +421,7 @@ export class LeadsService {
       organizationId: updated.organizationId,
       assignedToId: updated.assignedToId,
       convertedClientId: updated.convertedClientId,
+      followUpDate: updated.followUpDate ?? undefined,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     };
@@ -392,7 +435,7 @@ export class LeadsService {
   ): Promise<ILeadActivity> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -430,7 +473,7 @@ export class LeadsService {
   ): Promise<ILead> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 
@@ -490,15 +533,44 @@ export class LeadsService {
       organizationId: result.organizationId,
       assignedToId: result.assignedToId,
       convertedClientId: result.convertedClientId,
+      followUpDate: result.followUpDate ?? undefined,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
     };
   }
 
+  async capture(dto: CaptureLeadDto): Promise<{ id: string; message: string }> {
+    const brand = await this.prisma.brand.findUnique({
+      where: { id: dto.brandId },
+      select: { id: true, organizationId: true },
+    });
+
+    if (!brand) {
+      throw new NotFoundException('Brand not found');
+    }
+
+    const title = dto.title ?? `Web Capture - ${dto.source}`;
+
+    const lead = await this.prisma.lead.create({
+      data: {
+        title,
+        source: dto.source,
+        data: (dto.data as any) ?? undefined,
+        status: LeadStatus.NEW,
+        brandId: brand.id,
+        organizationId: brand.organizationId,
+      },
+    });
+
+    await this.cache.delByPrefix(`leads:${brand.organizationId}:`);
+
+    return { id: lead.id, message: 'Lead captured successfully' };
+  }
+
   async getActivities(id: string, orgId: string): Promise<ILeadActivity[]> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
 
-    if (!lead) {
+    if (!lead || lead.deletedAt) {
       throw new NotFoundException('Lead not found');
     }
 

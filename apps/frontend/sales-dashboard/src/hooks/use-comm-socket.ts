@@ -113,6 +113,6 @@ export function useCommSocket() {
       socket.disconnect();
       useUIStore.getState().setCommConnectionStatus('disconnected');
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   }, []);
 }

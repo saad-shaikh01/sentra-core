@@ -7,7 +7,7 @@ import { IamModule } from '../iam';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy, JwtRefreshStrategy } from './strategies';
-import { AccessTokenGuard, RefreshTokenGuard, RolesGuard } from './guards';
+import { AccessTokenGuard, RefreshTokenGuard, RolesGuard, AppAccessGuard } from './guards';
 
 @Module({
   imports: [
@@ -33,7 +33,8 @@ import { AccessTokenGuard, RefreshTokenGuard, RolesGuard } from './guards';
     AccessTokenGuard,
     RefreshTokenGuard,
     RolesGuard,
+    AppAccessGuard,
   ],
-  exports: [AuthService, AccessTokenGuard, RolesGuard],
+  exports: [AuthService, AccessTokenGuard, RolesGuard, AppAccessGuard],
 })
 export class AuthModule {}

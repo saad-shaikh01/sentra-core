@@ -6,7 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaClientModule } from '@sentra-core/prisma-client';
 import { MailClientModule } from '@sentra-core/mail-client';
-import { AuthModule, AccessTokenGuard, RolesGuard } from '../modules/auth';
+import { AuthModule, AccessTokenGuard, RolesGuard, AppAccessGuard } from '../modules/auth';
 import { UsersModule } from '../modules/users';
 import { OrganizationModule } from '../modules/organization';
 import { InvitationModule } from '../modules/invitation';
@@ -19,6 +19,10 @@ import { AuthorizeNetModule } from '../modules/authorize-net';
 import { IamModule } from '../modules/iam';
 import { SentraCacheModule } from '../common';
 import { InternalContactsModule } from '../modules/internal-contacts/internal-contacts.module';
+import { TeamsModule } from '../modules/teams';
+import { PackagesModule } from '../modules/packages';
+import { SearchModule } from '../modules/search';
+import { AnalyticsModule } from '../modules/analytics';
 
 @Module({
   imports: [
@@ -53,6 +57,10 @@ import { InternalContactsModule } from '../modules/internal-contacts/internal-co
     InvoicesModule,
     IamModule,
     InternalContactsModule,
+    TeamsModule,
+    PackagesModule,
+    SearchModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -68,6 +76,10 @@ import { InternalContactsModule } from '../modules/internal-contacts/internal-co
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AppAccessGuard,
     },
   ],
 })

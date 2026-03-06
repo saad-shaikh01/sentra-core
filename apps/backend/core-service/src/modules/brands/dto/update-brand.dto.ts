@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUrl, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUrl, IsHexColor, MinLength, MaxLength } from 'class-validator';
 
 export class UpdateBrandDto {
   @IsOptional()
@@ -14,6 +14,18 @@ export class UpdateBrandDto {
   @IsOptional()
   @IsUrl()
   logoUrl?: string;
+
+  @IsOptional()
+  @IsUrl()
+  faviconUrl?: string;
+
+  @IsOptional()
+  @IsHexColor()
+  primaryColor?: string;
+
+  @IsOptional()
+  @IsHexColor()
+  secondaryColor?: string;
 
   @IsOptional()
   colors?: Record<string, string>;

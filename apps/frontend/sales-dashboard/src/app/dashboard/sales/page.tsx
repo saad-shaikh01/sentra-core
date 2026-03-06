@@ -14,6 +14,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { ISale, SaleStatus } from '@sentra-core/types';
 import { SaleFormModal } from './_components/sale-form-modal';
 import { SaleDetailSheet } from './_components/sale-detail-sheet';
+import { QuickSaleModal } from './_components/quick-sale-modal';
 
 // Enriched row type shown in the table
 interface SaleRow extends ISale {
@@ -49,6 +50,7 @@ export default function SalesPage() {
   const openConfirmDialog        = useUIStore((s) => s.openConfirmDialog);
 
   const [modalOpen, setModalOpen]         = useState(false);
+  const [quickSaleOpen, setQuickSaleOpen] = useState(false);
   const [editSale, setEditSale]           = useState<ISale | null>(null);
   const [detailSaleId, setDetailSaleId]   = useState<string | null>(null);
 
@@ -150,14 +152,20 @@ export default function SalesPage() {
         title="Sales"
         description="Track sales, payments, and subscriptions."
         action={
-          <Button
-            onClick={() => {
-              setEditSale(null);
-              setModalOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" /> New Sale
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditSale(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" /> Simple Sale
+            </Button>
+            <Button onClick={() => setQuickSaleOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Quick Sale
+            </Button>
+          </div>
         }
       />
 
@@ -252,6 +260,7 @@ export default function SalesPage() {
       />
 
       <SaleFormModal open={modalOpen} onOpenChange={setModalOpen} sale={editSale} />
+      <QuickSaleModal open={quickSaleOpen} onOpenChange={setQuickSaleOpen} />
 
       <SaleDetailSheet saleId={detailSaleId} onClose={() => setDetailSaleId(null)} />
     </div>

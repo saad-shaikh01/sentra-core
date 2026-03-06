@@ -1,4 +1,5 @@
 export * from './create-lead.dto';
+export * from './capture-lead.dto';
 export * from './update-lead.dto';
 export * from './query-leads.dto';
 export * from './change-status.dto';

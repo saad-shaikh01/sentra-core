@@ -27,6 +27,7 @@ export enum LeadStatus {
   NEW = 'NEW',
   CONTACTED = 'CONTACTED',
   PROPOSAL = 'PROPOSAL',
+  FOLLOW_UP = 'FOLLOW_UP',
   CLOSED = 'CLOSED',
 }
 
@@ -35,6 +36,12 @@ export enum SaleStatus {
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
+}
+
+export enum PaymentPlanType {
+  ONE_TIME = 'ONE_TIME',
+  INSTALLMENTS = 'INSTALLMENTS',
+  SUBSCRIPTION = 'SUBSCRIPTION',
 }
 
 export enum InvoiceStatus {
@@ -95,9 +102,10 @@ export type DataScopeType = (typeof DataScopeType)[keyof typeof DataScopeType];
 // ==========================================
 
 export const LEAD_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
-  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.CLOSED],
-  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.CLOSED],
-  [LeadStatus.PROPOSAL]: [LeadStatus.CLOSED, LeadStatus.CONTACTED],
+  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED],
+  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED],
+  [LeadStatus.PROPOSAL]: [LeadStatus.FOLLOW_UP, LeadStatus.CLOSED, LeadStatus.CONTACTED],
+  [LeadStatus.FOLLOW_UP]: [LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.CLOSED],
   [LeadStatus.CLOSED]: [],
 };
 
@@ -281,6 +289,9 @@ export interface IBrand {
   name: string;
   domain?: string;
   logoUrl?: string;
+  faviconUrl?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
   colors?: Record<string, string>;
   organizationId: string;
   createdAt?: Date;
@@ -300,6 +311,8 @@ export interface ILead {
   organizationId: string;
   assignedToId?: string;
   convertedClientId?: string;
+  followUpDate?: Date;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -335,18 +348,32 @@ export interface IClient {
 // SALE INTERFACES
 // ==========================================
 
+export interface ISaleItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+  customPrice?: number;
+  saleId: string;
+}
+
 export interface ISale {
   id: string;
   totalAmount: number;
   status: SaleStatus;
   currency: string;
   description?: string;
+  contractUrl?: string;
+  paymentPlan: PaymentPlanType;
+  installmentCount?: number;
   clientId: string;
   brandId: string;
   organizationId: string;
   customerProfileId?: string;
   paymentProfileId?: string;
   subscriptionId?: string;
+  items?: ISaleItem[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -383,6 +410,80 @@ export interface IPaymentTransaction {
   saleId: string;
   invoiceId?: string;
   createdAt: Date;
+}
+
+// ==========================================
+// SALES TEAMS
+// ==========================================
+
+export interface ISalesTeamMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatarUrl?: string;
+}
+
+export interface ISalesTeam {
+  id: string;
+  name: string;
+  description?: string;
+  organizationId: string;
+  managers: ISalesTeamMember[];
+  members: ISalesTeamMember[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ==========================================
+// PRODUCT PACKAGES
+// ==========================================
+
+export interface IPackageItem {
+  id: string;
+  name: string;
+  description?: string;
+  unitPrice: number;
+  isActive: boolean;
+  packageId: string;
+}
+
+export interface IProductPackage {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  brandId?: string;
+  organizationId: string;
+  items: IPackageItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ==========================================
+// ANALYTICS
+// ==========================================
+
+export interface IAnalyticsSummary {
+  totalRevenue: number;
+  totalLeads: number;
+  convertedLeads: number;
+  activeSales: number;
+  revenueByMonth: Array<{ month: string; revenue: number }>;
+  leadsByAgent: Array<{ agentName: string; total: number; converted: number }>;
+  salesByBrand: Array<{ brandName: string; total: number; revenue: number }>;
+}
+
+// ==========================================
+// SEARCH
+// ==========================================
+
+export interface ISearchResult {
+  type: 'lead' | 'client' | 'sale' | 'invoice';
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
 }
 
 // ==========================================

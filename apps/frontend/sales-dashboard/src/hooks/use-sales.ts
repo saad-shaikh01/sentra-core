@@ -108,3 +108,17 @@ export function useCancelSubscription() {
     onError: (e: Error) => toast.error('Failed to cancel subscription', e.message),
   });
 }
+
+export function useUploadContract() {
+  return useMutation({
+    mutationFn: async (file: File): Promise<{ url: string }> => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.fetch<{ url: string }>('/sales/upload/contract', {
+        method: 'POST',
+        body: form,
+      });
+    },
+    onError: (e: Error) => toast.error('Contract upload failed', e.message),
+  });
+}

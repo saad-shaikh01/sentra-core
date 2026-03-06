@@ -8,8 +8,9 @@ import {
   Body,
   Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { LeadsService } from './leads.service';
-import { Roles, CurrentUser } from '../auth/decorators';
+import { Roles, CurrentUser, Public, AppAccess } from '../auth/decorators';
 import {
   CreateLeadDto,
   UpdateLeadDto,
@@ -18,9 +19,11 @@ import {
   AssignLeadDto,
   AddNoteDto,
   ConvertLeadDto,
+  CaptureLeadDto,
 } from './dto';
 import {
   UserRole,
+  AppCode,
   JwtPayload,
   ILead,
   ILeadActivity,
@@ -28,8 +31,18 @@ import {
 } from '@sentra-core/types';
 
 @Controller('leads')
+@AppAccess(AppCode.SALES_DASHBOARD)
 export class LeadsController {
   constructor(private leadsService: LeadsService) {}
+
+  @Post('capture')
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  capture(
+    @Body() dto: CaptureLeadDto,
+  ): Promise<{ id: string; message: string }> {
+    return this.leadsService.capture(dto);
+  }
 
   @Post()
   @Roles(
@@ -49,9 +62,9 @@ export class LeadsController {
   @Get()
   findAll(
     @Query() query: QueryLeadsDto,
-    @CurrentUser('orgId') orgId: string,
+    @CurrentUser() user: JwtPayload,
   ): Promise<IPaginatedResponse<ILead>> {
-    return this.leadsService.findAll(orgId, query);
+    return this.leadsService.findAll(user.orgId, query, user.sub, user.role);
   }
 
   @Get(':id')

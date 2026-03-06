@@ -33,6 +33,7 @@ enum LeadStatus {
   NEW
   CONTACTED
   PROPOSAL
+  FOLLOW_UP
   CLOSED
 }
 
@@ -41,6 +42,12 @@ enum SaleStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+enum PaymentPlanType {
+  ONE_TIME
+  INSTALLMENTS
+  SUBSCRIPTION
 }
 
 enum InvoiceStatus {
@@ -358,9 +365,89 @@ model Organization {
   userAppAccesses UserAppAccess[]
   userAppRoles UserAppRole[]
   userScopeGrants UserScopeGrant[]
+  salesTeams  SalesTeam[]
+  packages    ProductPackage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// SALES TEAMS
+// ==========================================
+
+model SalesTeam {
+  id             String @id @default(uuid())
+  name           String
+  description    String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  managers SalesTeamManager[]
+  members  SalesTeamMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model SalesTeamManager {
+  teamId String
+  team   SalesTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User      @relation("TeamManagers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+}
+
+model SalesTeamMember {
+  teamId String
+  team   SalesTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User      @relation("TeamMembers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+}
+
+// ==========================================
+// PRODUCT PACKAGES / SERVICE CATALOG
+// ==========================================
+
+model ProductPackage {
+  id             String  @id @default(uuid())
+  name           String
+  description    String?
+  isActive       Boolean @default(true)
+
+  brandId        String?
+  brand          Brand?  @relation(fields: [brandId], references: [id])
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  items PackageItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, brandId])
+}
+
+model PackageItem {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  unitPrice   Decimal @db.Decimal(10, 2)
+  isActive    Boolean @default(true)
+
+  packageId String
+  package   ProductPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([packageId])
 }
 
 model Brand {
@@ -372,9 +459,12 @@ model Brand {
   customPortalDomain String? @unique
 
   // Branding Assets
-  logoUrl     String?
-  colors      Json?
-  themeConfig Json?
+  logoUrl        String?
+  faviconUrl     String?
+  primaryColor   String? // hex e.g. "#6366F1"
+  secondaryColor String? // hex
+  colors         Json?
+  themeConfig    Json?
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -383,6 +473,7 @@ model Brand {
   clients      Client[]
   sales        Sale[]
   emailAliases EmailAlias[]
+  packages     ProductPackage[]
 
   members BrandAccess[]
 
@@ -420,6 +511,8 @@ model User {
 
   assignedLeads  Lead[]
   leadActivities LeadActivity[]
+  managedTeams   SalesTeamManager[] @relation("TeamManagers")
+  memberOfTeams  SalesTeamMember[]  @relation("TeamMembers")
 
   // Refresh Token (for JWT)
   refreshToken String?
@@ -669,12 +762,16 @@ model Lead {
 
   convertedClientId String? @unique // Link if converted
 
+  followUpDate DateTime? // Required when status = FOLLOW_UP
+  deletedAt    DateTime? // Soft-delete timestamp
+
   activities LeadActivity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, brandId, status]) // Performance Index for Dashboard
+  @@index([organizationId, deletedAt])       // Soft-delete filter index
 }
 
 model LeadActivity {
@@ -723,6 +820,11 @@ model Sale {
   status      SaleStatus @default(PENDING)
   currency    String     @default("USD")
   description String?
+  contractUrl String? // Optional uploaded contract file URL
+
+  // Payment plan config
+  paymentPlan     PaymentPlanType @default(ONE_TIME)
+  installmentCount Int?            // Number of installments (null = 1)
 
   // Authorize.net fields
   customerProfileId String?
@@ -738,6 +840,7 @@ model Sale {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
+  items        SaleItem[]
   invoices     Invoice[]
   transactions PaymentTransaction[]
 
@@ -747,6 +850,23 @@ model Sale {
   @@index([organizationId, brandId, status])
   @@index([clientId])
   @@index([subscriptionId])
+}
+
+model SaleItem {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  customPrice Decimal? @db.Decimal(10, 2) // Price override for custom plans
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([saleId])
 }
 
 model Invoice {

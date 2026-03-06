@@ -128,6 +128,7 @@ class ApiClient {
       accessToken: string;
       refreshToken: string;
       user: any;
+      appAccess?: Array<{ appCode: string; appName: string; baseUrl?: string; isDefault: boolean }>;
     }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -146,6 +147,7 @@ class ApiClient {
       refreshToken: string;
       user: any;
       organization: any;
+      appAccess?: Array<{ appCode: string; appName: string; baseUrl?: string; isDefault: boolean }>;
     }>('/auth/signup', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -180,6 +182,7 @@ class ApiClient {
       accessToken: string;
       refreshToken: string;
       user: any;
+      appAccess?: Array<{ appCode: string; appName: string; baseUrl?: string; isDefault: boolean }>;
     }>('/auth/accept-invite', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -543,6 +546,51 @@ class ApiClient {
       body: JSON.stringify({ threadId, entityType, entityId }),
       service: 'comm',
     });
+  }
+
+  // Teams endpoints
+  async getTeams() {
+    return this.fetch<any[]>('/teams');
+  }
+
+  async createTeam(dto: Record<string, unknown>) {
+    return this.fetch<any>('/teams', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updateTeam(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/teams/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deleteTeam(id: string) {
+    return this.fetch<{ message: string }>(`/teams/${id}`, { method: 'DELETE' });
+  }
+
+  // Packages endpoints
+  async getPackages(params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/packages${qs}`);
+  }
+
+  async createPackage(dto: Record<string, unknown>) {
+    return this.fetch<any>('/packages', { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async updatePackage(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/packages/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
+  }
+
+  async deletePackage(id: string) {
+    return this.fetch<{ message: string }>(`/packages/${id}`, { method: 'DELETE' });
+  }
+
+  // Analytics
+  async getAnalyticsSummary() {
+    return this.fetch<any>('/analytics/summary');
+  }
+
+  // Global search
+  async search(q: string) {
+    return this.fetch<any[]>(`/search?q=${encodeURIComponent(q)}`);
   }
 
   // Comm — Attachments

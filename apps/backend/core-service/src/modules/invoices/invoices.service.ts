@@ -57,6 +57,41 @@ export class InvoicesService {
     return this.mapToIInvoice(invoice);
   }
 
+  async findPublic(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        amount: true,
+        dueDate: true,
+        status: true,
+        notes: true,
+        sale: {
+          select: {
+            id: true,
+            currency: true,
+            description: true,
+            brand: {
+              select: {
+                name: true,
+                logoUrl: true,
+                faviconUrl: true,
+                primaryColor: true,
+                secondaryColor: true,
+              },
+            },
+            client: {
+              select: { companyName: true, contactName: true, email: true },
+            },
+          },
+        },
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return invoice;
+  }
+
   async findAll(orgId: string, query: QueryInvoicesDto): Promise<IPaginatedResponse<IInvoice>> {
     const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
     const cacheKey = `invoices:${orgId}:list:${queryHash}`;

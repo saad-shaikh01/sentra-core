@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { api } from '@/lib/api';
+import { api, AppBundleInput } from '@/lib/api';
 
 const APPS = [
   { code: 'SALES_DASHBOARD', label: 'Sales Dashboard' },
@@ -17,7 +17,7 @@ const APPS = [
 export default function AccessConsolePage() {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
-  const [selectedApps, setSelectedApps] = useState<string[]>(['SALES_DASHBOARD']);
+  const [selectedApps, setSelectedApps] = useState<AppBundleInput['appCode'][]>(['SALES_DASHBOARD']);
   const [lastInviteLink, setLastInviteLink] = useState('');
   const [mailStatus, setMailStatus] = useState<'SENT' | 'FAILED' | ''>('');
 

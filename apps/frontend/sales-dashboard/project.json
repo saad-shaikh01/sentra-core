@@ -41,7 +41,10 @@
       "executor": "@nx/eslint:lint",
       "outputs": ["{options.outputFile}"],
       "options": {
-        "lintFilePatterns": ["apps/frontend/sales-dashboard/**/*.{ts,tsx,js,jsx}"]
+        "lintFilePatterns": [
+          "apps/frontend/sales-dashboard/src/**/*.{ts,tsx,js,jsx}",
+          "apps/frontend/sales-dashboard/*.{js,jsx,mjs,cjs}"
+        ]
       }
     }
   }

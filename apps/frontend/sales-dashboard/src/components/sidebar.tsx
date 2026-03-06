@@ -21,6 +21,7 @@ import {
   ClipboardCheck,
   Inbox,
   Mail,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -55,6 +56,12 @@ const settingsNavigation = [
     href: '/dashboard/settings/access',
     icon: Users,
     roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[],
+  },
+  {
+    name: 'Sales Teams',
+    href: '/dashboard/settings/sales-teams',
+    icon: UsersRound,
+    roles: [UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER] as UserRole[],
   },
   ...(COMM_ENABLED ? [{ name: 'Gmail', href: '/dashboard/settings/gmail', icon: Mail }] : []),
 ];

@@ -10,6 +10,7 @@ const COLUMNS: { status: LeadStatus; label: string }[] = [
   { status: LeadStatus.NEW, label: 'New' },
   { status: LeadStatus.CONTACTED, label: 'Contacted' },
   { status: LeadStatus.PROPOSAL, label: 'Proposal' },
+  { status: LeadStatus.FOLLOW_UP, label: 'Follow Up' },
   { status: LeadStatus.CLOSED, label: 'Closed' },
 ];
 
@@ -17,6 +18,7 @@ const COLUMN_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.NEW]: 'border-t-blue-500/60',
   [LeadStatus.CONTACTED]: 'border-t-amber-500/60',
   [LeadStatus.PROPOSAL]: 'border-t-purple-500/60',
+  [LeadStatus.FOLLOW_UP]: 'border-t-orange-500/60',
   [LeadStatus.CLOSED]: 'border-t-emerald-500/60',
 };
 
@@ -47,7 +49,7 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {COLUMNS.map(({ status, label }) => {
           const columnLeads = leads.filter((l) => l.status === status);
           return (
