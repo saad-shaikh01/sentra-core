@@ -3,21 +3,38 @@
 import { useState } from 'react';
 import { DetailSheet, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import {
   useLead, useLeadActivities, useChangeLeadStatus, useAssignLead, useAddLeadNote
 } from '@/hooks/use-leads';
+import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
-import { ILead, LeadStatus, LeadActivityType, LEAD_STATUS_TRANSITIONS } from '@sentra-core/types';
+import {
+  hasMinimumRole,
+  ILeadDetail,
+  LeadStatus,
+  LeadActivityType,
+  LEAD_STATUS_TRANSITIONS,
+  UserRole,
+} from '@sentra-core/types';
 import { ConvertLeadModal } from './convert-lead-modal';
-import { MessageSquare, RefreshCw, UserCheck, GitBranch, AlertCircle, Mail, Globe, Phone, User } from 'lucide-react';
+import { MessageSquare, RefreshCw, UserCheck, GitBranch, AlertCircle, Mail, Globe, Phone, User, Pencil } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 
 interface LeadDetailSheetProps {
   leadId: string | null;
   onClose: () => void;
+  onEdit: (lead: ILeadDetail) => void;
 }
 
 const activityIcons: Record<LeadActivityType, React.ReactNode> = {
@@ -28,10 +45,11 @@ const activityIcons: Record<LeadActivityType, React.ReactNode> = {
   [LeadActivityType.CREATED]: <GitBranch className="h-3.5 w-3.5" />,
 };
 
-export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
+export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProps) {
   const { data: lead, isLoading, isError } = useLead(leadId ?? '');
   const { data: activities } = useLeadActivities(leadId ?? '');
   const { data: members } = useMembers();
+  const { user } = useAuth();
   const changeStatus = useChangeLeadStatus();
   const assignLead = useAssignLead();
   const addNote = useAddLeadNote();
@@ -39,8 +57,20 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
   const [note, setNote] = useState('');
   const [convertOpen, setConvertOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'emails'>('details');
+  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState('');
 
   const allowedTransitions = lead ? LEAD_STATUS_TRANSITIONS[lead.status] : [];
+  const minFollowUpDate = new Date().toISOString().split('T')[0];
+  const userRole = user?.role;
+  const canAssign = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
+  const canConvert = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
+  const showReadOnlyAssignee = !!userRole && !canAssign;
+
+  const closeFollowUpDialog = () => {
+    setFollowUpDialogOpen(false);
+    setFollowUpDate('');
+  };
 
   const handleAddNote = async () => {
     if (!note.trim() || !leadId) return;
@@ -163,7 +193,14 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
                           variant="outline"
                           size="sm"
                           disabled={changeStatus.isPending}
-                          onClick={() => changeStatus.mutate({ id: lead.id, status: s })}
+                          onClick={() => {
+                            if (s === LeadStatus.FOLLOW_UP) {
+                              setFollowUpDialogOpen(true);
+                              return;
+                            }
+
+                            changeStatus.mutate({ id: lead.id, status: s });
+                          }}
                         >
                           → {s}
                         </Button>
@@ -173,25 +210,34 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
                 )}
 
                 {/* Assign */}
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Assign To</h3>
-                  <Select
-                    value={lead.assignedToId ?? ''}
-                    onValueChange={(v) => assignLead.mutate({ id: lead.id, assignedToId: v })}
-                  >
-                    <SelectTrigger className="bg-white/5 border-white/10">
-                      <SelectValue placeholder="Unassigned" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {members?.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {canAssign && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Assign To</h3>
+                    <Select
+                      value={lead.assignedToId ?? ''}
+                      onValueChange={(v) => assignLead.mutate({ id: lead.id, assignedToId: v })}
+                    >
+                      <SelectTrigger className="bg-white/5 border-white/10">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members?.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {showReadOnlyAssignee && (
+                  <InfoCard
+                    label="Assigned To"
+                    value={<span className="text-sm">{lead.assignedTo?.name ?? (lead.assignedToId ? 'Assigned' : 'Unassigned')}</span>}
+                  />
+                )}
 
                 {/* Convert */}
-                {lead.status !== LeadStatus.CLOSED && !lead.convertedClientId && (
+                {canConvert && lead.status !== LeadStatus.CLOSED && !lead.convertedClientId && (
                   <Button
                     variant="outline"
                     className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
@@ -251,6 +297,57 @@ export function LeadDetailSheet({ leadId, onClose }: LeadDetailSheetProps) {
           </>
         ) : null}
       </DetailSheet>
+
+      {leadId && lead && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="fixed right-16 top-5 z-[60] h-8 w-8 hover:bg-white/10"
+          onClick={() => onEdit(lead)}
+          aria-label="Edit lead"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      )}
+
+      {lead && (
+        <Dialog open={followUpDialogOpen} onOpenChange={(open) => { if (!open) closeFollowUpDialog(); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Set Follow-Up Date</DialogTitle>
+              <DialogDescription>Select the date before moving this lead to follow-up.</DialogDescription>
+            </DialogHeader>
+
+            <Input
+              type="date"
+              value={followUpDate}
+              min={minFollowUpDate}
+              onChange={(event) => setFollowUpDate(event.target.value)}
+            />
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeFollowUpDialog}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={!followUpDate || changeStatus.isPending}
+                onClick={() => {
+                  changeStatus.mutate({
+                    id: lead.id,
+                    status: LeadStatus.FOLLOW_UP,
+                    followUpDate: new Date(followUpDate).toISOString(),
+                  });
+                  closeFollowUpDialog();
+                }}
+              >
+                Confirm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {lead && (
         <ConvertLeadModal

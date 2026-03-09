@@ -320,6 +320,17 @@ export interface ILead {
   updatedAt: Date | string;
 }
 
+export interface ILeadAssignee {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface ILeadDetail extends ILead {
+  activities: ILeadActivity[];
+  assignedTo?: ILeadAssignee;
+}
+
 export interface ILeadActivity {
   id: string;
   type: LeadActivityType;

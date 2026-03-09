@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { UserRole } from '@sentra-core/types';
+import { IOrganizationMember, UserRole } from '@sentra-core/types';
 
 // Query keys
 export const organizationKeys = {
@@ -15,7 +15,8 @@ export const organizationKeys = {
 export function useMembers() {
   return useQuery({
     queryKey: organizationKeys.members(),
-    queryFn: () => api.getMembers(),
+    queryFn: (): Promise<IOrganizationMember[]> => api.getMembers(),
+    retry: false,
   });
 }
 

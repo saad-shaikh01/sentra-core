@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
 import { Plus, LayoutGrid, List } from 'lucide-react';
 import { PageHeader, FilterBar, Pagination } from '@/components/shared';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useLeads } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
-import { ILead, LeadStatus } from '@sentra-core/types';
+import { ILead, ILeadDetail, IOrganizationMember, LeadStatus } from '@sentra-core/types';
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
 import { LeadFormModal } from './_components/lead-form-modal';
@@ -39,7 +39,7 @@ export default function LeadsPage() {
   const isKanban = params.view === 'kanban';
 
   const queryParams = useMemo(() => ({
-    ...(isKanban ? { limit: 200 } : { page: params.page, limit: params.limit }),
+    ...(isKanban ? { limit: 100 } : { page: params.page, limit: params.limit }),
     ...(debouncedSearch      ? { search: debouncedSearch }          : {}),
     ...(!isKanban && params.status       ? { status: params.status }             : {}),
     ...(params.brandId       ? { brandId: params.brandId }           : {}),
@@ -55,15 +55,27 @@ export default function LeadsPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
+  const [editLead, setEditLead] = useState<ILeadDetail | null>(null);
+
+  const handleModalOpenChange = (open: boolean) => {
+    setModalOpen(open);
+
+    if (!open) {
+      setEditLead(null);
+    }
+  };
 
   // Enrich leads with human-readable brand name + assignee name for kanban
   const leadsEnriched = useMemo(() => {
     const brandMap  = Object.fromEntries(brandsData?.data.map((b) => [b.id, b.name]) ?? []);
-    const memberMap = Object.fromEntries((members ?? []).map((m: any) => [m.id, m.name]));
+    const memberMap = Object.fromEntries(
+      (members ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => [member.id, member.name])
+    );
+
     return (data?.data ?? []).map((l) => ({
       ...l,
       brandName:    brandMap[l.brandId] ?? undefined,
-      assigneeName: l.assignedToId ? (memberMap[l.assignedToId] ?? undefined) : undefined,
+      assigneeName: l.assignedToId ? (memberMap[l.assignedToId] ?? 'Assigned') : 'Unassigned',
     }));
   }, [data?.data, brandsData?.data, members]);
 
@@ -101,7 +113,10 @@ export default function LeadsPage() {
                 Table
               </button>
             </div>
-            <Button onClick={() => setModalOpen(true)}>
+            <Button onClick={() => {
+              setEditLead(null);
+              setModalOpen(true);
+            }}>
               <Plus className="h-4 w-4 mr-2" /> New Lead
             </Button>
           </div>
@@ -166,8 +181,8 @@ export default function LeadsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All assignees</SelectItem>
-            {(members ?? []).map((m: any) => (
-              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            {(members ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
+              <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -211,11 +226,19 @@ export default function LeadsPage() {
         </>
       )}
 
-      <LeadFormModal open={modalOpen} onOpenChange={setModalOpen} />
+      <LeadFormModal
+        open={modalOpen}
+        onOpenChange={handleModalOpenChange}
+        lead={editLead ?? undefined}
+      />
 
       <LeadDetailSheet
         leadId={detailLeadId}
         onClose={() => setDetailLeadId(null)}
+        onEdit={(lead) => {
+          setEditLead(lead);
+          setModalOpen(true);
+        }}
       />
     </div>
   );

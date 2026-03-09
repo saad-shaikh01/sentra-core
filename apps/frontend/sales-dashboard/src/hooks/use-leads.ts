@@ -1,8 +1,8 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ILead, ILeadActivity, IPaginatedResponse } from '@sentra-core/types';
+import { ILead, ILeadActivity, ILeadDetail, IPaginatedResponse, LeadStatus } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const leadsKeys = {
@@ -13,6 +13,12 @@ export const leadsKeys = {
   activities: (id: string)     => [...leadsKeys.all, 'activities', id] as const,
 };
 
+interface ChangeLeadStatusVariables {
+  id: string;
+  status: LeadStatus;
+  followUpDate?: string;
+}
+
 export function useLeads(params?: Record<string, unknown>) {
   return useQuery({
     queryKey: leadsKeys.list(params ?? {}),
@@ -22,10 +28,10 @@ export function useLeads(params?: Record<string, unknown>) {
   });
 }
 
-export function useLead(id: string) {
+export function useLead(id: string): UseQueryResult<ILeadDetail> {
   return useQuery({
     queryKey: leadsKeys.detail(id),
-    queryFn:  () => api.getLead(id) as Promise<ILead>,
+    queryFn:  () => api.getLead(id) as Promise<ILeadDetail>,
     enabled:  !!id,
     staleTime: 60_000,
   });
@@ -72,8 +78,8 @@ export function useDeleteLead() {
 export function useChangeLeadStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      api.changeLeadStatus(id, status),
+    mutationFn: ({ id, status, followUpDate }: ChangeLeadStatusVariables) =>
+      api.changeLeadStatus(id, status, followUpDate),
     onSuccess: (data, { id, status }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.setQueryData(leadsKeys.detail(id), data);

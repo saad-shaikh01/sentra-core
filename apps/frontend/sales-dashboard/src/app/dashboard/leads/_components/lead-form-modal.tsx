@@ -10,12 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateLead, useUpdateLead } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
-import { ILead } from '@sentra-core/types';
+import { ILeadDetail } from '@sentra-core/types';
 
 interface LeadFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lead?: ILead | null;
+  lead?: ILeadDetail | null;
 }
 
 interface FormValues {
@@ -29,6 +29,31 @@ interface FormValues {
   assignedToId: string;
 }
 
+interface LeadFormPayload extends Record<string, unknown> {
+  title: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  source?: string;
+  assignedToId?: string;
+}
+
+interface CreateLeadFormPayload extends LeadFormPayload {
+  brandId?: string;
+}
+
+const defaultValues: FormValues = {
+  title: '',
+  name: '',
+  email: '',
+  phone: '',
+  website: '',
+  source: '',
+  brandId: '',
+  assignedToId: '',
+};
+
 export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) {
   const isEdit = !!lead;
   const createLead = useCreateLead();
@@ -36,43 +61,68 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const { data: brandsData } = useBrands({ limit: 100 });
   const { data: members } = useMembers();
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormValues>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<FormValues>({
+    defaultValues,
+  });
   const brandId = watch('brandId');
   const assignedToId = watch('assignedToId');
 
+  register('brandId', { required: 'Brand is required' });
+
   useEffect(() => {
-    if (open) {
+    if (lead) {
       reset({
-        title: lead?.title ?? '',
-        name: lead?.name ?? '',
-        email: lead?.email ?? '',
-        phone: lead?.phone ?? '',
-        website: lead?.website ?? '',
-        source: lead?.source ?? '',
-        brandId: lead?.brandId ?? '',
-        assignedToId: lead?.assignedToId ?? '',
+        title: lead.title,
+        name: lead.name ?? '',
+        email: lead.email ?? '',
+        phone: lead.phone ?? '',
+        website: lead.website ?? '',
+        source: lead.source ?? '',
+        brandId: lead.brandId ?? '',
+        assignedToId: lead.assignedToId ?? '',
       });
+      return;
     }
-  }, [open, lead, reset]);
+
+    reset(defaultValues);
+  }, [lead, reset]);
 
   const mutation = isEdit ? updateLead : createLead;
   const error = mutation.error?.message ?? null;
 
   const onSubmit = async (values: FormValues) => {
-    const dto: Record<string, unknown> = {
+    if (!isEdit && !values.brandId) {
+      setError('brandId', { type: 'required', message: 'Brand is required' });
+      return;
+    }
+
+    const dto: LeadFormPayload = {
       title: values.title,
       ...(values.name && { name: values.name }),
       ...(values.email && { email: values.email }),
       ...(values.phone && { phone: values.phone }),
       ...(values.website && { website: values.website }),
       ...(values.source && { source: values.source }),
-      ...(values.brandId && { brandId: values.brandId }),
       ...(values.assignedToId && { assignedToId: values.assignedToId }),
     };
+
     if (isEdit && lead) {
       await updateLead.mutateAsync({ id: lead.id, ...dto });
     } else {
-      await createLead.mutateAsync(dto);
+      const createDto: CreateLeadFormPayload = {
+        ...dto,
+        ...(values.brandId && { brandId: values.brandId }),
+      };
+
+      await createLead.mutateAsync(createDto);
     }
     onOpenChange(false);
   };
@@ -121,7 +171,10 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Brand</Label>
-            <Select value={brandId} onValueChange={(v) => setValue('brandId', v)}>
+            <Select
+              value={brandId}
+              onValueChange={(value) => setValue('brandId', value, { shouldValidate: true })}
+            >
               <SelectTrigger className="bg-white/5 border-white/10">
                 <SelectValue placeholder="Select brand" />
               </SelectTrigger>
@@ -131,6 +184,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
                 ))}
               </SelectContent>
             </Select>
+            {errors.brandId && <p className="text-sm text-red-400 mt-1">{errors.brandId.message}</p>}
           </div>
 
           <div className="space-y-1.5">

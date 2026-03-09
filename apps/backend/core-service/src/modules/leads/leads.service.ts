@@ -3,9 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcryptjs';
 import {
   LeadStatus,
@@ -235,6 +237,7 @@ export class LeadsService {
       },
     });
 
+    await this.cache.del(`leads:${orgId}:${id}`);
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return this.mapToILead(updated);
@@ -427,38 +430,50 @@ export class LeadsService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const client = await tx.client.create({
-        data: {
-          email: dto.email,
-          password: hashedPassword,
-          companyName: dto.companyName,
-          contactName: dto.contactName,
-          phone: dto.phone,
-          brandId: lead.brandId,
-          organizationId: orgId,
-        },
-      });
+    let result;
 
-      const updated = await tx.lead.update({
-        where: { id },
-        data: {
-          convertedClientId: client.id,
-          status: LeadStatus.CLOSED,
-        },
-      });
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const client = await tx.client.create({
+          data: {
+            email: dto.email,
+            password: hashedPassword,
+            companyName: dto.companyName,
+            contactName: dto.contactName,
+            phone: dto.phone,
+            brandId: lead.brandId,
+            organizationId: orgId,
+          },
+        });
 
-      await tx.leadActivity.create({
-        data: {
-          type: LeadActivityType.CONVERSION,
-          data: { clientId: client.id, companyName: dto.companyName },
-          leadId: id,
-          userId,
-        },
-      });
+        const updated = await tx.lead.update({
+          where: { id },
+          data: {
+            convertedClientId: client.id,
+            status: LeadStatus.CLOSED,
+          },
+        });
 
-      return updated;
-    });
+        await tx.leadActivity.create({
+          data: {
+            type: LeadActivityType.CONVERSION,
+            data: { clientId: client.id, companyName: dto.companyName },
+            leadId: id,
+            userId,
+          },
+        });
+
+        return updated;
+      });
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(
+          'A client with this email address already exists in your organization',
+        );
+      }
+
+      throw error;
+    }
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
     await this.cache.delByPrefix(`clients:${orgId}:`);

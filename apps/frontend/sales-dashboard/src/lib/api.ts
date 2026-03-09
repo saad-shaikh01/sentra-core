@@ -334,8 +334,11 @@ class ApiClient {
     return this.fetch<{ message: string }>(`/leads/${id}`, { method: 'DELETE' });
   }
 
-  async changeLeadStatus(id: string, status: string) {
-    return this.fetch<any>(`/leads/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  async changeLeadStatus(id: string, status: string, followUpDate?: string) {
+    return this.fetch<any>(`/leads/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, ...(followUpDate ? { followUpDate } : {}) }),
+    });
   }
 
   async assignLead(id: string, assignedToId: string) {
