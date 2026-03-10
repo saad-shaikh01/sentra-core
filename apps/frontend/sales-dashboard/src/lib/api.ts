@@ -466,7 +466,11 @@ class ApiClient {
 
   async initiateOAuth(brandId?: string) {
     const qs = brandId ? `?brandId=${encodeURIComponent(brandId)}` : '';
-    return this.fetch<{ redirectUrl: string }>(`/identities/oauth/initiate${qs}`, { service: 'comm' });
+    const response = await this.fetch<{ data?: { redirectUrl?: string }; redirectUrl?: string }>(
+      `/identities/oauth/initiate${qs}`,
+      { service: 'comm' },
+    );
+    return response.data ?? response;
   }
 
   async disconnectIdentity(id: string) {
