@@ -60,7 +60,12 @@ export class BrandsService {
       this.prisma.brand.count({ where }),
     ]);
 
-    const result = buildPaginationResponse(brands.map(b => this.mapToIBrand(b)), total, page, limit);
+    const result: IPaginatedResponse<IBrand> = buildPaginationResponse(
+      brands.map((b) => this.mapToIBrand(b)),
+      total,
+      page,
+      limit,
+    );
     await this.cache.set(cacheKey, result);
     return result;
   }

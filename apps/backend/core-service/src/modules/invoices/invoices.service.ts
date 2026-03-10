@@ -122,7 +122,12 @@ export class InvoicesService {
       this.prisma.invoice.count({ where }),
     ]);
 
-    const result = buildPaginationResponse(invoices.map(i => this.mapToIInvoice(i)), total, page, limit);
+    const result: IPaginatedResponse<IInvoice> = buildPaginationResponse(
+      invoices.map((i) => this.mapToIInvoice(i)),
+      total,
+      page,
+      limit,
+    );
     await this.cache.set(cacheKey, result);
     return result;
   }

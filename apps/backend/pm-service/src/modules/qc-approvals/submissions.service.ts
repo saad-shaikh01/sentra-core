@@ -18,11 +18,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { PmSubmissionStatus } from '@prisma/client';
 import {
   buildPmPaginationResponse,
   toPrismaPagination,
 } from '../../common/helpers/pagination.helper';
+import { PmSubmissionStatus } from '../../common/enums/pm.enums';
 import { PmEventsService } from '../events/pm-events.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 

@@ -6,7 +6,6 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import * as bcrypt from 'bcryptjs';
 import {
@@ -89,7 +88,7 @@ export class LeadsService {
     const { page, limit, status, source, assignedToId, brandId, dateFrom, dateTo, search } = query;
 
     const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
-    const where: Prisma.LeadWhereInput = { organizationId: orgId, deletedAt: null };
+    const where: Record<string, any> = { organizationId: orgId, deletedAt: null };
 
     // Data visibility scoping
     if (agentRoles.includes(role)) {
@@ -124,10 +123,10 @@ export class LeadsService {
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) {
-        (where.createdAt as Prisma.DateTimeFilter).gte = new Date(dateFrom);
+        where.createdAt.gte = new Date(dateFrom);
       }
       if (dateTo) {
-        (where.createdAt as Prisma.DateTimeFilter).lte = new Date(dateTo);
+        where.createdAt.lte = new Date(dateTo);
       }
     }
 
@@ -152,7 +151,12 @@ export class LeadsService {
 
     const data: ILead[] = leads.map((lead) => this.mapToILead(lead));
 
-    const result = buildPaginationResponse(data, total, page, limit);
+    const result: IPaginatedResponse<ILead> = buildPaginationResponse(
+      data,
+      total,
+      page,
+      limit,
+    );
     await this.cache.set(cacheKey, result);
     return result;
   }

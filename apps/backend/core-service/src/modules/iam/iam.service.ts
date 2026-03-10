@@ -19,6 +19,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { CreateIamInvitationDto, InviteAppBundleDto, UpdateUserEntitlementsDto } from './dto';
 
 const INVITE_REQUIRED_KEYS = ['app.user.invite', 'app.access.grant', 'app.role.assign'];
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 const DEFAULT_APP_REGISTRY: Array<{ code: AppCode; name: string; description: string }> = [
   {
@@ -296,7 +298,7 @@ export class IamService {
   }
 
   private serializeScopeValues(scopeValues?: Record<string, unknown>) {
-    return scopeValues ? (scopeValues as unknown as Prisma.InputJsonValue) : Prisma.JsonNull;
+    return (scopeValues ?? null) as JsonValue;
   }
 
   private invitationToResponse(invitation: {
@@ -310,8 +312,8 @@ export class IamService {
     createdAt: Date;
     bundles: Array<{
       app: { code: string };
-      roleIds: Prisma.JsonValue | null;
-      scopeGrants: Prisma.JsonValue | null;
+      roleIds: JsonValue | null;
+      scopeGrants: JsonValue | null;
     }>;
   }) {
     return {
@@ -394,8 +396,8 @@ export class IamService {
           data: {
             invitationId: created.id,
             appId: app.id,
-            roleIds: (bundle.roleIds ?? []) as unknown as Prisma.InputJsonValue,
-            scopeGrants: (bundle.scopeGrants ?? []) as unknown as Prisma.InputJsonValue,
+            roleIds: (bundle.roleIds ?? []) as JsonValue,
+            scopeGrants: (bundle.scopeGrants ?? []) as JsonValue,
           },
         });
       }
@@ -783,14 +785,14 @@ export class IamService {
     await this.prisma.$transaction(async (tx) => {
       await this.ensureDefaultCatalog(tx);
 
-      const appRows = await tx.appRegistry.findMany({
+      const appRows = (await tx.appRegistry.findMany({
         where: {
           code: {
             in: [AppCode.SALES_DASHBOARD, AppCode.PM_DASHBOARD],
           },
         },
         select: { id: true, code: true },
-      });
+      })) as Array<{ id: string; code: string }>;
       const appIdByCode = new Map(appRows.map((row) => [this.toAppCode(row.code as string), row.id]));
 
       const ensureRoleWithAllPermissions = async (appCode: AppCode, slug: string, name: string) => {
@@ -883,8 +885,8 @@ export class IamService {
     userId: string,
     bundles: Array<{
       app: { id: string; code: string };
-      roleIds: Prisma.JsonValue | null;
-      scopeGrants: Prisma.JsonValue | null;
+      roleIds: JsonValue | null;
+      scopeGrants: JsonValue | null;
     }>,
   ): Promise<void> {
     if (!this.isFeatureEnabled() || !bundles || bundles.length === 0) return;
@@ -918,14 +920,14 @@ export class IamService {
 
     await this.ensureDefaultCatalog();
 
-    const appRows = await this.prisma.appRegistry.findMany({
+    const appRows = (await this.prisma.appRegistry.findMany({
       where: {
         code: {
           in: [AppCode.SALES_DASHBOARD, AppCode.PM_DASHBOARD],
         },
       },
       select: { id: true, code: true },
-    });
+    })) as Array<{ id: string; code: string }>;
     const appByCode = new Map(appRows.map((row) => [this.toAppCode(row.code as string), row.id]));
 
     const roleSlugByLegacyRole: Partial<Record<UserRole, { appCode: AppCode; slug: string }>> = {

@@ -5,7 +5,6 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { Prisma } from '@prisma/client';
 import {
   ISale,
   ISaleItem,
@@ -105,7 +104,7 @@ export class SalesService {
       });
     } else if (plan === PaymentPlanType.INSTALLMENTS && installmentCount) {
       const installmentAmount = Math.round((totalAmount / installmentCount) * 100) / 100;
-      const invoices: Prisma.InvoiceCreateManyInput[] = [];
+      const invoices: Array<Record<string, unknown>> = [];
       for (let i = 0; i < installmentCount; i++) {
         const dueDate = new Date(now);
         dueDate.setMonth(dueDate.getMonth() + i + 1);
@@ -141,7 +140,7 @@ export class SalesService {
 
     const { page, limit, status, clientId, brandId, dateFrom, dateTo } = query;
     const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
-    const where: Prisma.SaleWhereInput = { organizationId: orgId };
+    const where: Record<string, any> = { organizationId: orgId };
 
     // Data visibility scoping
     if (agentRoles.includes(role)) {
@@ -174,8 +173,8 @@ export class SalesService {
     if (brandId) where.brandId = brandId;
     if (dateFrom || dateTo) {
       where.createdAt = {};
-      if (dateFrom) (where.createdAt as Prisma.DateTimeFilter).gte = new Date(dateFrom);
-      if (dateTo) (where.createdAt as Prisma.DateTimeFilter).lte = new Date(dateTo);
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo) where.createdAt.lte = new Date(dateTo);
     }
 
     const [sales, total] = await Promise.all([
@@ -189,7 +188,12 @@ export class SalesService {
       this.prisma.sale.count({ where }),
     ]);
 
-    const result = buildPaginationResponse(sales.map(s => this.mapToISale(s)), total, page, limit);
+    const result: IPaginatedResponse<ISale> = buildPaginationResponse(
+      sales.map((s) => this.mapToISale(s)),
+      total,
+      page,
+      limit,
+    );
     await this.cache.set(cacheKey, result);
     return result;
   }
