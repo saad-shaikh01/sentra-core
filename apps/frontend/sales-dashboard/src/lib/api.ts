@@ -78,11 +78,16 @@ class ApiClient {
     const { skipAuth = false, service, ...fetchOptions } = options;
     const baseUrl = service === 'comm' ? this.commUrl : this.baseUrl;
     const url = `${baseUrl}${endpoint}`;
+    const isFormData =
+      typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
 
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
       ...fetchOptions.headers,
     };
+
+    if (!isFormData) {
+      (headers as Record<string, string>)['Content-Type'] = 'application/json';
+    }
 
     if (!skipAuth) {
       const accessToken = this.getAccessToken();
@@ -410,7 +415,7 @@ class ApiClient {
   }
 
   async cancelSubscription(id: string) {
-    return this.fetch<any>(`/sales/${id}/subscription`, { method: 'DELETE' });
+    return this.fetch<any>(`/sales/${id}/cancel-subscription`, { method: 'POST' });
   }
 
   // Invoice endpoints

@@ -392,6 +392,13 @@ export interface ISale {
   updatedAt: Date;
 }
 
+export interface ISaleWithRelations extends ISale {
+  client: IClient;
+  invoices: IInvoice[];
+  transactions: IPaymentTransaction[];
+  items: ISaleItem[];
+}
+
 // ==========================================
 // INVOICE INTERFACES
 // ==========================================

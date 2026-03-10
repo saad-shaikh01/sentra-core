@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
+
+const workspaceRoot = path.resolve(__dirname, '../../..');
 
 export default defineConfig({
   testDir: './tests',
@@ -19,11 +22,20 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npx nx serve sales-dashboard',
-    url: 'http://localhost:4200',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-    cwd: '/workspaces/sentra-core',
-  },
+  webServer: [
+    {
+      command: 'npx nx serve core-service',
+      url: 'http://localhost:3001/api/auth/apps',
+      reuseExistingServer: !process.env.CI,
+      timeout: 240000,
+      cwd: workspaceRoot,
+    },
+    {
+      command: 'npx nx serve sales-dashboard',
+      url: 'http://localhost:4200',
+      reuseExistingServer: !process.env.CI,
+      timeout: 240000,
+      cwd: workspaceRoot,
+    },
+  ],
 });

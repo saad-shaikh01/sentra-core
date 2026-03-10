@@ -9,13 +9,14 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly s3: S3Client;
   private readonly bucket: string;
-  private readonly cdnHostname: string;
+  private readonly cdnBaseUrl: string;
 
   constructor(private config: ConfigService) {
     const endpoint = this.config.getOrThrow<string>('WASABI_ENDPOINT');
     const region = this.config.get<string>('WASABI_REGION', 'us-east-1');
     this.bucket = this.config.getOrThrow<string>('WASABI_BUCKET');
-    this.cdnHostname = this.config.getOrThrow<string>('BUNNY_CDN_HOSTNAME');
+    const rawCdnHost = this.config.getOrThrow<string>('BUNNY_CDN_HOSTNAME').trim().replace(/\/+$/, '');
+    this.cdnBaseUrl = /^https?:\/\//i.test(rawCdnHost) ? rawCdnHost : `https://${rawCdnHost}`;
 
     this.s3 = new S3Client({
       endpoint,
@@ -53,13 +54,16 @@ export class StorageService {
     }
 
     // Return Bunny CDN URL
-    return `https://${this.cdnHostname}/${key}`;
+    return `${this.cdnBaseUrl}/${key}`;
   }
 
   async delete(cdnUrl: string): Promise<void> {
     try {
       // Extract S3 key from CDN URL
-      const key = cdnUrl.replace(`https://${this.cdnHostname}/`, '');
+      const prefix = `${this.cdnBaseUrl}/`;
+      const key = cdnUrl.startsWith(prefix)
+        ? cdnUrl.slice(prefix.length)
+        : new URL(cdnUrl).pathname.replace(/^\/+/, '');
       await this.s3.send(
         new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
       );

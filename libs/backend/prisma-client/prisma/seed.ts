@@ -47,6 +47,11 @@ type SeedUser = {
   jobTitle: string;
 };
 
+type SeededUser = {
+  id: string;
+  email: string;
+};
+
 function hash(plain: string) {
   return bcrypt.hashSync(plain, 10);
 }
@@ -143,7 +148,7 @@ async function main() {
     },
   ];
 
-  const users: any[] = [];
+  const users: SeededUser[] = [];
   for (const seedUser of seedUsers) {
     users.push(
       await prisma.user.create({
@@ -214,8 +219,9 @@ async function main() {
   await grantAccess(agentFront.id, salesApp.id, true);
   await grantAccess(agentUp.id, salesApp.id, true);
 
-  // PM gets PM only
+  // PM gets PM by default and Sales for cross-module verification
   await grantAccess(pm.id, pmApp.id, true);
+  await grantAccess(pm.id, salesApp.id, false);
 
   console.log('✅  App Access: Gateway and Switcher data ready.');
 

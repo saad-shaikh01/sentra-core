@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useSales, useDeleteSale } from '@/hooks/use-sales';
 import { useClients } from '@/hooks/use-clients';
 import { useBrands } from '@/hooks/use-brands';
+import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui-store';
-import { ISale, SaleStatus } from '@sentra-core/types';
+import { hasMinimumRole, ISale, SaleStatus, UserRole } from '@sentra-core/types';
 import { SaleFormModal } from './_components/sale-form-modal';
 import { SaleDetailSheet } from './_components/sale-detail-sheet';
 import { QuickSaleModal } from './_components/quick-sale-modal';
@@ -46,6 +47,7 @@ export default function SalesPage() {
   const { data, isLoading, isError } = useSales(queryParams);
   const { data: clientsData }    = useClients({ limit: 100 });
   const { data: brandsData }     = useBrands({ limit: 100 });
+  const { user, isLoading: isAuthLoading } = useAuth();
   const deleteSale               = useDeleteSale();
   const openConfirmDialog        = useUIStore((s) => s.openConfirmDialog);
 
@@ -53,6 +55,9 @@ export default function SalesPage() {
   const [quickSaleOpen, setQuickSaleOpen] = useState(false);
   const [editSale, setEditSale]           = useState<ISale | null>(null);
   const [detailSaleId, setDetailSaleId]   = useState<string | null>(null);
+  const userRole = user?.role;
+  const canCreateEdit = userRole ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) : false;
+  const canDelete = userRole ? hasMinimumRole(userRole, UserRole.ADMIN) : false;
 
   // Build lookup maps for human-readable names
   const clientMap = useMemo(
@@ -79,7 +84,7 @@ export default function SalesPage() {
     (sale: ISale) => {
       openConfirmDialog({
         title:       'Delete Sale?',
-        description: 'This will permanently delete this sale and all related data.',
+        description: 'This will permanently delete this sale. Sales with invoice(s) cannot be deleted until those invoice(s) are removed.',
         onConfirm:   () => deleteSale.mutate(sale.id),
       });
     },
@@ -87,63 +92,77 @@ export default function SalesPage() {
   );
 
   const columns = useMemo<Column<SaleRow>[]>(
-    () => [
-      { key: 'clientName', header: 'Client' },
-      { key: 'brandName',  header: 'Brand' },
-      {
-        key:    'totalAmount',
-        header: 'Amount',
-        render: (s) => (
-          <span className="font-bold">
-            ${s.totalAmount}{' '}
-            <span className="text-muted-foreground font-normal">{s.currency}</span>
-          </span>
-        ),
-      },
-      {
-        key:    'status',
-        header: 'Status',
-        render: (s) => <StatusBadge status={s.status} />,
-      },
-      {
-        key:    'createdAt',
-        header: 'Created',
-        render: (s) => new Date(s.createdAt).toLocaleDateString(),
-      },
-      {
-        key:       'actions',
-        header:    '',
-        className: 'w-24',
-        render:    (s) => (
-          <div className="flex items-center gap-1 justify-end">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:bg-white/10"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditSale(s);
-                setModalOpen(true);
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:bg-red-500/10 hover:text-red-400"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(s);
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ),
-      },
-    ],
-    [handleDelete]
+    () => {
+      const baseColumns: Column<SaleRow>[] = [
+        { key: 'clientName', header: 'Client' },
+        { key: 'brandName',  header: 'Brand' },
+        {
+          key:    'totalAmount',
+          header: 'Amount',
+          render: (s) => (
+            <span className="font-bold">
+              ${s.totalAmount}{' '}
+              <span className="text-muted-foreground font-normal">{s.currency}</span>
+            </span>
+          ),
+        },
+        {
+          key:    'status',
+          header: 'Status',
+          render: (s) => <StatusBadge status={s.status} />,
+        },
+        {
+          key:    'createdAt',
+          header: 'Created',
+          render: (s) => new Date(s.createdAt).toLocaleDateString(),
+        },
+      ];
+
+      if (isAuthLoading || (!canCreateEdit && !canDelete)) {
+        return baseColumns;
+      }
+
+      return [
+        ...baseColumns,
+        {
+          key:       'actions',
+          header:    '',
+          className: 'w-24',
+          render:    (s) => (
+            <div className="flex items-center gap-1 justify-end">
+              {canCreateEdit ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-white/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditSale(s);
+                    setModalOpen(true);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-red-500/10 hover:text-red-400"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(s);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+            </div>
+          ),
+        },
+      ];
+    },
+    [canCreateEdit, canDelete, handleDelete, isAuthLoading]
   );
 
   return (
@@ -151,7 +170,7 @@ export default function SalesPage() {
       <PageHeader
         title="Sales"
         description="Track sales, payments, and subscriptions."
-        action={
+        action={isAuthLoading || !canCreateEdit ? null : (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -166,7 +185,7 @@ export default function SalesPage() {
               <Plus className="h-4 w-4 mr-2" /> Quick Sale
             </Button>
           </div>
-        }
+        )}
       />
 
       <FilterBar>

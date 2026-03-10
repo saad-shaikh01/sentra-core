@@ -1,8 +1,8 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ISale, IPaginatedResponse } from '@sentra-core/types';
+import { ISale, ISaleWithRelations, IPaginatedResponse } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const salesKeys = {
@@ -21,10 +21,10 @@ export function useSales(params?: Record<string, unknown>) {
   });
 }
 
-export function useSale(id: string) {
+export function useSale(id: string): UseQueryResult<ISaleWithRelations> {
   return useQuery({
     queryKey: salesKeys.detail(id),
-    queryFn:  () => api.getSale(id) as Promise<ISale>,
+    queryFn:  () => api.getSale(id) as Promise<ISaleWithRelations>,
     enabled:  !!id,
     staleTime: 60_000,
   });
@@ -64,7 +64,19 @@ export function useDeleteSale() {
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
       toast.success('Sale deleted');
     },
-    onError: (e: Error) => toast.error('Failed to delete sale', e.message),
+    onError: (e: Error) => {
+      const message = e.message.toLowerCase();
+
+      if (message.includes('cannot delete sale') && message.includes('invoice')) {
+        toast.error(
+          'Cannot delete sale',
+          'This sale already has invoice(s). Delete the related invoice(s) first.',
+        );
+        return;
+      }
+
+      toast.error('Failed to delete sale', e.message);
+    },
   });
 }
 
@@ -87,9 +99,9 @@ export function useCreateSubscription() {
   return useMutation({
     mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
       api.createSubscription(id, dto),
-    onSuccess: (data, { id }) => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
-      queryClient.setQueryData(salesKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
       toast.success('Subscription created');
     },
     onError: (e: Error) => toast.error('Failed to create subscription', e.message),
@@ -100,9 +112,9 @@ export function useCancelSubscription() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.cancelSubscription(id),
-    onSuccess: (data, id) => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
-      queryClient.setQueryData(salesKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
       toast.success('Subscription cancelled');
     },
     onError: (e: Error) => toast.error('Failed to cancel subscription', e.message),

@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { DetailSheet, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { useSale, useCancelSubscription } from '@/hooks/use-sales';
+import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui-store';
-import { ISale, IPaymentTransaction, IInvoice, TransactionStatus } from '@sentra-core/types';
+import { hasMinimumRole, ISaleWithRelations, TransactionStatus, UserRole } from '@sentra-core/types';
 import { ChargeSaleModal } from './charge-sale-modal';
 import { SubscribeModal } from './subscribe-modal';
 import { CreditCard, RefreshCw, AlertCircle } from 'lucide-react';
@@ -15,19 +16,18 @@ interface SaleDetailSheetProps {
   onClose: () => void;
 }
 
-type SaleWithRelations = ISale & {
-  transactions?: IPaymentTransaction[];
-  invoices?: IInvoice[];
-  client?: { companyName: string };
-};
-
 export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
-  const { data: sale, isLoading, isError } = useSale(saleId ?? '') as { data: SaleWithRelations | undefined; isLoading: boolean; isError: boolean };
+  const { data: sale, isLoading, isError } = useSale(saleId ?? '');
+  const { user, isLoading: isAuthLoading } = useAuth();
   const cancelSubscription = useCancelSubscription();
   const openConfirmDialog = useUIStore((s) => s.openConfirmDialog);
 
   const [chargeOpen, setChargeOpen] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const userRole = user?.role;
+  const canChargeOrSubscribe =
+    !isAuthLoading && !!userRole && hasMinimumRole(userRole, UserRole.ADMIN);
+  const hasPaymentProfile = !!(sale?.customerProfileId && sale?.paymentProfileId);
 
   const handleCancelSub = () => {
     if (!saleId) return;
@@ -61,7 +61,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
               <InfoCard label="Status" value={<StatusBadge status={sale.status} />} />
               <InfoCard label="Currency" value={<span className="text-sm">{sale.currency}</span>} />
               <InfoCard label="Amount" value={<span className="text-sm font-bold">${sale.totalAmount}</span>} />
-              <InfoCard label="Client" value={<span className="text-sm">{sale.client?.companyName ?? sale.clientId}</span>} />
+              <InfoCard label="Client" value={<span className="text-sm">{sale.client.companyName}</span>} />
             </div>
 
             {sale.description && (
@@ -89,30 +89,42 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 mb-1">Active Subscription</p>
                     <p className="text-xs text-muted-foreground">{sale.subscriptionId}</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                    onClick={handleCancelSub}
-                    disabled={cancelSubscription.isPending}
-                  >
-                    Cancel
-                  </Button>
+                  {canChargeOrSubscribe ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                      onClick={handleCancelSub}
+                      disabled={cancelSubscription.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
                 </div>
+              </div>
+            ) : null}
+
+            {!isAuthLoading && canChargeOrSubscribe && !hasPaymentProfile ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                <p className="text-xs text-amber-300">
+                  This sale cannot be charged yet because both customer and payment profiles are required.
+                </p>
               </div>
             ) : null}
 
             {/* Action buttons */}
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => setChargeOpen(true)}
-              >
-                <CreditCard className="h-4 w-4" />
-                Charge Now
-              </Button>
-              {!sale.subscriptionId && (
+              {canChargeOrSubscribe && hasPaymentProfile ? (
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => setChargeOpen(true)}
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Charge Now
+                </Button>
+              ) : null}
+              {canChargeOrSubscribe && hasPaymentProfile && !sale.subscriptionId ? (
                 <Button
                   variant="outline"
                   className="flex-1 gap-2"
@@ -121,11 +133,11 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
                   <RefreshCw className="h-4 w-4" />
                   Subscribe
                 </Button>
-              )}
+              ) : null}
             </div>
 
             {/* Transactions */}
-            {sale.transactions?.length ? (
+            {sale.transactions.length ? (
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Transactions</h3>
                 <div className="space-y-2">
@@ -145,7 +157,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
             ) : null}
 
             {/* Invoices */}
-            {sale.invoices?.length ? (
+            {sale.invoices.length ? (
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Invoices</h3>
                 <div className="space-y-2">

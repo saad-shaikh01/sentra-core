@@ -26,6 +26,20 @@ interface FormValues {
   description: string;
 }
 
+interface CreateSalePayload {
+  clientId: string;
+  brandId: string;
+  totalAmount: number;
+  currency: string;
+  description?: string;
+}
+
+interface UpdateSalePayload {
+  totalAmount: number;
+  currency?: string;
+  description?: string;
+}
+
 export function SaleFormModal({ open, onOpenChange, sale }: SaleFormModalProps) {
   const isEdit = !!sale;
   const createSale = useCreateSale();
@@ -36,6 +50,8 @@ export function SaleFormModal({ open, onOpenChange, sale }: SaleFormModalProps) 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormValues>();
   const clientId = watch('clientId');
   const brandId = watch('brandId');
+  const clientName = clientsData?.data.find((client) => client.id === sale?.clientId)?.companyName ?? sale?.clientId ?? '';
+  const brandName = brandsData?.data.find((brand) => brand.id === sale?.brandId)?.name ?? sale?.brandId ?? '';
 
   // Register select fields so react-hook-form validates them on submit
   register('clientId', { required: 'Client is required' });
@@ -57,16 +73,23 @@ export function SaleFormModal({ open, onOpenChange, sale }: SaleFormModalProps) 
   const error = mutation.error?.message ?? null;
 
   const onSubmit = async (values: FormValues) => {
-    const dto: Record<string, unknown> = {
-      clientId: values.clientId,
-      brandId: values.brandId,
-      totalAmount: parseFloat(values.totalAmount),
-      currency: values.currency || 'USD',
-      ...(values.description && { description: values.description }),
-    };
     if (isEdit && sale) {
+      const dto: UpdateSalePayload & Record<string, unknown> = {
+        totalAmount: parseFloat(values.totalAmount),
+        ...(values.currency ? { currency: values.currency } : {}),
+        ...(values.description ? { description: values.description } : {}),
+      };
+
       await updateSale.mutateAsync({ id: sale.id, ...dto });
     } else {
+      const dto: CreateSalePayload & Record<string, unknown> = {
+        clientId: values.clientId,
+        brandId: values.brandId,
+        totalAmount: parseFloat(values.totalAmount),
+        currency: values.currency || 'USD',
+        ...(values.description ? { description: values.description } : {}),
+      };
+
       await createSale.mutateAsync(dto);
     }
     onOpenChange(false);
@@ -83,31 +106,47 @@ export function SaleFormModal({ open, onOpenChange, sale }: SaleFormModalProps) 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Client *</Label>
-            <Select value={clientId} onValueChange={(v) => setValue('clientId', v, { shouldValidate: true })}>
-              <SelectTrigger className="bg-white/5 border-white/10">
-                <SelectValue placeholder="Select client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientsData?.data.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.clientId && <p className="text-xs text-destructive">{errors.clientId.message}</p>}
+            {isEdit ? (
+              <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
+                {clientName}
+              </div>
+            ) : (
+              <>
+                <Select value={clientId} onValueChange={(v) => setValue('clientId', v, { shouldValidate: true })}>
+                  <SelectTrigger className="bg-white/5 border-white/10">
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientsData?.data.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.clientId && <p className="text-xs text-destructive">{errors.clientId.message}</p>}
+              </>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>Brand *</Label>
-            <Select value={brandId} onValueChange={(v) => setValue('brandId', v, { shouldValidate: true })}>
-              <SelectTrigger className="bg-white/5 border-white/10">
-                <SelectValue placeholder="Select brand" />
-              </SelectTrigger>
-              <SelectContent>
-                {brandsData?.data.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.brandId && <p className="text-xs text-destructive">{errors.brandId.message}</p>}
+            {isEdit ? (
+              <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
+                {brandName}
+              </div>
+            ) : (
+              <>
+                <Select value={brandId} onValueChange={(v) => setValue('brandId', v, { shouldValidate: true })}>
+                  <SelectTrigger className="bg-white/5 border-white/10">
+                    <SelectValue placeholder="Select brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brandsData?.data.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.brandId && <p className="text-xs text-destructive">{errors.brandId.message}</p>}
+              </>
+            )}
           </div>
         </div>
 
