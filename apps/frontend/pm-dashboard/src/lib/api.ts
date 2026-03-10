@@ -16,6 +16,19 @@ interface FetchOptions extends RequestInit {
   service?: 'core' | 'pm' | 'comm';
 }
 
+function buildQueryString(params?: Record<string, unknown>): string {
+  if (!params) return '';
+
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    searchParams.set(key, String(value));
+  }
+
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
 export type AppBundleInput = {
   appCode: 'SALES_DASHBOARD' | 'PM_DASHBOARD' | 'HRMS' | 'CLIENT_PORTAL' | 'COMM_SERVICE';
   roleIds?: string[];
@@ -423,7 +436,7 @@ class ApiClient {
 
   // Brand endpoints
   async getBrands(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/brands${qs}`);
   }
 
@@ -445,7 +458,7 @@ class ApiClient {
 
   // Client endpoints
   async getClients(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/clients${qs}`);
   }
 
@@ -467,7 +480,7 @@ class ApiClient {
 
   // PM (PM Service)
   async getProjects(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/projects${qs}`, { service: 'pm' });
   }
 
@@ -480,7 +493,7 @@ class ApiClient {
   }
 
   async getProjectActivity(id: string, params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/projects/${id}/activity${qs}`, { service: 'pm' });
   }
 
@@ -497,7 +510,7 @@ class ApiClient {
   }
 
   async getEngagements(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/engagements${qs}`, { service: 'pm' });
   }
 
@@ -529,12 +542,12 @@ class ApiClient {
   }
 
   async getTemplates(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/templates${qs}`, { service: 'pm' });
   }
 
   async getStages(projectId: string, params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/projects/${projectId}/stages${qs}`, { service: 'pm' });
   }
 
@@ -599,22 +612,22 @@ class ApiClient {
   }
 
   async getAllStages(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/stages${qs}`, { service: 'pm' });
   }
 
   async getTasksByStage(stageId: string, params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/stages/${stageId}/tasks${qs}`, { service: 'pm' });
   }
 
   async getMyTasks(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/my-tasks${qs}`, { service: 'pm' });
   }
 
   async getSubmissions(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/submissions/queue/all${qs}`, { service: 'pm' });
   }
 
@@ -706,7 +719,7 @@ class ApiClient {
   }
 
   async getThreadMessages(threadId: string, params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<{ data: PmThreadMessage[]; meta: { total: number; page: number; limit: number; totalPages: number } }>(
       `/threads/${threadId}/messages${qs}`,
       { service: 'pm' },
@@ -825,12 +838,12 @@ class ApiClient {
   }
 
   async getApprovalRequests(projectId: string, params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/projects/${projectId}/approval-requests${qs}`, { service: 'pm' });
   }
 
   async getNotifications(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/notifications${qs}`, { service: 'pm' });
   }
 
@@ -872,7 +885,7 @@ class ApiClient {
 
   // Comm — Threads
   async listCommThreads(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/threads${qs}`, { service: 'comm' });
   }
 
@@ -890,7 +903,7 @@ class ApiClient {
 
   // Comm — Messages
   async listCommMessages(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/messages${qs}`, { service: 'comm' });
   }
 

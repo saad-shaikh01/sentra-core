@@ -6,6 +6,19 @@ interface FetchOptions extends RequestInit {
   service?: 'comm';
 }
 
+function buildQueryString(params?: Record<string, unknown>): string {
+  if (!params) return '';
+
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    searchParams.set(key, String(value));
+  }
+
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
 export type AppBundleInput = {
   appCode: 'SALES_DASHBOARD' | 'PM_DASHBOARD' | 'HRMS' | 'CLIENT_PORTAL' | 'COMM_SERVICE';
   roleIds?: string[];
@@ -297,7 +310,7 @@ class ApiClient {
 
   // Brand endpoints
   async getBrands(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/brands${qs}`);
   }
 
@@ -319,7 +332,7 @@ class ApiClient {
 
   // Lead endpoints
   async getLeads(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/leads${qs}`);
   }
 
@@ -364,7 +377,7 @@ class ApiClient {
 
   // Client endpoints
   async getClients(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/clients${qs}`);
   }
 
@@ -386,7 +399,7 @@ class ApiClient {
 
   // Sale endpoints
   async getSales(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/sales${qs}`);
   }
 
@@ -420,7 +433,7 @@ class ApiClient {
 
   // Invoice endpoints
   async getInvoices(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/invoices${qs}`);
   }
 
@@ -483,7 +496,7 @@ class ApiClient {
 
   // Comm — Threads
   async listCommThreads(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/threads${qs}`, { service: 'comm' });
   }
 
@@ -501,7 +514,7 @@ class ApiClient {
 
   // Comm — Messages
   async listCommMessages(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/messages${qs}`, { service: 'comm' });
   }
 
@@ -539,7 +552,7 @@ class ApiClient {
   // Comm — Timeline
   async getEntityTimeline(entityType: string, entityId: string, params?: Record<string, unknown>) {
     const allParams = { entityType, entityId, ...(params ?? {}) };
-    const qs = '?' + new URLSearchParams(allParams as Record<string, string>).toString();
+    const qs = buildQueryString(allParams);
     return this.fetch<any>(`/messages${qs}`, { service: 'comm' });
   }
 
@@ -579,7 +592,7 @@ class ApiClient {
 
   // Packages endpoints
   async getPackages(params?: Record<string, unknown>) {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    const qs = buildQueryString(params);
     return this.fetch<any>(`/packages${qs}`);
   }
 
