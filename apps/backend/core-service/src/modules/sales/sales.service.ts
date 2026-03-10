@@ -104,7 +104,13 @@ export class SalesService {
       });
     } else if (plan === PaymentPlanType.INSTALLMENTS && installmentCount) {
       const installmentAmount = Math.round((totalAmount / installmentCount) * 100) / 100;
-      const invoices: Array<Record<string, unknown>> = [];
+      const invoices: Array<{
+        invoiceNumber: string;
+        amount: number;
+        dueDate: Date;
+        saleId: string;
+        notes?: string;
+      }> = [];
       for (let i = 0; i < installmentCount; i++) {
         const dueDate = new Date(now);
         dueDate.setMonth(dueDate.getMonth() + i + 1);

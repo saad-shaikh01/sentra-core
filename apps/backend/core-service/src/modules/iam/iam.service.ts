@@ -396,8 +396,8 @@ export class IamService {
           data: {
             invitationId: created.id,
             appId: app.id,
-            roleIds: (bundle.roleIds ?? []) as JsonValue,
-            scopeGrants: (bundle.scopeGrants ?? []) as JsonValue,
+            roleIds: (bundle.roleIds ?? []) as unknown as JsonValue,
+            scopeGrants: (bundle.scopeGrants ?? []) as unknown as JsonValue,
           },
         });
       }

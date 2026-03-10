@@ -38,19 +38,20 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   });
 
   const thread: PmThread | undefined = threadRes?.data;
+  const threadId = thread?.id;
 
   // 2. Initial message history fetch (REST, no polling — WS delivers live updates)
   const { data: messagesData, isLoading: loadingMessages } = useQuery({
-    queryKey: ['thread', thread?.id, 'messages'],
-    queryFn: () => api.getThreadMessages(thread.id),
-    enabled: !!thread?.id,
+    queryKey: ['thread', threadId, 'messages'],
+    queryFn: () => api.getThreadMessages(threadId!),
+    enabled: !!threadId,
     staleTime: Infinity,
   });
 
   // Reset WS messages when thread changes
   useEffect(() => {
     setWsMessages([]);
-  }, [thread?.id]);
+  }, [threadId]);
 
   // 3. WebSocket for real-time messages
   const handleIncomingMessage = useCallback((msg: ThreadMessage) => {
@@ -62,8 +63,8 @@ export function ThreadPane({ projectId, scopeType, scopeId, className }: ThreadP
   }, []);
 
   const { status: wsStatus, sendMessage: wsSend } = useThreadSocket({
-    threadId: thread?.id,
-    enabled: !!thread?.id,
+    threadId,
+    enabled: !!threadId,
     onMessage: handleIncomingMessage,
   });
 
