@@ -24,11 +24,21 @@ import { PackagesModule } from '../modules/packages';
 import { SearchModule } from '../modules/search';
 import { AnalyticsModule } from '../modules/analytics';
 
+function resolveEnvFiles(): string[] {
+  const explicitEnvFile = process.env.ENV_FILE?.trim();
+  if (explicitEnvFile) {
+    return [explicitEnvFile, '.env'];
+  }
+
+  const nodeEnv = process.env.NODE_ENV?.trim();
+  return nodeEnv ? [`.env.${nodeEnv}`, '.env'] : ['.env'];
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: resolveEnvFiles(),
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],

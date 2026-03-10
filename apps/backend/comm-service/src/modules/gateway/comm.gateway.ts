@@ -39,10 +39,25 @@ interface CommAuthPayload {
   organizationId: string;
 }
 
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:4200',
+  'http://localhost:4201',
+];
+
+function resolveCorsOrigins(): string[] {
+  const configuredOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([...DEFAULT_CORS_ORIGINS, ...configuredOrigins]));
+}
+
 @WebSocketGateway({
   namespace: '/comm',
+  path: '/socket.io-comm/',
   cors: {
-    origin: ['http://localhost:4200', 'http://localhost:4201'],
+    origin: resolveCorsOrigins(),
     credentials: true,
   },
 })

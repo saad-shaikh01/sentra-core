@@ -14,6 +14,14 @@ const CORS_STATIC_ORIGINS = [
 ];
 const CORS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+function resolveConfiguredOrigins(): string[] {
+  const rawOrigins = process.env.CORS_ORIGINS ?? '';
+  return rawOrigins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 let cachedOrigins: string[] = [...CORS_STATIC_ORIGINS];
 let lastRefreshAt = 0;
 
@@ -27,7 +35,9 @@ async function refreshCorsOrigins(app: INestApplication): Promise<void> {
     const brandOrigins = brands
       .filter((b): b is { domain: string } => b.domain !== null)
       .flatMap((b) => [`https://${b.domain}`, `https://www.${b.domain}`]);
-    cachedOrigins = [...CORS_STATIC_ORIGINS, ...brandOrigins];
+    cachedOrigins = Array.from(
+      new Set([...CORS_STATIC_ORIGINS, ...resolveConfiguredOrigins(), ...brandOrigins]),
+    );
     lastRefreshAt = Date.now();
   } catch (err) {
     Logger.warn(`CORS origin refresh failed: ${(err as Error).message}`);

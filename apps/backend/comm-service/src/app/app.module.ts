@@ -33,12 +33,22 @@ import { AttachmentsModule } from '../modules/attachments/attachments.module';
 import { MessagesModule } from '../modules/messages/messages.module';
 import { GatewayModule } from '../modules/gateway/gateway.module';
 
+function resolveEnvFiles(): string[] {
+  const explicitEnvFile = process.env.ENV_FILE?.trim();
+  if (explicitEnvFile) {
+    return [explicitEnvFile, '.env'];
+  }
+
+  const nodeEnv = process.env.NODE_ENV?.trim();
+  return nodeEnv ? [`.env.${nodeEnv}`, '.env'] : ['.env'];
+}
+
 @Module({
   imports: [
     // Global config — reads .env at root
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: resolveEnvFiles(),
     }),
 
     // Rate limiting

@@ -21,6 +21,20 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app/app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:4200',
+  'http://localhost:4201',
+];
+
+function resolveCorsOrigins(): string[] {
+  const configuredOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([...DEFAULT_CORS_ORIGINS, ...configuredOrigins]));
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -42,10 +56,7 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: [
-      'http://localhost:4200',
-      'http://localhost:4201',
-    ],
+    origin: resolveCorsOrigins(),
     credentials: true,
   });
 

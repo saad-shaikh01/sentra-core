@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { COMM_ENABLED } from '@/lib/feature-flags';
 
 const COMM_WS_URL = process.env.NEXT_PUBLIC_COMM_WS_URL || 'http://localhost:3002';
+const COMM_WS_PATH = process.env.NEXT_PUBLIC_COMM_WS_PATH || '/socket.io-comm/';
 
 /**
  * App-level hook that connects to the /comm Socket.io namespace.
@@ -32,6 +33,7 @@ export function useCommSocket() {
 
     const socket = io(COMM_WS_URL + '/comm', {
       auth: { token },
+      path: COMM_WS_PATH,
       reconnection: true,
       reconnectionAttempts: 8,
       reconnectionDelay: 1000,

@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sentra_postgres_prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - sentra_prod_network
+
+  mongo:
+    image: mongo:6.0
+    container_name: sentra_mongo_prod
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    ports:
+      - "${MONGO_BIND_IP:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_prod_data:/data/db
+    networks:
+      - sentra_prod_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sentra_redis_prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_prod_data:/data
+    networks:
+      - sentra_prod_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sentra_rabbitmq_prod
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "${RABBITMQ_BIND_IP:-127.0.0.1}:${RABBITMQ_PORT:-5673}:5672"
+      - "${RABBITMQ_BIND_IP:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15673}:15672"
+    networks:
+      - sentra_prod_network
+
+volumes:
+  postgres_prod_data:
+  mongo_prod_data:
+  redis_prod_data:
+
+networks:
+  sentra_prod_network:
+    driver: bridge

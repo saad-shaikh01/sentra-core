@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 
 const WS_URL =
   (process.env.NEXT_PUBLIC_PM_WS_URL || 'http://localhost:3003') + '/ws/threads';
+const PM_WS_PATH = process.env.NEXT_PUBLIC_PM_WS_PATH || '/socket.io-pm/';
 
 export interface ThreadMessage {
   id: string;
@@ -50,6 +51,7 @@ export function useThreadSocket({ threadId, enabled = true, onMessage }: UseThre
 
     const socket = io(WS_URL, {
       auth: { token },
+      path: PM_WS_PATH,
       reconnection: true,
       reconnectionAttempts: 8,
       reconnectionDelay: 1000,

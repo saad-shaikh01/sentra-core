@@ -44,13 +44,19 @@ export class FilesService {
     private readonly config: ConfigService,
   ) {
     this.bucket = this.config.get<string>('WASABI_BUCKET', 'sentra-pm-assets');
-    
+    const accessKeyId =
+      this.config.get<string>('WASABI_ACCESS_KEY_ID') ??
+      this.config.get<string>('WASABI_ACCESS_KEY', '');
+    const secretAccessKey =
+      this.config.get<string>('WASABI_SECRET_ACCESS_KEY') ??
+      this.config.get<string>('WASABI_SECRET_KEY', '');
+
     this.s3Client = new S3Client({
       endpoint: this.config.get<string>('WASABI_ENDPOINT', 'https://s3.wasabisys.com'),
       region: this.config.get<string>('WASABI_REGION', 'us-east-1'),
       credentials: {
-        accessKeyId: this.config.get<string>('WASABI_ACCESS_KEY', ''),
-        secretAccessKey: this.config.get<string>('WASABI_SECRET_KEY', ''),
+        accessKeyId,
+        secretAccessKey,
       },
       forcePathStyle: true, // Required for Wasabi
     });
