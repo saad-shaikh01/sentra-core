@@ -88,6 +88,8 @@ docker compose --env-file deploy/env/infra.prod.env -f docker-compose.prod.yml u
 
 Production compose intentionally `127.0.0.1` bind use karta hai, is liye DBs internet par expose nahi hongi.
 
+Note: kuch VPS CPUs par AVX support nahi hota. Isi liye Mongo image `mongo:4.4` rakhi gayi hai; `mongo:5+` aur `mongo:6+` aise servers par boot fail kar sakte hain.
+
 ## Database migrate
 
 ```bash

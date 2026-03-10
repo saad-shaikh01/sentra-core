@@ -15,7 +15,7 @@ services:
       - sentra_prod_network
 
   mongo:
-    image: mongo:6.0
+    image: mongo:4.4
     container_name: sentra_mongo_prod
     restart: unless-stopped
     environment:
