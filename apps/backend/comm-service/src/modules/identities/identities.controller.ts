@@ -18,7 +18,6 @@ import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-response';
 import { IdentitiesService } from './identities.service';
-import { OAuthCallbackQueryDto } from './dto/identities.dto';
 import { SyncService } from '../sync/sync.service';
 
 @Controller('identities')
@@ -50,19 +49,23 @@ export class IdentitiesController {
    */
   @Get('oauth/callback')
   async oauthCallback(
-    @Query() query: OAuthCallbackQueryDto,
+    @Query() query: Record<string, string | undefined>,
     @Res() res: Response,
   ) {
-    if (query.error) {
-      return res.redirect(this.buildSettingsRedirect({ error: query.error }));
+    const error = typeof query.error === 'string' ? query.error : undefined;
+    const code = typeof query.code === 'string' ? query.code : undefined;
+    const state = typeof query.state === 'string' ? query.state : undefined;
+
+    if (error) {
+      return res.redirect(this.buildSettingsRedirect({ error }));
     }
 
-    if (!query.code || !query.state) {
+    if (!code || !state) {
       return res.redirect(this.buildSettingsRedirect({ error: 'missing_oauth_parameters' }));
     }
 
     try {
-      const identity = await this.service.handleOAuthCallback(query.code, query.state);
+      const identity = await this.service.handleOAuthCallback(code, state);
       await this.syncService.triggerInitialSync(String(identity._id));
       return res.redirect(this.buildSettingsRedirect({ success: true, identityId: String(identity._id) }));
     } catch (error) {
