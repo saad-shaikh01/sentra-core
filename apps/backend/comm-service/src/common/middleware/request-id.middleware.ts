@@ -10,11 +10,22 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { randomBytes } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 
 declare module 'express' {
   interface Request {
     requestId?: string;
   }
+}
+
+type RequestContext = {
+  requestId: string;
+};
+
+export const requestContextStorage = new AsyncLocalStorage<RequestContext>();
+
+export function getCurrentRequestId(): string | undefined {
+  return requestContextStorage.getStore()?.requestId;
 }
 
 @Injectable()
@@ -27,6 +38,6 @@ export class RequestIdMiddleware implements NestMiddleware {
 
     req.requestId = requestId;
     res.setHeader('x-request-id', requestId);
-    next();
+    requestContextStorage.run({ requestId }, () => next());
   }
 }

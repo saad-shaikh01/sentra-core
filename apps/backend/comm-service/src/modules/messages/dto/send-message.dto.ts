@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsEmail, IsOptional, ArrayNotEmpty, ValidateIf } from 'class-validator';
+import { IsString, IsArray, IsEmail, IsOptional, ArrayNotEmpty, ValidateIf, IsBoolean } from 'class-validator';
 
 export class SendMessageDto {
   @IsString()
@@ -71,6 +71,15 @@ export class ReplyDto {
   @IsArray()
   @IsEmail({}, { each: true })
   cc?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentS3Keys?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  replyAll?: boolean;
 }
 
 export class ForwardDto {
@@ -89,4 +98,9 @@ export class ForwardDto {
   @IsOptional()
   @IsString()
   bodyText?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachmentS3Keys?: string[];
 }

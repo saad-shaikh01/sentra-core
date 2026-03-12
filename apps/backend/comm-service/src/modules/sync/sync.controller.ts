@@ -4,10 +4,12 @@ import {
   Post,
   Param,
   Query,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { InjectModel } from '@nestjs/mongoose';
@@ -41,8 +43,13 @@ export class SyncController {
   async triggerSync(
     @GetOrgContext() ctx: OrgContext,
     @Param('identityId') identityId: string,
+    @Req() req: Request,
   ) {
-    await this.syncService.triggerIncrementalSyncForIdentity(identityId, ctx.organizationId);
+    await this.syncService.triggerIncrementalSyncForIdentity(
+      identityId,
+      ctx.organizationId,
+      req.requestId,
+    );
     return COMM_MUTATION_OK;
   }
 
@@ -100,6 +107,7 @@ export class SyncController {
   async retryDlqJob(
     @GetOrgContext() ctx: OrgContext,
     @Param('jobId') jobId: string,
+    @Req() req: Request,
   ) {
     const job = await this.syncJobModel.findOne({
       _id: jobId,
@@ -111,7 +119,7 @@ export class SyncController {
       return { success: false, message: 'DLQ job not found' };
     }
 
-    await this.syncService.triggerInitialSync(job.identityId);
+    await this.syncService.triggerInitialSync(job.identityId, req.requestId);
     await this.syncJobModel.findByIdAndUpdate(jobId, { $set: { status: 'pending' } });
 
     return COMM_MUTATION_OK;

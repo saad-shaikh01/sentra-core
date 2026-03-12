@@ -45,6 +45,9 @@ export class CommThread {
   hasUnread: boolean;
 
   @Prop({ default: false })
+  hasSent: boolean;
+
+  @Prop({ default: false })
   isArchived: boolean;
 
   @Prop()
@@ -58,4 +61,5 @@ CommThreadSchema.index({ organizationId: 1, lastMessageAt: -1 });
 CommThreadSchema.index({ organizationId: 1, isArchived: 1, lastMessageAt: -1 });
 CommThreadSchema.index({ organizationId: 1, identityId: 1, lastMessageAt: -1 });
 CommThreadSchema.index({ organizationId: 1, hasUnread: 1, lastMessageAt: -1 });
+CommThreadSchema.index({ organizationId: 1, hasSent: 1, lastMessageAt: -1 });
 CommThreadSchema.index({ organizationId: 1, 'entityLinks.entityType': 1, 'entityLinks.entityId': 1 });

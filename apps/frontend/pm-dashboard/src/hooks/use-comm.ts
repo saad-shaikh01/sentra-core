@@ -8,6 +8,8 @@ import {
 } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
+import { useUIStore } from '@/stores/ui-store';
+import { COMM_ENABLED } from '@/lib/feature-flags';
 import type {
   CommIdentity,
   CommThread,
@@ -22,13 +24,52 @@ import type {
   ForwardDto,
 } from '@/types/comm.types';
 
+const COMM_UNREAD_STORAGE_KEY = 'comm:unread';
+const COMM_UNREAD_STALE_TIME_MS = 5 * 60 * 1000;
+
+type CommUnreadCountResponse = {
+  total: number;
+  byIdentity: Record<string, number>;
+};
+
+function readStoredUnreadCount(): { count: number; timestamp: number } | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(COMM_UNREAD_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as Partial<{ count: number; timestamp: number }>;
+    if (typeof parsed.count !== 'number' || typeof parsed.timestamp !== 'number') {
+      return null;
+    }
+
+    return {
+      count: Math.max(0, parsed.count),
+      timestamp: parsed.timestamp,
+    };
+  } catch {
+    return null;
+  }
+}
+
+type EntityTimelineParams = PaginationParams & {
+  search?: string;
+  filter?: 'all' | 'unread';
+};
+
 export const commKeys = {
   all: ['comm'] as const,
   identities: () => [...commKeys.all, 'identities'] as const,
+  unreadCount: () => [...commKeys.all, 'unread-count'] as const,
   threads: (params?: ListThreadsParams) => [...commKeys.all, 'threads', params] as const,
   thread: (id: string) => [...commKeys.all, 'threads', id] as const,
   messages: (params?: ListMessagesParams) => [...commKeys.all, 'messages', params] as const,
-  timeline: (entityType: string, entityId: string, params?: PaginationParams) =>
+  timeline: (entityType: string, entityId: string, params?: EntityTimelineParams) =>
     [...commKeys.all, 'timeline', entityType, entityId, params] as const,
 };
 
@@ -39,6 +80,32 @@ export function useIdentities() {
       const res = await api.listIdentities();
       return (res?.data ?? res ?? []) as CommIdentity[];
     },
+  });
+}
+
+export function useUnreadCount() {
+  const setCommUnread = useUIStore((state) => state.setCommUnread);
+  const storedUnread = readStoredUnreadCount();
+
+  return useQuery({
+    queryKey: commKeys.unreadCount(),
+    queryFn: async () => {
+      const response = await api.fetch<CommUnreadCountResponse>('/threads/unread-count', {
+        service: 'comm',
+      });
+      setCommUnread(response.total);
+      return response;
+    },
+    initialData: storedUnread
+      ? {
+          total: storedUnread.count,
+          byIdentity: {},
+        }
+      : undefined,
+    initialDataUpdatedAt: storedUnread?.timestamp ?? undefined,
+    staleTime: COMM_UNREAD_STALE_TIME_MS,
+    refetchOnMount: 'always',
+    enabled: COMM_ENABLED,
   });
 }
 
@@ -77,24 +144,27 @@ export function useMessages(params?: ListMessagesParams) {
   });
 }
 
-export function useEntityTimeline(entityType: string, entityId: string, params?: PaginationParams) {
+export function useEntityTimeline(entityType: string, entityId: string, params?: EntityTimelineParams) {
   return useQuery({
     queryKey: commKeys.timeline(entityType, entityId, params),
     queryFn: async () => {
       const res = await api.getEntityTimeline(entityType, entityId, params as Record<string, unknown>);
-      const items = res?.data ?? [];
-      return items.map((message: CommMessage) => ({
-        id: message.id,
-        threadId: message.threadId,
-        gmailThreadId: message.gmailThreadId,
-        direction: message.isSentByIdentity ? 'outbound' : 'inbound',
-        isSentByIdentity: message.isSentByIdentity,
-        from: message.from,
-        subject: message.subject,
-        snippet: message.bodyText?.slice(0, 160) ?? message.subject,
-        sentAt: message.sentAt,
-        hasAttachments: (message.attachments?.length ?? 0) > 0,
-      })) as CommMessageSummary[];
+      const page = res as PaginatedResponse<CommMessage>;
+      return {
+        ...page,
+        data: page.data.map((message) => ({
+          id: message.id,
+          threadId: message.threadId,
+          gmailThreadId: message.gmailThreadId,
+          direction: message.isSentByIdentity ? 'outbound' : 'inbound',
+          isSentByIdentity: message.isSentByIdentity,
+          from: message.from,
+          subject: message.subject,
+          snippet: message.bodyText?.slice(0, 160) ?? message.subject,
+          sentAt: message.sentAt,
+          hasAttachments: (message.attachments?.length ?? 0) > 0,
+        })) as CommMessageSummary[],
+      } as PaginatedResponse<CommMessageSummary>;
     },
     enabled: !!entityType && !!entityId,
   });
@@ -161,10 +231,27 @@ export function useArchiveThread() {
 
 export function useMarkThreadRead() {
   const queryClient = useQueryClient();
+  const decrementCommUnread = useUIStore((state) => state.decrementCommUnread);
   return useMutation({
     mutationFn: (threadId: string) => api.markCommThreadRead(threadId),
     onSuccess: () => {
+      decrementCommUnread(1);
       queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
+    },
+  });
+}
+
+export function useMarkThreadUnread() {
+  const queryClient = useQueryClient();
+  const incrementCommUnread = useUIStore((state) => state.incrementCommUnread);
+  return useMutation({
+    mutationFn: (threadId: string) =>
+      api.fetch<void>(`/threads/${threadId}/unread`, { method: 'PATCH', service: 'comm' }),
+    onSuccess: () => {
+      incrementCommUnread(1);
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },
   });
 }

@@ -19,6 +19,7 @@ import {
   Post,
   Body,
   Headers,
+  Req,
   HttpCode,
   HttpStatus,
   UnauthorizedException,
@@ -28,6 +29,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OAuth2Client } from 'google-auth-library';
+import { Request } from 'express';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
 import { SyncService } from './sync.service';
 
@@ -51,6 +53,7 @@ export class PubsubController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async handlePubSubPush(
     @Headers('authorization') authHeader: string,
+    @Req() req: Request,
     @Body() body: Record<string, any>,
   ): Promise<void> {
     // Extract and verify the Google-signed JWT
@@ -118,6 +121,7 @@ export class PubsubController {
     await this.syncService.triggerIncrementalSyncForIdentity(
       String(identity._id),
       identity.organizationId,
+      req.requestId,
     );
   }
 }

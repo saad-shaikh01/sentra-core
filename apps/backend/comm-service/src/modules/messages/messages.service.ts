@@ -12,6 +12,7 @@ import {
   Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { UserRole } from '@sentra-core/types';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import MailComposer from 'nodemailer/lib/mail-composer';
@@ -27,6 +28,7 @@ import { CommGateway } from '../gateway/comm.gateway';
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { buildCommPaginationResponse, toMongoosePagination } from '../../common/helpers/pagination.helper';
 import { ListMessagesQueryDto } from './dto/list-messages.dto';
+import { AttachmentsService } from '../attachments/attachments.service';
 
 @Injectable()
 export class MessagesService {
@@ -43,21 +45,31 @@ export class MessagesService {
     private readonly entityLinkModel: Model<CommEntityLinkDocument>,
     private readonly identitiesService: IdentitiesService,
     private readonly gmailApi: GmailApiService,
+    private readonly attachmentsService: AttachmentsService,
     private readonly audit: AuditService,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly metrics?: MetricsService,
   ) {}
 
-  async listMessages(organizationId: string, query: ListMessagesQueryDto) {
+  async listMessages(
+    organizationId: string,
+    userId: string,
+    role: UserRole,
+    query: ListMessagesQueryDto,
+  ) {
     const { page = 1, limit = 20, threadId, entityType, entityId } = query;
     const filter: Record<string, unknown> = { organizationId };
     let sort: { sentAt: 1 | -1 } = { sentAt: -1 };
+    const userIdentityIds = this.identitiesService.isPrivileged(role)
+      ? []
+      : await this.identitiesService.resolveUserIdentityIds(organizationId, userId);
 
     if (threadId) {
       const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
       if (!thread) {
         throw new NotFoundException(`Thread ${threadId} not found`);
       }
+      this.assertMessageAccess(thread.identityId, userIdentityIds, role, `Thread ${threadId} not found`);
       filter.gmailThreadId = thread.gmailThreadId;
       sort = { sentAt: 1 };
     }
@@ -68,6 +80,9 @@ export class MessagesService {
           organizationId,
           'entityLinks.entityType': entityType,
           'entityLinks.entityId': entityId,
+          ...(this.identitiesService.isPrivileged(role)
+            ? {}
+            : { identityId: { $in: userIdentityIds } }),
         })
         .select('gmailThreadId')
         .lean()
@@ -101,10 +116,20 @@ export class MessagesService {
     return buildCommPaginationResponse(data, total, page, limit);
   }
 
-  async getMessage(organizationId: string, id: string): Promise<CommMessageDocument> {
+  async getMessage(
+    organizationId: string,
+    id: string,
+    userId: string,
+    role: UserRole,
+  ): Promise<CommMessageDocument> {
     const message = await this.findMessageByIdOrGmailId(organizationId, id);
     if (!message) {
       throw new NotFoundException(`Message ${id} not found`);
+    }
+
+    if (!this.identitiesService.isPrivileged(role)) {
+      const userIdentityIds = await this.identitiesService.resolveUserIdentityIds(organizationId, userId);
+      this.assertMessageAccess(message.identityId, userIdentityIds, role, `Message ${id} not found`);
     }
     return message;
   }
@@ -118,6 +143,7 @@ export class MessagesService {
     const fromAddress = this.resolveFromAlias(identity, dto.fromAlias);
     const body = this.resolveMessageBody(dto.bodyHtml, dto.bodyText);
     const subject = dto.subject?.trim();
+    const attachments = await this.attachmentsService.fetchAttachmentBuffers(dto.attachmentS3Keys ?? []);
 
     if (!subject) {
       throw new UnprocessableEntityException('Subject is required');
@@ -131,6 +157,7 @@ export class MessagesService {
       subject,
       html: body.bodyHtml,
       text: body.bodyText,
+      attachments,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
@@ -157,7 +184,12 @@ export class MessagesService {
           subject,
           bodyHtml: body.bodyHtml,
           bodyText: body.bodyText,
-          attachments: [],
+          attachments: attachments.map((attachment) => ({
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            s3Key: attachment.s3Key,
+          })),
           isRead: true,
           isSentByIdentity: true,
           gmailLabels: ['SENT'],
@@ -212,21 +244,20 @@ export class MessagesService {
     const identity = await this.getIdentityForSend(organizationId, dto.identityId);
     const fromAddress = this.resolveFromAlias(identity, dto.fromAlias);
     const body = this.resolveMessageBody(dto.bodyHtml, dto.bodyText);
-
-    const replyToEmail = original.isSentByIdentity
-      ? original.to[0]?.email ?? original.from.email
-      : original.from.email;
+    const attachments = await this.attachmentsService.fetchAttachmentBuffers(dto.attachmentS3Keys ?? []);
+    const recipients = this.resolveReplyRecipients(original, fromAddress, dto.replyAll);
 
     const rawMime = await this.buildMime({
       from: fromAddress,
-      to: [replyToEmail],
-      cc: dto.cc,
+      to: recipients.to,
+      cc: this.mergeRecipients(recipients.cc, dto.cc),
       subject: `Re: ${original.subject ?? ''}`,
       html: body.bodyHtml,
       text: body.bodyText,
       inReplyTo: original.gmailMessageId,
       references: original.gmailMessageId,
       threadId: original.gmailThreadId,
+      attachments,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
@@ -246,13 +277,18 @@ export class MessagesService {
           gmailMessageId,
           identityId: String(identity._id),
           from: { email: fromAddress },
-          to: [{ email: replyToEmail }],
-          cc: (dto.cc ?? []).map((e) => ({ email: e })),
+          to: recipients.to.map((email) => ({ email })),
+          cc: this.mergeRecipients(recipients.cc, dto.cc).map((email) => ({ email })),
           bcc: [],
           subject: `Re: ${original.subject ?? ''}`,
           bodyHtml: body.bodyHtml,
           bodyText: body.bodyText,
-          attachments: [],
+          attachments: attachments.map((attachment) => ({
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            s3Key: attachment.s3Key,
+          })),
           isRead: true,
           isSentByIdentity: true,
           gmailLabels: ['SENT'],
@@ -299,6 +335,7 @@ export class MessagesService {
 
     const identity = await this.getIdentityForSend(organizationId, dto.identityId);
     const fromAddress = this.resolveFromAlias(identity, undefined);
+    const attachments = await this.attachmentsService.fetchAttachmentBuffers(dto.attachmentS3Keys ?? []);
     const introHtml = dto.bodyHtml
       ? dto.bodyHtml
       : dto.bodyText
@@ -321,6 +358,7 @@ export class MessagesService {
       subject: `Fwd: ${original.subject ?? ''}`,
       html: quotedBody,
       text: dto.bodyText,
+      attachments,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
@@ -346,7 +384,12 @@ export class MessagesService {
           bcc: [],
           subject: `Fwd: ${original.subject ?? ''}`,
           bodyHtml: quotedBody,
-          attachments: [],
+          attachments: attachments.map((attachment) => ({
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            s3Key: attachment.s3Key,
+          })),
           isRead: true,
           isSentByIdentity: true,
           gmailLabels: ['SENT'],
@@ -429,6 +472,50 @@ export class MessagesService {
     };
   }
 
+  private resolveReplyRecipients(
+    original: CommMessageDocument,
+    fromAddress: string,
+    replyAll?: boolean,
+  ): { to: string[]; cc: string[] } {
+    if (!replyAll) {
+      const fallback = original.isSentByIdentity
+        ? original.to[0]?.email ?? original.from.email
+        : original.from.email;
+      return { to: [fallback], cc: [] };
+    }
+
+    const excluded = new Set([fromAddress.toLowerCase()]);
+    const toCandidates = original.isSentByIdentity
+      ? original.to.map((entry) => entry.email)
+      : [original.from.email, ...original.to.map((entry) => entry.email)];
+
+    return {
+      to: this.filterUniqueEmails(toCandidates, excluded),
+      cc: this.filterUniqueEmails(original.cc.map((entry) => entry.email), excluded),
+    };
+  }
+
+  private mergeRecipients(base: string[], extra?: string[]): string[] {
+    return this.filterUniqueEmails([...base, ...(extra ?? [])]);
+  }
+
+  private filterUniqueEmails(emails: Array<string | undefined>, excluded = new Set<string>()): string[] {
+    const seen = new Set<string>();
+    const results: string[] = [];
+
+    for (const email of emails) {
+      const normalized = email?.trim().toLowerCase();
+      if (!normalized || excluded.has(normalized) || seen.has(normalized)) {
+        continue;
+      }
+
+      seen.add(normalized);
+      results.push(email!.trim());
+    }
+
+    return results;
+  }
+
   private async buildMime(opts: {
     from: string;
     to: string[];
@@ -440,8 +527,9 @@ export class MessagesService {
     inReplyTo?: string;
     references?: string;
     threadId?: string;
+    attachments?: Array<{ buffer: Buffer; filename: string; mimeType: string }>;
   }): Promise<string> {
-    const mailOptions: any = {
+    const mailOptions: ConstructorParameters<typeof MailComposer>[0] = {
       from: opts.from,
       to: opts.to.join(', '),
       subject: opts.subject,
@@ -451,6 +539,13 @@ export class MessagesService {
     if (opts.bcc?.length) mailOptions.bcc = opts.bcc.join(', ');
     if (opts.html) mailOptions.html = opts.html;
     if (opts.text) mailOptions.text = opts.text;
+    if (opts.attachments?.length) {
+      mailOptions.attachments = opts.attachments.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.buffer,
+        contentType: attachment.mimeType,
+      }));
+    }
 
     const headers: Record<string, string> = {};
     if (opts.inReplyTo) headers['In-Reply-To'] = `<${opts.inReplyTo}>`;
@@ -487,7 +582,10 @@ export class MessagesService {
         },
         $inc: { messageCount: 1 },
         $max: { lastMessageAt: message.sentAt ?? new Date() },
-        $set: { snippet: subject },
+        $set: {
+          snippet: subject,
+          ...(message.isSentByIdentity ? { hasSent: true } : {}),
+        },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     ).exec())!;
@@ -584,5 +682,20 @@ export class MessagesService {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  private assertMessageAccess(
+    identityId: string,
+    userIdentityIds: string[],
+    role: UserRole,
+    notFoundMessage: string,
+  ): void {
+    if (this.identitiesService.isPrivileged(role)) {
+      return;
+    }
+
+    if (!userIdentityIds.includes(identityId)) {
+      throw new NotFoundException(notFoundMessage);
+    }
   }
 }

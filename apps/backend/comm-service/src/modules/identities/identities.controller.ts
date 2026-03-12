@@ -6,14 +6,17 @@ import {
   Param,
   Query,
   Res,
+  Headers,
   UseGuards,
   HttpCode,
   HttpStatus,
   Inject,
+  Req,
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import { Request, Response } from 'express';
+import { UserRole } from '@sentra-core/types';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-response';
@@ -35,11 +38,16 @@ export class IdentitiesController {
    */
   @UseGuards(OrgContextGuard)
   @Get('oauth/initiate')
-  initiateOAuth(
+  async initiateOAuth(
     @GetOrgContext() ctx: OrgContext,
     @Query('brandId') brandId?: string,
   ) {
-    const url = this.service.initiateOAuth(ctx.organizationId, ctx.userId, brandId);
+    const url = await this.service.initiateOAuth(
+      ctx.organizationId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+      brandId,
+    );
     return wrapSingle({ redirectUrl: url });
   }
 
@@ -50,6 +58,7 @@ export class IdentitiesController {
   @Get('oauth/callback')
   async oauthCallback(
     @Query() query: Record<string, string | undefined>,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const error = typeof query.error === 'string' ? query.error : undefined;
@@ -66,7 +75,7 @@ export class IdentitiesController {
 
     try {
       const identity = await this.service.handleOAuthCallback(code, state);
-      await this.syncService.triggerInitialSync(String(identity._id));
+      await this.syncService.triggerInitialSync(String(identity._id), req.requestId);
       return res.redirect(this.buildSettingsRedirect({ success: true, identityId: String(identity._id) }));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'oauth_callback_failed';
@@ -75,9 +84,20 @@ export class IdentitiesController {
   }
 
   @UseGuards(OrgContextGuard)
+  @Get('oauth/brands')
+  async getOAuthBrands(@Headers('authorization') authorization?: string) {
+    const brands = await this.service.getOAuthBrands(authorization);
+    return { data: brands };
+  }
+
+  @UseGuards(OrgContextGuard)
   @Get()
   async listIdentities(@GetOrgContext() ctx: OrgContext) {
-    const identities = await this.service.listIdentities(ctx.organizationId);
+    const identities = await this.service.listIdentities(
+      ctx.organizationId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return { data: identities };
   }
 
@@ -88,7 +108,12 @@ export class IdentitiesController {
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
   ) {
-    const labels = await this.service.getLabels(ctx.organizationId, id);
+    const labels = await this.service.getLabels(
+      ctx.organizationId,
+      id,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return { data: labels };
   }
 
@@ -98,7 +123,12 @@ export class IdentitiesController {
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
   ) {
-    const identity = await this.service.getIdentity(ctx.organizationId, id);
+    const identity = await this.service.getIdentity(
+      ctx.organizationId,
+      id,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return wrapSingle(identity);
   }
 

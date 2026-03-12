@@ -17,6 +17,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app/app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { validateCommEnv } from './common/config/env-validation';
 
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:4200',
@@ -33,6 +34,8 @@ function resolveCorsOrigins(): string[] {
 }
 
 async function bootstrap() {
+  validateCommEnv(process.env);
+
   const app = await NestFactory.create(AppModule);
 
   // WebSocket adapter for /comm namespace

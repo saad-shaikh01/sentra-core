@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Search, Command } from 'lucide-react';
+import { Bell, Search, Command, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,12 +8,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useNotifications } from '@/hooks/use-notifications';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useUIStore } from '@/stores/ui-store';
 
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: unreadRes } = useNotifications({ page: 1, limit: 1, status: 'UNREAD' });
   const unreadCount = unreadRes?.meta?.total ?? 0;
+  const commUnreadCount = useUIStore((state) => state.commUnreadCount);
+  const commUnreadLabel = commUnreadCount > 99 ? '99+' : String(commUnreadCount);
   const { data: apps = [] } = useQuery({
     queryKey: ['auth', 'apps'],
     queryFn: () => api.getAvailableApps(),
@@ -83,6 +86,17 @@ export function TopNav() {
               </SelectContent>
             </Select>
           )}
+          <div className="relative flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-muted-foreground">
+            <Mail className="h-4 w-4" />
+            {commUnreadCount > 0 && (
+              <span
+                aria-label={`Email unread count: ${commUnreadLabel}`}
+                className="ml-2 inline-flex min-w-6 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+              >
+                {commUnreadLabel}
+              </span>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"

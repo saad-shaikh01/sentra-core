@@ -61,8 +61,22 @@ export class GmailApiService {
           });
           this.metrics.incrementTokenRefresh(String(identity._id), 'success');
         } catch (err) {
-          this.logger.error(`Failed to persist refreshed token for identity ${identity._id}: ${err}`);
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          this.logger.error(
+            `Failed to persist refreshed token for identity ${identity._id}: ${errorMessage}`,
+          );
           this.metrics.incrementTokenRefresh(String(identity._id), 'error');
+          try {
+            await this.identitiesService.markDegraded(String(identity._id), errorMessage);
+          } catch (markDegradedError) {
+            this.logger.error(
+              `Failed to mark identity ${identity._id} degraded after token refresh error: ${
+                markDegradedError instanceof Error
+                  ? markDegradedError.message
+                  : String(markDegradedError)
+              }`,
+            );
+          }
         }
       }
     });

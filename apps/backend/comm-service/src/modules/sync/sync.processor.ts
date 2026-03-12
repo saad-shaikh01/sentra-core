@@ -11,7 +11,7 @@
  */
 
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Job } from 'bullmq';
@@ -22,8 +22,16 @@ import { SyncService } from './sync.service';
 import { GmailApiService } from './gmail-api.service';
 import { MetricsService } from '../../common/metrics/metrics.service';
 import { COMM_SYNC_QUEUE } from './sync.constants';
+import { CommGateway } from '../gateway/comm.gateway';
 
-@Processor(COMM_SYNC_QUEUE)
+// BullMQ OSS only supports worker-level rate limiting. Per-identity group-key
+// limiting requires BullMQ Pro and is deferred until that upgrade.
+@Processor(COMM_SYNC_QUEUE, {
+  limiter: {
+    max: 10,
+    duration: 1000,
+  },
+})
 export class SyncProcessor extends WorkerHost {
   private readonly logger = new Logger(SyncProcessor.name);
 
@@ -37,6 +45,7 @@ export class SyncProcessor extends WorkerHost {
     private readonly syncService: SyncService,
     private readonly gmailApi: GmailApiService,
     private readonly metrics: MetricsService,
+    @Optional() private readonly gateway?: CommGateway,
   ) {
     super();
   }
@@ -58,6 +67,12 @@ export class SyncProcessor extends WorkerHost {
           this.logger.warn(`Unknown job name: ${job.name}`);
       }
     } catch (err) {
+      if (err instanceof Error && err.message === 'GMAIL_RATE_LIMITED') {
+        this.metrics.incrementCounter('comm_sync_errors_total', {
+          identity_id: String((job.data as { identityId?: string } | undefined)?.identityId ?? 'unknown'),
+          type: 'rate_limit',
+        });
+      }
       this.metrics.incrementSyncError(job.name);
       throw err;
     } finally {
@@ -65,23 +80,38 @@ export class SyncProcessor extends WorkerHost {
     }
   }
 
-  private async handleInitialSync(job: Job<{ identityId: string; days: number }>) {
+  private async handleInitialSync(job: Job<{ identityId: string; days: number; requestId?: string }>) {
     const identity = await this.getIdentity(job.data.identityId);
     if (!identity) return;
 
-    this.logger.log(`Starting initial sync for identity ${job.data.identityId}`);
-    await this.syncService.performInitialSync(identity);
+    this.logger.log(
+      `Starting initial sync for identity ${job.data.identityId} requestId=${job.data.requestId ?? 'n/a'}`,
+    );
+    const count = await this.syncService.performInitialSync(identity, job.data.requestId);
+    this.gateway?.emitToOrg(identity.organizationId, 'sync:complete', {
+      identityId: String(identity._id),
+      email: identity.email,
+      count,
+    });
   }
 
-  private async handleIncrementalSync(job: Job<{ identityId: string }>) {
+  private async handleIncrementalSync(job: Job<{ identityId: string; requestId?: string }>) {
     const identity = await this.getIdentity(job.data.identityId);
     if (!identity) return;
 
     try {
-      await this.syncService.performIncrementalSync(identity);
+      this.logger.log(
+        `Starting incremental sync for identity ${job.data.identityId} requestId=${job.data.requestId ?? 'n/a'}`,
+      );
+      const count = await this.syncService.performIncrementalSync(identity, job.data.requestId);
 
       // COMM-BE-012: Process label events from the last incremental sync
       await this.syncLabelUpdates(identity);
+      this.gateway?.emitToOrg(identity.organizationId, 'sync:complete', {
+        identityId: String(identity._id),
+        email: identity.email,
+        count,
+      });
     } catch (err: any) {
       // COMM-BE-010: If historyId is expired, fall back to full sync
       const isHistoryExpired =
@@ -92,7 +122,7 @@ export class SyncProcessor extends WorkerHost {
         this.logger.warn(
           `HistoryId expired for identity ${job.data.identityId} — falling back to full sync`,
         );
-        await this.syncService.triggerInitialSync(job.data.identityId);
+        await this.syncService.triggerInitialSync(job.data.identityId, job.data.requestId);
         return;
       }
 
@@ -100,10 +130,13 @@ export class SyncProcessor extends WorkerHost {
     }
   }
 
-  private async handleProcessMessage(job: Job<{ identityId: string; messageId: string }>) {
+  private async handleProcessMessage(job: Job<{ identityId: string; messageId: string; requestId?: string }>) {
     const identity = await this.getIdentity(job.data.identityId);
     if (!identity) return;
 
+    this.logger.debug(
+      `Processing Gmail message ${job.data.messageId} for identity ${job.data.identityId} requestId=${job.data.requestId ?? 'n/a'}`,
+    );
     await this.syncService.processMessage(identity, job.data.messageId);
     this.metrics.incrementMessagesProcessed(job.data.identityId);
   }
@@ -147,12 +180,22 @@ export class SyncProcessor extends WorkerHost {
             });
 
             // Update thread read state
+            const unreadMessage = await this.messageModel
+              .findOne({
+                organizationId: identity.organizationId,
+                gmailThreadId: msg.gmailThreadId,
+                gmailLabels: 'UNREAD',
+              })
+              .select('_id')
+              .lean()
+              .exec();
+
             await this.threadModel.findOneAndUpdate(
               {
                 organizationId: identity.organizationId,
                 gmailThreadId: msg.gmailThreadId,
               },
-              { $set: { hasUnread: !isRead } },
+              { $set: { hasUnread: Boolean(unreadMessage) } },
             );
           }
         } catch {

@@ -5,10 +5,10 @@
  * No external prom-client dependency — outputs standard text format.
  *
  * Counters tracked:
- *   comm_messages_processed_total    (label: identity_id)
+ *   comm_messages_received_total     (label: identity_id)
  *   comm_messages_sent_total         (label: identity_id)
  *   comm_token_refresh_total         (label: identity_id, result: success|error)
- *   comm_sync_errors_total           (label: job_name)
+ *   comm_sync_errors_total           (label: identity_id, type)
  *
  * Gauges tracked:
  *   comm_ws_connections              (current active WS connections)
@@ -117,8 +117,12 @@ export class MetricsService {
     this.observeHistogram('comm_sync_duration_seconds', durationSeconds, { job_name: jobName });
   }
 
+  incrementMessagesReceived(identityId: string): void {
+    this.incrementCounter('comm_messages_received_total', { identity_id: identityId });
+  }
+
   incrementMessagesProcessed(identityId: string): void {
-    this.incrementCounter('comm_messages_processed_total', { identity_id: identityId });
+    this.incrementMessagesReceived(identityId);
   }
 
   incrementMessagesSent(identityId: string): void {
@@ -129,8 +133,8 @@ export class MetricsService {
     this.incrementCounter('comm_token_refresh_total', { identity_id: identityId, result });
   }
 
-  incrementSyncError(jobName: string): void {
-    this.incrementCounter('comm_sync_errors_total', { job_name: jobName });
+  incrementSyncError(identityId: string, type = 'unknown'): void {
+    this.incrementCounter('comm_sync_errors_total', { identity_id: identityId, type });
   }
 
   trackWsConnect(): void {
@@ -146,6 +150,7 @@ export class MetricsService {
   // ---------------------------------------------------------------------------
 
   async renderPrometheusText(): Promise<string> {
+    await this.refreshQueueDepth();
     // Update DLQ depth just before rendering
     await this.refreshDlqDepth();
 
@@ -228,6 +233,16 @@ export class MetricsService {
     try {
       const failedCount = await this.syncQueue.getFailedCount();
       this.setGauge('comm_dlq_depth', failedCount);
+    } catch {
+      // Redis might be unavailable; skip
+    }
+  }
+
+  private async refreshQueueDepth(): Promise<void> {
+    try {
+      const counts = await this.syncQueue.getJobCounts('waiting', 'active', 'delayed');
+      const depth = (counts.waiting ?? 0) + (counts.active ?? 0) + (counts.delayed ?? 0);
+      this.setGauge('comm_queue_depth', depth, { queue: COMM_SYNC_QUEUE });
     } catch {
       // Redis might be unavailable; skip
     }

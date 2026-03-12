@@ -8,6 +8,7 @@ import {
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
+import { UserRole } from '@sentra-core/types';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
@@ -25,7 +26,13 @@ export class AttachmentsController {
     @Param('messageId') messageId: string,
     @Param('index', ParseIntPipe) index: number,
   ) {
-    const result = await this.service.getAttachmentUrl(ctx.organizationId, messageId, index);
+    const result = await this.service.getAttachmentUrl(
+      ctx.organizationId,
+      messageId,
+      index,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return wrapSingle(result);
   }
 }

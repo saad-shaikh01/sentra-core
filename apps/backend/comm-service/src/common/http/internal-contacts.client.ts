@@ -9,6 +9,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { AxiosError } from 'axios';
+import { getCurrentRequestId } from '../middleware/request-id.middleware';
 
 export interface ContactLookupResult {
   email: string;
@@ -22,6 +24,9 @@ export class InternalContactsClient {
   private readonly logger = new Logger(InternalContactsClient.name);
   private readonly coreServiceUrl: string;
   private readonly serviceSecret: string;
+  private readonly timeoutMs = 5000;
+  private readonly maxRetries = 2;
+  private readonly retryDelayMs = 200;
 
   constructor(
     private readonly http: HttpService,
@@ -38,22 +43,61 @@ export class InternalContactsClient {
     if (emails.length === 0) return [];
 
     try {
-      const resp = await firstValueFrom(
-        this.http.post<{ data: ContactLookupResult[] }>(
-          `${this.coreServiceUrl}/api/internal/contacts/by-emails`,
-          { organizationId, emails },
-          {
-            headers: {
-              'x-service-secret': this.serviceSecret,
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
-      );
+      const resp = await this.postWithRetry(organizationId, emails);
       return resp.data.data ?? [];
     } catch (err) {
-      this.logger.warn(`Contact lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        `Contact lookup failed for org ${organizationId} with ${emails.length} emails: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
       return [];
     }
+  }
+
+  private async postWithRetry(
+    organizationId: string,
+    emails: string[],
+  ): Promise<{ data: { data?: ContactLookupResult[] } }> {
+    let attempt = 0;
+
+    while (true) {
+      try {
+        const requestId = getCurrentRequestId();
+        return await firstValueFrom(
+          this.http.post<{ data: ContactLookupResult[] }>(
+            `${this.coreServiceUrl}/api/internal/contacts/by-emails`,
+            { organizationId, emails },
+            {
+              timeout: this.timeoutMs,
+              headers: {
+                'x-service-secret': this.serviceSecret,
+                'Content-Type': 'application/json',
+                ...(requestId ? { 'x-request-id': requestId } : {}),
+              },
+            },
+          ),
+        );
+      } catch (error) {
+        if (!this.shouldRetry(error, attempt)) {
+          throw error;
+        }
+
+        attempt += 1;
+        await this.delay(this.retryDelayMs);
+      }
+    }
+  }
+
+  private shouldRetry(error: unknown, attempt: number): boolean {
+    if (!(error instanceof AxiosError)) {
+      return false;
+    }
+
+    return error.response?.status === 503 && attempt < this.maxRetries;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

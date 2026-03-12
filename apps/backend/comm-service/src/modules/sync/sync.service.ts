@@ -24,6 +24,24 @@ import { CommGateway } from '../gateway/comm.gateway';
 import { WatchRenewalService } from './watch-renewal.service';
 import { COMM_ATTACHMENT_QUEUE, COMM_SYNC_QUEUE } from './sync.constants';
 import { EntityLinksService } from '../entity-links/entity-links.service';
+import sanitizeHtml from 'sanitize-html';
+
+type RateLimitedError = Error & {
+  retryAfterSeconds?: number;
+};
+
+type SyncJobData = {
+  identityId: string;
+  requestId?: string;
+};
+
+type InitialSyncJobData = SyncJobData & {
+  days: number;
+};
+
+type ProcessMessageJobData = SyncJobData & {
+  messageId: string;
+};
 
 @Injectable()
 export class SyncService implements OnModuleInit, OnModuleDestroy {
@@ -64,10 +82,10 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
    * Trigger initial 90-day sync after OAuth callback.
    * Enqueues a job immediately.
    */
-  async triggerInitialSync(identityId: string): Promise<void> {
+  async triggerInitialSync(identityId: string, requestId?: string): Promise<void> {
     const bullJob = await this.syncQueue.add(
       'initial-sync',
-      { identityId, days: 90 },
+      { identityId, days: 90, requestId } satisfies InitialSyncJobData,
       { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
     );
 
@@ -94,10 +112,14 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
   /**
    * Trigger incremental sync for a specific identity (controller-invoked).
    */
-  async triggerIncrementalSyncForIdentity(identityId: string, organizationId: string): Promise<void> {
+  async triggerIncrementalSyncForIdentity(
+    identityId: string,
+    organizationId: string,
+    requestId?: string,
+  ): Promise<void> {
     await this.syncQueue.add(
       'incremental-sync',
-      { identityId },
+      { identityId, requestId } satisfies SyncJobData,
       { attempts: 2, backoff: { type: 'fixed', delay: 10000 } },
     );
     this.logger.log(`Manual incremental sync triggered for identity ${identityId}`);
@@ -136,7 +158,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     for (const identity of identities) {
       await this.syncQueue.add(
         'incremental-sync',
-        { identityId: String(identity._id) },
+        { identityId: String(identity._id), requestId: undefined } satisfies SyncJobData,
         {
           attempts: 2,
           backoff: { type: 'fixed', delay: 10000 },
@@ -154,14 +176,17 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
    * Perform 90-day fast import for an identity.
    * Called by the sync processor.
    */
-  async performInitialSync(identity: CommIdentityDocument): Promise<void> {
+  async performInitialSync(identity: CommIdentityDocument, requestId?: string): Promise<number> {
     const gmail = await this.gmailApi.getGmailClient(identity);
 
     const after = new Date();
     after.setDate(after.getDate() - 90);
 
     // Get baseline historyId before import
-    const historyId = await this.gmailApi.getCurrentHistoryId(gmail);
+    const historyId = await this.executeGmailCall(
+      String(identity._id),
+      () => this.gmailApi.getCurrentHistoryId(gmail),
+    );
 
     let pageToken: string | undefined;
     let processed = 0;
@@ -170,11 +195,15 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     let totalEstimate = 0;
 
     do {
-      const { messages, nextPageToken } = await this.gmailApi.listMessages(gmail, {
-        after,
-        pageToken,
-        maxResults: 100,
-      });
+      const { messages, nextPageToken } = await this.executeGmailCall(
+        String(identity._id),
+        () =>
+          this.gmailApi.listMessages(gmail, {
+            after,
+            pageToken,
+            maxResults: 100,
+          }),
+      );
 
       totalEstimate += messages.length;
 
@@ -182,7 +211,11 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         if (msg.id) {
           await this.syncQueue.add(
             'process-message',
-            { identityId: String(identity._id), messageId: msg.id },
+            {
+              identityId: String(identity._id),
+              messageId: msg.id,
+              requestId,
+            } satisfies ProcessMessageJobData,
             {
               attempts: 3,
               backoff: { type: 'exponential', delay: 2000 },
@@ -215,28 +248,34 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(`Initial sync queued ${processed} messages for identity ${identity._id}`);
+    return processed;
   }
 
   /**
    * Perform incremental sync using Gmail history API.
    * Called by the sync processor.
    */
-  async performIncrementalSync(identity: CommIdentityDocument): Promise<void> {
+  async performIncrementalSync(identity: CommIdentityDocument, requestId?: string): Promise<number> {
     const historyId = identity.syncState?.historyId;
     if (!historyId) {
       this.logger.warn(`No historyId for identity ${identity._id}, skipping incremental sync`);
-      return;
+      return 0;
     }
 
     const gmail = await this.gmailApi.getGmailClient(identity);
     let pageToken: string | undefined;
     let newHistoryId = historyId;
+    let processed = 0;
 
     do {
-      const { history, nextPageToken, historyId: latestId } = await this.gmailApi.listHistory(
-        gmail,
-        historyId,
-        pageToken,
+      const { history, nextPageToken, historyId: latestId } = await this.executeGmailCall(
+        String(identity._id),
+        () =>
+          this.gmailApi.listHistory(
+            gmail,
+            historyId,
+            pageToken,
+          ),
       );
 
       if (latestId) newHistoryId = latestId;
@@ -245,10 +284,15 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         for (const msg of item.messagesAdded ?? []) {
           if (msg.message?.id) {
             await this.syncQueue.add(
-              'process-message',
-              { identityId: String(identity._id), messageId: msg.message.id },
+            'process-message',
+              {
+                identityId: String(identity._id),
+                messageId: msg.message.id,
+                requestId,
+              } satisfies ProcessMessageJobData,
               { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
             );
+            processed++;
           }
         }
       }
@@ -262,6 +306,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         'syncState.lastSyncAt': new Date(),
       },
     });
+
+    return processed;
   }
 
   /**
@@ -278,7 +324,10 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     });
     if (existing) return;
 
-    const raw = await this.gmailApi.getMessage(gmail, gmailMessageId);
+    const raw = await this.executeGmailCall(
+      String(identity._id),
+      () => this.gmailApi.getMessage(gmail, gmailMessageId),
+    );
     const parsed = this.parseGmailMessage(raw, identity);
 
     const isNew = !(await this.messageModel.exists({ organizationId: identity.organizationId, gmailMessageId }));
@@ -363,7 +412,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
 
     // Extract body
     let bodyText: string | undefined;
-    let bodyHtml: string | undefined;
+    let rawBodyHtml: string | undefined;
     const attachments: CommMessage['attachments'] = [];
 
     const extractParts = (parts: gmail_v1.Schema$MessagePart[] = []) => {
@@ -371,7 +420,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         if (part.mimeType === 'text/plain' && part.body?.data) {
           bodyText = Buffer.from(part.body.data, 'base64url').toString('utf8');
         } else if (part.mimeType === 'text/html' && part.body?.data) {
-          bodyHtml = Buffer.from(part.body.data, 'base64url').toString('utf8');
+          rawBodyHtml = Buffer.from(part.body.data, 'base64url').toString('utf8');
         } else if (part.filename && part.body?.attachmentId) {
           attachments.push({
             filename: part.filename,
@@ -389,9 +438,22 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     } else if (raw.payload?.body?.data) {
       const mime = raw.payload.mimeType ?? 'text/plain';
       const text = Buffer.from(raw.payload.body.data, 'base64url').toString('utf8');
-      if (mime === 'text/html') bodyHtml = text;
+      if (mime === 'text/html') rawBodyHtml = text;
       else bodyText = text;
     }
+
+    const bodyHtml = rawBodyHtml
+      ? sanitizeHtml(rawBodyHtml, {
+          allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2']),
+          allowedAttributes: {
+            ...sanitizeHtml.defaults.allowedAttributes,
+            img: ['src', 'alt', 'width', 'height'],
+            a: ['href', 'target', 'rel'],
+          },
+          allowedSchemes: ['https', 'data'],
+          allowedSchemesByTag: { img: ['https', 'data'] },
+        }) || undefined
+      : undefined;
 
     const labels = raw.labelIds ?? [];
     const isRead = !labels.includes('UNREAD');
@@ -446,9 +508,76 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         $set: {
           snippet: parsed.bodyText?.slice(0, 200) ?? parsed.bodyHtml?.replace(/<[^>]+>/g, '').slice(0, 200),
           hasUnread: !parsed.isRead,
+          ...(parsed.isSentByIdentity ? { hasSent: true } : {}),
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     ).exec())!;
+  }
+
+  private async executeGmailCall<T>(
+    identityId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      const rateLimitedError = this.toRateLimitedError(identityId, error);
+      if (rateLimitedError) {
+        throw rateLimitedError;
+      }
+
+      throw error;
+    }
+  }
+
+  private toRateLimitedError(identityId: string, error: unknown): RateLimitedError | null {
+    const status =
+      typeof error === 'object' && error !== null
+        ? (
+            ('code' in error ? error.code : undefined) ??
+            ('status' in error ? error.status : undefined) ??
+            ('response' in error &&
+            typeof error.response === 'object' &&
+            error.response !== null &&
+            'status' in error.response
+              ? error.response.status
+              : undefined)
+          )
+        : undefined;
+
+    if (status !== 429) {
+      return null;
+    }
+
+    const retryAfterHeader =
+      typeof error === 'object' &&
+      error !== null &&
+      'response' in error &&
+      typeof error.response === 'object' &&
+      error.response !== null &&
+      'headers' in error.response &&
+      typeof error.response.headers === 'object' &&
+      error.response.headers !== null
+        ? (error.response.headers as Record<string, unknown>)['retry-after']
+        : undefined;
+
+    const parsedRetryAfter =
+      typeof retryAfterHeader === 'string'
+        ? Number.parseInt(retryAfterHeader, 10)
+        : Array.isArray(retryAfterHeader) && typeof retryAfterHeader[0] === 'string'
+          ? Number.parseInt(retryAfterHeader[0], 10)
+          : Number.NaN;
+
+    const retryAfterSeconds =
+      Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0 ? parsedRetryAfter : 60;
+
+    this.logger.warn(
+      `Gmail rate limited for identity ${identityId}; retry after ${retryAfterSeconds}s`,
+    );
+
+    const rateLimitedError = new Error('GMAIL_RATE_LIMITED') as RateLimitedError;
+    rateLimitedError.retryAfterSeconds = retryAfterSeconds;
+    return rateLimitedError;
   }
 }

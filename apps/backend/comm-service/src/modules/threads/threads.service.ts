@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { UserRole } from '@sentra-core/types';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
@@ -22,9 +23,17 @@ export class ThreadsService {
     @Optional() private readonly gateway?: CommGateway,
   ) {}
 
-  async listThreads(organizationId: string, query: ListThreadsQueryDto) {
+  async listThreads(
+    organizationId: string,
+    userId: string,
+    role: UserRole,
+    query: ListThreadsQueryDto,
+  ) {
     const { page = 1, limit = 20, entityType, entityId, search, filter, identityId } = query;
-    const mongoFilter: Record<string, any> = { organizationId };
+    const mongoFilter: Record<string, unknown> = { organizationId };
+    const userIdentityIds = this.isPrivileged(role)
+      ? []
+      : await this.resolveUserIdentityIds(organizationId, userId);
 
     if (entityType && entityId) {
       mongoFilter['entityLinks.entityType'] = entityType;
@@ -32,7 +41,11 @@ export class ThreadsService {
     }
 
     if (identityId) {
-      mongoFilter.identityId = identityId;
+      mongoFilter.identityId = this.isPrivileged(role)
+        ? identityId
+        : { $in: userIdentityIds.filter((candidateId) => candidateId === identityId) };
+    } else if (!this.isPrivileged(role)) {
+      mongoFilter.identityId = { $in: userIdentityIds };
     }
 
     if (search) {
@@ -46,6 +59,9 @@ export class ThreadsService {
     // Apply filter tab
     if (filter === 'unread') {
       mongoFilter.hasUnread = true;
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'sent') {
+      mongoFilter.hasSent = true;
       mongoFilter.isArchived = { $ne: true };
     } else if (filter === 'archived') {
       mongoFilter.isArchived = true;
@@ -68,12 +84,19 @@ export class ThreadsService {
     return buildCommPaginationResponse(data, total, page, limit);
   }
 
-  async getThread(organizationId: string, threadId: string) {
+  async getThread(
+    organizationId: string,
+    threadId: string,
+    userId: string,
+    role: UserRole,
+  ) {
     const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
 
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
+
+    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId);
 
     // Fetch messages embedded in the response
     const messages = await this.messageModel
@@ -84,12 +107,20 @@ export class ThreadsService {
     return { ...thread.toObject(), messages };
   }
 
-  async listMessages(organizationId: string, threadId: string, query: ListMessagesQueryDto) {
+  async listMessages(
+    organizationId: string,
+    threadId: string,
+    userId: string,
+    role: UserRole,
+    query: ListMessagesQueryDto,
+  ) {
     const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
 
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
+
+    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId);
 
     const { page = 1, limit = 20 } = query;
     const { skip } = toMongoosePagination(page, limit);
@@ -108,6 +139,37 @@ export class ThreadsService {
     ]);
 
     return buildCommPaginationResponse(data, total, page, limit);
+  }
+
+  async getUnreadCount(
+    organizationId: string,
+    userId: string,
+    role: UserRole,
+  ): Promise<{ total: number; byIdentity: Record<string, number> }> {
+    const filter: Record<string, unknown> = {
+      organizationId,
+      hasUnread: true,
+      isArchived: false,
+    };
+
+    if (!this.isPrivileged(role)) {
+      filter.identityId = { $in: await this.resolveUserIdentityIds(organizationId, userId) };
+    }
+
+    const [total, grouped] = await Promise.all([
+      this.threadModel.countDocuments(filter),
+      this.threadModel.aggregate<{ _id: string; count: number }>([
+        { $match: filter },
+        { $group: { _id: '$identityId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    return {
+      total,
+      byIdentity: Object.fromEntries(
+        grouped.map((item) => [item._id, item.count]),
+      ),
+    };
   }
 
   async archiveThread(organizationId: string, threadId: string): Promise<void> {
@@ -131,12 +193,19 @@ export class ThreadsService {
     this.gateway?.emitToOrg(organizationId, 'thread:updated', { threadId: String(thread._id) });
   }
 
-  async markThreadRead(organizationId: string, threadId: string): Promise<void> {
+  async markThreadRead(
+    organizationId: string,
+    threadId: string,
+    userId: string,
+    role: UserRole,
+  ): Promise<void> {
     const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
 
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
+
+    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId);
 
     const identity = await this.getThreadIdentity(organizationId, thread.identityId);
     const gmail = await this.gmailApi.getGmailClient(identity);
@@ -158,6 +227,50 @@ export class ThreadsService {
         $set: { hasUnread: false },
       }),
     ]);
+    this.gateway?.emitToOrg(organizationId, 'thread:updated', { threadId: String(thread._id) });
+  }
+
+  async markThreadUnread(
+    organizationId: string,
+    threadId: string,
+    userId: string,
+    role: UserRole,
+  ): Promise<void> {
+    const thread = await this.findThreadByIdOrGmailThreadId(organizationId, threadId);
+
+    if (!thread) {
+      throw new NotFoundException(`Thread ${threadId} not found`);
+    }
+
+    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId);
+
+    const identity = await this.getThreadIdentity(organizationId, thread.identityId);
+    const gmail = await this.gmailApi.getGmailClient(identity);
+
+    await gmail.users.threads.modify({
+      userId: 'me',
+      id: thread.gmailThreadId,
+      requestBody: {
+        addLabelIds: ['UNREAD'],
+      },
+    });
+
+    const latestMessage = await this.messageModel
+      .findOne({ organizationId, gmailThreadId: thread.gmailThreadId })
+      .sort({ sentAt: -1, _id: -1 })
+      .exec();
+
+    await Promise.all([
+      latestMessage
+        ? this.messageModel.findByIdAndUpdate(latestMessage._id, {
+            $set: { isRead: false },
+          })
+        : Promise.resolve(),
+      this.threadModel.findByIdAndUpdate(thread._id, {
+        $set: { hasUnread: true },
+      }),
+    ]);
+
     this.gateway?.emitToOrg(organizationId, 'thread:updated', { threadId: String(thread._id) });
   }
 
@@ -188,5 +301,36 @@ export class ThreadsService {
       : { organizationId, gmailThreadId: threadId };
 
     return this.threadModel.findOne(query).exec();
+  }
+
+  private async resolveUserIdentityIds(organizationId: string, userId: string): Promise<string[]> {
+    const identities = await this.identityModel
+      .find({ organizationId, userId, isActive: true })
+      .select('_id')
+      .lean()
+      .exec();
+
+    return identities.map((identity) => String(identity._id));
+  }
+
+  private isPrivileged(role: UserRole): boolean {
+    return role === UserRole.OWNER || role === UserRole.ADMIN;
+  }
+
+  private async assertThreadAccess(
+    organizationId: string,
+    identityId: string,
+    userId: string,
+    role: UserRole,
+    threadId: string,
+  ): Promise<void> {
+    if (this.isPrivileged(role)) {
+      return;
+    }
+
+    const userIdentityIds = await this.resolveUserIdentityIds(organizationId, userId);
+    if (!userIdentityIds.includes(identityId)) {
+      throw new NotFoundException(`Thread ${threadId} not found`);
+    }
   }
 }

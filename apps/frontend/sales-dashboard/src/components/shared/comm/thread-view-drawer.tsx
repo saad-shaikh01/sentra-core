@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
+import DOMPurify from 'dompurify';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Archive, ChevronDown, ChevronRight, Paperclip, Link2, XCircle, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Archive, ChevronDown, ChevronRight, Paperclip, Link2, XCircle, Loader2, AlertCircle, RefreshCw, Bold, Italic, List, ListOrdered, Strikethrough, Type, Underline as UnderlineIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useIdentities, useLinkThread, useUnlinkThread } from '@/hooks/use-comm';
 import { toast } from '@/hooks/use-toast';
@@ -52,6 +58,129 @@ interface ThreadViewDrawerProps {
   entityId?: string;
 }
 
+interface UploadAttachmentResponse {
+  s3Key: string;
+  cdnUrl: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+interface UploadedAttachment {
+  s3Key: string;
+  filename: string;
+  size: number;
+}
+
+function normalizeEditorHtml(html: string): string | undefined {
+  const trimmed = html.trim();
+  if (!trimmed || trimmed === '<p></p>') {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function formatFileSize(size: number): string {
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (size >= 1024) {
+    return `${Math.round(size / 1024)} KB`;
+  }
+  return `${size} B`;
+}
+
+function ReplyToolbarButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs transition-colors ${
+        active
+          ? 'border-primary/40 bg-primary/20 text-primary'
+          : 'border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function InlineReplyToolbar({ editor, visible }: { editor: Editor | null; visible: boolean }) {
+  if (!editor || !visible) {
+    return null;
+  }
+
+  const setLink = () => {
+    const currentHref = editor.getAttributes('link').href as string | undefined;
+    const value = window.prompt('Enter a link URL', currentHref ?? 'https://');
+    if (value === null) {
+      return;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+
+    editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 border-b border-white/10 px-3 py-3">
+      <ReplyToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <Bold className="h-3.5 w-3.5" />
+        <span>Bold</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <Italic className="h-3.5 w-3.5" />
+        <span>Italic</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+        <UnderlineIcon className="h-3.5 w-3.5" />
+        <span>Underline</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton label="Strikethrough" active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}>
+        <Strikethrough className="h-3.5 w-3.5" />
+        <span>Strike</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton label="Bullet List" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <List className="h-3.5 w-3.5" />
+        <span>Bullets</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton label="Ordered List" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <ListOrdered className="h-3.5 w-3.5" />
+        <span>Numbered</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton label="Link" active={editor.isActive('link')} onClick={setLink}>
+        <Link2 className="h-3.5 w-3.5" />
+        <span>Link</span>
+      </ReplyToolbarButton>
+      <ReplyToolbarButton
+        label="Clear Formatting"
+        active={false}
+        onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+      >
+        <Type className="h-3.5 w-3.5" />
+        <span>Clear</span>
+      </ReplyToolbarButton>
+    </div>
+  );
+}
+
 export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: ThreadViewDrawerProps) {
   const { data: thread, isLoading: threadLoading, isError: threadError } = useThread(threadId ?? '');
   const { data: messagesRes, isLoading: messagesLoading, isError: messagesError, refetch: refetchMessages } = useMessages(
@@ -61,8 +190,34 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
   const replyMutation = useReplyToMessage();
   const archiveMutation = useArchiveThread();
   const markRead = useMarkThreadRead();
+  const [replyToolbarVisible, setReplyToolbarVisible] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const replyEditor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: 'https',
+      }),
+      Image,
+    ],
+    content: '',
+    onFocus: () => setReplyToolbarVisible(true),
+    editorProps: {
+      attributes: {
+        class:
+          'min-h-[120px] px-3 py-3 text-sm text-foreground focus:outline-none',
+        role: 'textbox',
+        'data-testid': 'reply-editor',
+      },
+    },
+  });
 
-  const [replyBody, setReplyBody] = useState('');
   const [selectedFrom, setSelectedFrom] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -75,6 +230,12 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
       markRead.mutate(threadId);
     }
   }, [threadId]);
+
+  useEffect(() => {
+    replyEditor?.commands.setContent('', { emitUpdate: false });
+    setReplyToolbarVisible(false);
+    setUploadedAttachments([]);
+  }, [replyEditor, threadId]);
 
   // Default alias selection — prefer identity that owns the thread
   useEffect(() => {
@@ -98,18 +259,78 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
     }
   }, [lastMessage?.id]);
 
-  const handleReply = async () => {
-    if (!replyBody.trim() || !lastMessage || !threadId) return;
+  const uploadAttachment = async (file: File): Promise<UploadAttachmentResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.fetch<{ data?: UploadAttachmentResponse } | UploadAttachmentResponse>(
+      '/attachments/upload',
+      {
+        method: 'POST',
+        body: formData,
+        service: 'comm',
+      },
+    );
+
+    return ('data' in response ? response.data : response) as UploadAttachmentResponse;
+  };
+
+  const handleAttachmentUpload = async (files: FileList | null): Promise<void> => {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingAttachment(true);
+    try {
+      const uploads = await Promise.all(Array.from(files).map((file) => uploadAttachment(file)));
+      setUploadedAttachments((current) => [
+        ...current,
+        ...uploads.map((upload) => ({
+          s3Key: upload.s3Key,
+          filename: upload.filename,
+          size: upload.size,
+        })),
+      ]);
+    } catch (error) {
+      toast.error('Failed to upload attachment', error instanceof Error ? error.message : undefined);
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleReply = async (replyAll = false) => {
+    const bodyHtml = normalizeEditorHtml(replyEditor?.getHTML() ?? '');
+    const bodyText = replyEditor?.getText().trim() || undefined;
+
+    if ((!bodyHtml && !bodyText) || !lastMessage || !threadId) return;
     const messageId = lastMessage.gmailMessageId ?? lastMessage.id ?? '';
     const [identityId, aliasEmail] = selectedFrom.split('||');
     const identity = identities?.find((i) => i.id === identityId);
     const fromAlias = aliasEmail !== identity?.email ? aliasEmail : undefined;
+    const dto: {
+      identityId: string;
+      fromAlias?: string;
+      bodyText?: string;
+      bodyHtml?: string;
+      attachmentS3Keys?: string[];
+      replyAll?: boolean;
+    } = {
+      identityId,
+      fromAlias,
+      bodyText,
+      bodyHtml,
+      attachmentS3Keys:
+        uploadedAttachments.length > 0 ? uploadedAttachments.map((attachment) => attachment.s3Key) : undefined,
+      replyAll,
+    };
 
     await replyMutation.mutateAsync({
       messageId,
-      dto: { identityId, fromAlias, bodyText: replyBody },
+      dto,
     });
-    setReplyBody('');
+    replyEditor?.commands.clearContent(true);
+    setReplyToolbarVisible(false);
+    setUploadedAttachments([]);
   };
 
   const toggleExpand = (id: string) => {
@@ -260,18 +481,68 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
                   })}
                 </select>
               )}
-              <textarea
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                placeholder="Write a reply..."
-                rows={4}
-                className="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-white/30"
-              />
+              <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5">
+                <InlineReplyToolbar editor={replyEditor} visible={replyToolbarVisible} />
+                <EditorContent editor={replyEditor} />
+              </div>
+              {uploadedAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {uploadedAttachments.map((attachment) => (
+                    <span
+                      key={attachment.s3Key}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs"
+                    >
+                      <span>{attachment.filename}</span>
+                      <span className="text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove attachment ${attachment.filename}`}
+                        onClick={() =>
+                          setUploadedAttachments((current) =>
+                            current.filter((candidate) => candidate.s3Key !== attachment.s3Key),
+                          )
+                        }
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex justify-end gap-2">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  onChange={(event) => {
+                    void handleAttachmentUpload(event.target.files);
+                    event.target.value = '';
+                  }}
+                  className="hidden"
+                  data-testid="drawer-reply-attachment-input"
+                />
                 <Button
                   size="sm"
-                  onClick={handleReply}
-                  disabled={!replyBody.trim() || replyMutation.isPending || !selectedFrom}
+                  variant="ghost"
+                  onClick={() => attachmentInputRef.current?.click()}
+                  disabled={isUploadingAttachment}
+                >
+                  {isUploadingAttachment ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Paperclip className="mr-1.5 h-3.5 w-3.5" />}
+                  {isUploadingAttachment ? 'Uploading...' : 'Attach'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void handleReply(true)}
+                  disabled={replyMutation.isPending || !selectedFrom}
+                >
+                  Reply All
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleReply()}
+                  disabled={replyMutation.isPending || !selectedFrom}
                 >
                   {replyMutation.isPending ? 'Sending...' : 'Reply'}
                 </Button>
@@ -294,11 +565,20 @@ function MessageItem({
   onToggle: () => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const safeHtml = message.bodyHtml
+    ? DOMPurify.sanitize(message.bodyHtml, {
+        ADD_TAGS: ['img'],
+        ALLOWED_ATTR: ['src', 'alt', 'href', 'target', 'rel', 'class', 'style'],
+        ALLOW_DATA_ATTR: false,
+        FORCE_BODY: true,
+      })
+    : '';
+  const hasSafeHtml = safeHtml.trim().length > 0;
 
   useEffect(() => {
-    if (!isExpanded || !message.bodyHtml || !iframeRef.current) return;
+    if (!isExpanded || !hasSafeHtml || !iframeRef.current) return;
     const iframe = iframeRef.current;
-    iframe.srcdoc = message.bodyHtml;
+    iframe.srcdoc = safeHtml;
     const onLoad = () => {
       if (iframe.contentDocument?.body) {
         iframe.style.height = iframe.contentDocument.body.scrollHeight + 32 + 'px';
@@ -306,7 +586,7 @@ function MessageItem({
     };
     iframe.addEventListener('load', onLoad);
     return () => iframe.removeEventListener('load', onLoad);
-  }, [isExpanded, message.bodyHtml]);
+  }, [hasSafeHtml, isExpanded, safeHtml]);
 
   const fromLabel = message.from?.name || message.from?.email || 'Unknown';
 
@@ -351,10 +631,10 @@ function MessageItem({
             )}
           </div>
           <div className="rounded-lg overflow-hidden border border-white/10">
-            {message.bodyHtml ? (
+            {hasSafeHtml ? (
               <iframe
                 ref={iframeRef}
-                sandbox="allow-same-origin"
+                sandbox=""
                 referrerPolicy="no-referrer"
                 className="w-full min-h-[100px] bg-white"
                 style={{ border: 'none' }}

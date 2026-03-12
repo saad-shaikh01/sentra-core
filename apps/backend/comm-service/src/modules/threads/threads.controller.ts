@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { UserRole } from '@sentra-core/types';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-response';
@@ -24,7 +25,21 @@ export class ThreadsController {
     @GetOrgContext() ctx: OrgContext,
     @Query() query: ListThreadsQueryDto,
   ) {
-    return this.service.listThreads(ctx.organizationId, query);
+    return this.service.listThreads(
+      ctx.organizationId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+      query,
+    );
+  }
+
+  @Get('unread-count')
+  async getUnreadCount(@GetOrgContext() ctx: OrgContext) {
+    return this.service.getUnreadCount(
+      ctx.organizationId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
   }
 
   @Get(':threadId')
@@ -32,7 +47,12 @@ export class ThreadsController {
     @GetOrgContext() ctx: OrgContext,
     @Param('threadId') threadId: string,
   ) {
-    const thread = await this.service.getThread(ctx.organizationId, threadId);
+    const thread = await this.service.getThread(
+      ctx.organizationId,
+      threadId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return wrapSingle(thread);
   }
 
@@ -42,7 +62,13 @@ export class ThreadsController {
     @Param('threadId') threadId: string,
     @Query() query: ListMessagesQueryDto,
   ) {
-    return this.service.listMessages(ctx.organizationId, threadId, query);
+    return this.service.listMessages(
+      ctx.organizationId,
+      threadId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+      query,
+    );
   }
 
   @Patch(':threadId/archive')
@@ -61,7 +87,27 @@ export class ThreadsController {
     @GetOrgContext() ctx: OrgContext,
     @Param('threadId') threadId: string,
   ) {
-    await this.service.markThreadRead(ctx.organizationId, threadId);
+    await this.service.markThreadRead(
+      ctx.organizationId,
+      threadId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
+    return COMM_MUTATION_OK;
+  }
+
+  @Patch(':threadId/unread')
+  @HttpCode(HttpStatus.OK)
+  async markThreadUnread(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('threadId') threadId: string,
+  ) {
+    await this.service.markThreadUnread(
+      ctx.organizationId,
+      threadId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return COMM_MUTATION_OK;
   }
 }

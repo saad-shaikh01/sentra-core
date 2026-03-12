@@ -8,6 +8,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { UserRole } from '@sentra-core/types';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle } from '../../common/response/comm-api-response';
@@ -26,7 +27,12 @@ export class MessagesController {
     @GetOrgContext() ctx: OrgContext,
     @Query() query: ListMessagesQueryDto,
   ) {
-    return this.service.listMessages(ctx.organizationId, query);
+    return this.service.listMessages(
+      ctx.organizationId,
+      ctx.userId,
+      ctx.userRole as UserRole,
+      query,
+    );
   }
 
   @Get(':id')
@@ -34,7 +40,12 @@ export class MessagesController {
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
   ) {
-    const message = await this.service.getMessage(ctx.organizationId, id);
+    const message = await this.service.getMessage(
+      ctx.organizationId,
+      id,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
     return wrapSingle(message);
   }
 

@@ -1,9 +1,11 @@
 'use client';
 
-import { Suspense } from 'react';
-import { CheckCircle2, AlertCircle, Clock, Wifi, Star } from 'lucide-react';
+import { Suspense, useState } from 'react';
+import { CheckCircle2, AlertCircle, Clock, Wifi, Star, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
-import { useIdentities } from '@/hooks/use-comm';
+import { Button } from '@/components/ui/button';
+import { useDisconnectIdentity, useIdentities, useInitiateOAuth } from '@/hooks/use-comm';
+import { useUIStore } from '@/stores/ui-store';
 import { timeAgo } from '@/lib/format-date';
 import type { CommIdentity } from '@/types/comm.types';
 
@@ -16,13 +18,30 @@ export default function GmailSettingsPageWrapper() {
 }
 
 function GmailSettingsPage() {
+  const disconnectMutation = useDisconnectIdentity();
+  const oauthMutation = useInitiateOAuth();
   const { data: identities, isLoading } = useIdentities();
+  const commSyncProgress = useUIStore((s) => s.commSyncProgress);
+  const commIdentityErrors = useUIStore((s) => s.commIdentityErrors);
+  const [disconnectConfirmId, setDisconnectConfirmId] = useState<string | null>(null);
+
+  const handleDisconnect = async (id: string) => {
+    await disconnectMutation.mutateAsync(id);
+    setDisconnectConfirmId(null);
+  };
+
+  const handleReconnect = async (brandId?: string) => {
+    const result = await oauthMutation.mutateAsync(brandId ?? '');
+    if (result?.redirectUrl) {
+      window.location.href = result.redirectUrl;
+    }
+  };
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Gmail Accounts"
-        description="View connected Gmail accounts and their sync status."
+        description="View connected Gmail accounts and manage reconnects or disconnects."
       />
 
       <div className="space-y-4">
@@ -43,7 +62,18 @@ function GmailSettingsPage() {
         ) : (
           <div className="space-y-3">
             {identities.map((identity: CommIdentity) => (
-              <IdentityCard key={identity.id} identity={identity} />
+              <IdentityCard
+                key={identity.id}
+                identity={identity}
+                syncProgress={commSyncProgress[identity.id]}
+                wsError={commIdentityErrors[identity.id]}
+                disconnectConfirm={disconnectConfirmId === identity.id}
+                disconnecting={disconnectMutation.isPending && disconnectConfirmId === identity.id}
+                onDisconnect={() => setDisconnectConfirmId(identity.id)}
+                onCancelDisconnect={() => setDisconnectConfirmId(null)}
+                onConfirmDisconnect={() => void handleDisconnect(identity.id)}
+                onReconnect={() => void handleReconnect(identity.brandId)}
+              />
             ))}
           </div>
         )}
@@ -70,7 +100,27 @@ function SyncStatusBadge({ status }: { status: 'active' | 'error' | 'paused' }) 
   );
 }
 
-function IdentityCard({ identity }: { identity: CommIdentity }) {
+function IdentityCard({
+  identity,
+  syncProgress,
+  wsError,
+  disconnectConfirm,
+  disconnecting,
+  onDisconnect,
+  onCancelDisconnect,
+  onConfirmDisconnect,
+  onReconnect,
+}: {
+  identity: CommIdentity;
+  syncProgress?: { synced: number; total: number };
+  wsError?: string;
+  disconnectConfirm: boolean;
+  disconnecting: boolean;
+  onDisconnect: () => void;
+  onCancelDisconnect: () => void;
+  onConfirmDisconnect: () => void;
+  onReconnect: () => void;
+}) {
   const status = identity.syncState.status;
   const lastSyncAt = identity.syncState.lastSyncAt;
 
@@ -94,12 +144,37 @@ function IdentityCard({ identity }: { identity: CommIdentity }) {
         <SyncStatusBadge status={status} />
       </div>
 
-      {status === 'error' && (
+      {syncProgress && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Syncing messages...</span>
+            <span>{syncProgress.synced.toLocaleString()} / {syncProgress.total.toLocaleString()}</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300"
+              style={{ width: `${Math.min(100, (syncProgress.synced / syncProgress.total) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {(status === 'error' || wsError) && (
         <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
-          <p className="text-xs text-red-300 flex-1 min-w-0">
-            {identity.syncState.lastError || 'Token expired — contact an admin to reconnect'}
-          </p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-red-300">
+              {wsError || identity.syncState.lastError || 'Token expired — reconnect required'}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-red-500/30 text-red-400 hover:bg-red-500/10 shrink-0"
+            onClick={onReconnect}
+          >
+            Reconnect
+          </Button>
         </div>
       )}
 
@@ -123,6 +198,33 @@ function IdentityCard({ identity }: { identity: CommIdentity }) {
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {disconnectConfirm ? (
+        <div className="flex items-center gap-2 pt-1">
+          <p className="text-xs text-muted-foreground flex-1">Disconnect this account?</p>
+          <Button size="sm" variant="outline" onClick={onCancelDisconnect}>Cancel</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+            onClick={onConfirmDisconnect}
+            disabled={disconnecting}
+          >
+            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-end pt-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-7 border-red-500/30 text-red-400 hover:bg-red-500/10"
+            onClick={onDisconnect}
+          >
+            <Trash2 className="h-3 w-3 mr-1" /> Disconnect
+          </Button>
         </div>
       )}
     </div>

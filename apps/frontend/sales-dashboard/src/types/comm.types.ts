@@ -126,9 +126,11 @@ export interface SendMessageDto {
   fromAlias?: string;
   to: string[];
   cc?: string[];
+  bcc?: string[];
   subject: string;
   bodyText?: string;
   bodyHtml?: string;
+  attachmentS3Keys?: string[];
   entityType?: string;
   entityId?: string;
 }
@@ -139,6 +141,8 @@ export interface ReplyDto {
   bodyText?: string;
   bodyHtml?: string;
   cc?: string[];
+  attachmentS3Keys?: string[];
+  replyAll?: boolean;
 }
 
 export interface ForwardDto {
@@ -146,4 +150,5 @@ export interface ForwardDto {
   to: string[];
   bodyText?: string;
   bodyHtml?: string;
+  attachmentS3Keys?: string[];
 }

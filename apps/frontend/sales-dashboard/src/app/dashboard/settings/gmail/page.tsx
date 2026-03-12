@@ -3,9 +3,11 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, CheckCircle2, AlertCircle, Clock, Wifi, Trash2, Star } from 'lucide-react';
+import { UserRole } from '@sentra-core/types';
 import { PageHeader } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { useIdentities, useDisconnectIdentity, useInitiateOAuth } from '@/hooks/use-comm';
+import { useAuth } from '@/hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -13,6 +15,11 @@ import { commKeys } from '@/hooks/use-comm';
 import { timeAgo } from '@/lib/format-date';
 import { useUIStore } from '@/stores/ui-store';
 import type { CommIdentity } from '@/types/comm.types';
+
+type OAuthBrandOption = {
+  id: string;
+  name: string;
+};
 
 export default function GmailSettingsPageWrapper() {
   return (
@@ -23,7 +30,8 @@ export default function GmailSettingsPageWrapper() {
 }
 
 function GmailSettingsPage() {
-  const { data: identities, isLoading } = useIdentities();
+  const { user } = useAuth();
+  const { data: identities, isLoading, isError, error, refetch } = useIdentities();
   const disconnectMutation = useDisconnectIdentity();
   const oauthMutation = useInitiateOAuth();
   const queryClient = useQueryClient();
@@ -33,8 +41,12 @@ function GmailSettingsPage() {
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState('');
   const [disconnectConfirmId, setDisconnectConfirmId] = useState<string | null>(null);
+  const [brandOptions, setBrandOptions] = useState<OAuthBrandOption[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(true);
+  const [brandsError, setBrandsError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
+  const canViewOrgIdentities = user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN;
 
   // Handle OAuth return
   useEffect(() => {
@@ -48,9 +60,48 @@ function GmailSettingsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBrands = async () => {
+      try {
+        setBrandsLoading(true);
+        setBrandsError(null);
+        const response = await api.fetch<{ data?: OAuthBrandOption[] }>('/identities/oauth/brands', {
+          service: 'comm',
+        });
+        if (isMounted) {
+          setBrandOptions(response.data ?? []);
+        }
+      } catch (e) {
+        if (isMounted) {
+          setBrandsError(e instanceof Error ? e.message : 'Failed to load brands');
+          setBrandOptions([]);
+        }
+      } finally {
+        if (isMounted) {
+          setBrandsLoading(false);
+        }
+      }
+    };
+
+    void loadBrands();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleConnect = async () => {
     if (!selectedBrandId) return;
     const result = await oauthMutation.mutateAsync(selectedBrandId);
+    if (result?.redirectUrl) {
+      window.location.href = result.redirectUrl;
+    }
+  };
+
+  const handleReconnect = async (brandId?: string) => {
+    const result = await oauthMutation.mutateAsync(brandId);
     if (result?.redirectUrl) {
       window.location.href = result.redirectUrl;
     }
@@ -90,13 +141,25 @@ function GmailSettingsPage() {
             <h3 className="text-lg font-semibold">Connect Gmail Account</h3>
             <p className="text-sm text-muted-foreground">Select which brand this Gmail account belongs to.</p>
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Brand ID</label>
-              <input
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Brand</label>
+              <select
                 value={selectedBrandId}
                 onChange={(e) => setSelectedBrandId(e.target.value)}
-                placeholder="Brand ID..."
-                className="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-white/30"
-              />
+                className="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-white/30"
+                disabled={brandsLoading || brandOptions.length === 0}
+              >
+                <option value="">
+                  {brandsLoading ? 'Loading brands...' : 'Select a brand'}
+                </option>
+                {brandOptions.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.name}
+                  </option>
+                ))}
+              </select>
+              {brandsError && (
+                <p className="text-xs text-red-300">{brandsError}</p>
+              )}
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setConnectModalOpen(false)}>
@@ -105,7 +168,7 @@ function GmailSettingsPage() {
               <Button
                 className="flex-1 shadow-lg shadow-primary/20"
                 onClick={handleConnect}
-                disabled={!selectedBrandId || oauthMutation.isPending}
+                disabled={!selectedBrandId || oauthMutation.isPending || brandsLoading}
               >
                 {oauthMutation.isPending ? 'Redirecting...' : 'Connect Gmail'}
               </Button>
@@ -117,12 +180,30 @@ function GmailSettingsPage() {
       {/* Connected accounts */}
       <div className="space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Connected Accounts</h2>
+        <p className="text-sm text-muted-foreground">
+          {canViewOrgIdentities
+            ? 'Showing all Gmail identities connected in your organization.'
+            : 'Showing only the Gmail identities assigned to you.'}
+        </p>
 
         {isLoading ? (
           <div className="space-y-3 animate-pulse">
             {[1, 2].map((i) => (
               <div key={i} className="h-24 bg-white/5 rounded-2xl" />
             ))}
+          </div>
+        ) : isError ? (
+          <div className="py-10 px-6 rounded-2xl border border-red-500/20 bg-red-500/5 text-center space-y-4">
+            <AlertCircle className="h-8 w-8 mx-auto text-red-400" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-red-300">Failed to load Gmail identities</p>
+              <p className="text-xs text-muted-foreground">
+                {error instanceof Error ? error.message : 'Please try again.'}
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => void refetch()}>
+              Retry
+            </Button>
           </div>
         ) : !identities || identities.length === 0 ? (
           <div className="py-16 text-center rounded-2xl border border-white/10 bg-white/[0.02]">
@@ -140,7 +221,7 @@ function GmailSettingsPage() {
                 identity={identity}
                 onSetDefault={() => handleSetDefault(identity.id)}
                 onDisconnect={() => setDisconnectConfirmId(identity.id)}
-                onReconnect={() => handleConnect()}
+                onReconnect={() => void handleReconnect(identity.brandId)}
                 disconnectConfirm={disconnectConfirmId === identity.id}
                 onCancelDisconnect={() => setDisconnectConfirmId(null)}
                 onConfirmDisconnect={() => handleDisconnect(identity.id)}
@@ -242,7 +323,7 @@ function IdentityCard({
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs text-red-300">
-              {wsError || identity.syncState.lastError || 'Token expired — reconnect required'}
+              This account has an error: {wsError || identity.syncState.lastError || 'Token expired — reconnect required'}
             </p>
           </div>
           <Button size="sm" variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10 shrink-0" onClick={onReconnect}>
