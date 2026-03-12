@@ -73,7 +73,12 @@ export function useIdentities() {
     queryKey: commKeys.identities(),
     queryFn: async () => {
       const res = await api.listIdentities();
-      return (res?.data ?? res ?? []) as CommIdentity[];
+      const raw: CommIdentity[] = (res?.data ?? res ?? []) as CommIdentity[];
+      // Normalize: backend may return _id instead of id (Mongoose lean / serialization)
+      return raw.map((identity) => ({
+        ...identity,
+        id: (identity.id ?? (identity as unknown as { _id: string })._id ?? '') as string,
+      }));
     },
   });
 }
@@ -295,5 +300,62 @@ export function useDisconnectIdentity() {
       toast.success('Gmail account disconnected');
     },
     onError: (e: Error) => toast.error('Failed to disconnect account', e.message),
+  });
+}
+
+// ─── G Suite Hooks ──────────────────────────────────────────────────────────
+
+export const gsuiteKeys = {
+  connection: () => ['gsuite', 'connection'] as const,
+  users: (pageToken?: string) => ['gsuite', 'users', pageToken] as const,
+};
+
+export function useGSuiteConnection() {
+  return useQuery({
+    queryKey: gsuiteKeys.connection(),
+    queryFn: async () => {
+      const res = await api.getGSuiteConnection();
+      return res?.data ?? res;
+    },
+  });
+}
+
+export function useGSuiteUsers(pageToken?: string) {
+  return useQuery({
+    queryKey: gsuiteKeys.users(pageToken),
+    queryFn: () => api.listGSuiteUsers(pageToken),
+    enabled: false, // only load when connection is confirmed
+  });
+}
+
+export function useInitiateGSuiteOAuth() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.initiateGSuiteOAuth();
+      const url = res?.data?.redirectUrl ?? (res as any)?.redirectUrl;
+      if (url) window.location.href = url;
+    },
+    onError: (e: Error) => toast.error('Failed to initiate G Suite OAuth', e.message),
+  });
+}
+
+export function useDisconnectGSuite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.disconnectGSuite(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: gsuiteKeys.connection() });
+      queryClient.invalidateQueries({ queryKey: gsuiteKeys.users() });
+      toast.success('G Suite disconnected');
+    },
+    onError: (e: Error) => toast.error('Failed to disconnect G Suite', e.message),
+  });
+}
+
+export function useInviteUser() {
+  return useMutation({
+    mutationFn: ({ email, role }: { email: string; role: string }) =>
+      api.inviteUser(email, role),
+    onError: (e: Error) => toast.error('Failed to send invitation', e.message),
   });
 }

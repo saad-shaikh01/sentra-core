@@ -78,7 +78,11 @@ export function useIdentities() {
     queryKey: commKeys.identities(),
     queryFn: async () => {
       const res = await api.listIdentities();
-      return (res?.data ?? res ?? []) as CommIdentity[];
+      const raw: CommIdentity[] = (res?.data ?? res ?? []) as CommIdentity[];
+      return raw.map((identity) => ({
+        ...identity,
+        id: (identity.id ?? (identity as unknown as { _id: string })._id ?? '') as string,
+      }));
     },
   });
 }

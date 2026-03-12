@@ -64,6 +64,7 @@ const settingsNavigation = [
     roles: [UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER] as UserRole[],
   },
   ...(COMM_ENABLED ? [{ name: 'Gmail', href: '/dashboard/settings/gmail', icon: Mail }] : []),
+  ...(COMM_ENABLED ? [{ name: 'G Suite', href: '/dashboard/settings/gsuite', icon: Building2, roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[] }] : []),
 ];
 
 export function Sidebar() {

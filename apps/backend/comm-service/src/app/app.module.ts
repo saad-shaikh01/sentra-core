@@ -32,6 +32,7 @@ import { AuditModule } from '../modules/audit/audit.module';
 import { AttachmentsModule } from '../modules/attachments/attachments.module';
 import { MessagesModule } from '../modules/messages/messages.module';
 import { GatewayModule } from '../modules/gateway/gateway.module';
+import { GSuiteModule } from '../modules/gsuite/gsuite.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -107,6 +108,7 @@ function resolveEnvFiles(): string[] {
     EntityLinksModule,
     AttachmentsModule,
     MessagesModule,
+    GSuiteModule,
   ],
   providers: [
     {

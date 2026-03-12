@@ -6,6 +6,20 @@ interface FetchOptions extends RequestInit {
   service?: 'comm';
 }
 
+export interface GSuiteDirectoryUser {
+  id: string;
+  email: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  photoUrl?: string;
+  isAdmin: boolean;
+  isSuspended: boolean;
+  orgUnitPath: string;
+  lastLoginTime?: string;
+  creationTime?: string;
+}
+
 function buildQueryString(params?: Record<string, unknown>): string {
   if (!params) return '';
 
@@ -621,6 +635,31 @@ class ApiClient {
   // Comm — Attachments
   async getCommAttachmentUrl(messageId: string, attachmentIndex: number) {
     return this.fetch<{ url: string; filename: string }>(`/messages/${messageId}/attachments/${attachmentIndex}`, { service: 'comm' });
+  }
+
+  // Comm — G Suite Integration
+  async initiateGSuiteOAuth() {
+    return this.fetch<{ data: { redirectUrl: string } }>('/gsuite/oauth/initiate', { service: 'comm' });
+  }
+
+  async getGSuiteConnection() {
+    return this.fetch<{ data: { connected: boolean; adminEmail?: string; domain?: string; connectedAt?: string } }>('/gsuite/connection', { service: 'comm' });
+  }
+
+  async listGSuiteUsers(pageToken?: string) {
+    const qs = pageToken ? `?pageToken=${pageToken}` : '';
+    return this.fetch<{ users: GSuiteDirectoryUser[]; nextPageToken?: string }>(`/gsuite/users${qs}`, { service: 'comm' });
+  }
+
+  async disconnectGSuite() {
+    return this.fetch<void>('/gsuite/connection', { method: 'DELETE', service: 'comm' });
+  }
+
+  async inviteUser(email: string, role: string) {
+    return this.fetch<unknown>('/organization/invite', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
   }
 }
 

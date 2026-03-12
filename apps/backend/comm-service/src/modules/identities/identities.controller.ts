@@ -98,7 +98,13 @@ export class IdentitiesController {
       ctx.userId,
       ctx.userRole as UserRole,
     );
-    return { data: identities };
+    // Explicitly include id so frontend always receives it regardless of Mongoose serialization
+    return {
+      data: identities.map((identity) => ({
+        ...identity.toObject({ virtuals: true }),
+        id: String(identity._id),
+      })),
+    };
   }
 
   // Must be declared before :id to avoid route conflict

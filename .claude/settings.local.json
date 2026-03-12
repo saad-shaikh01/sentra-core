@@ -21,7 +21,9 @@
       "Bash(xargs grep:*)",
       "Bash(tasklist:*)",
       "Bash(xargs wc:*)",
-      "Bash(find \"D:/Repositories/new crm/sentra-core\" -maxdepth 3 -name \"docker-compose*.yml\" -o -name \"Dockerfile*\" 2>/dev/null | head -30)"
+      "Bash(find \"D:/Repositories/new crm/sentra-core\" -maxdepth 3 -name \"docker-compose*.yml\" -o -name \"Dockerfile*\" 2>/dev/null | head -30)",
+      "WebSearch",
+      "Bash(grep -rn \"gmail\\\\|Gmail\\\\|settings/gmail\" \"D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src\" --include=\"*.tsx\" -l 2>/dev/null | grep -v \"page\\\\|test\")"
     ]
   }
 }
