@@ -20,7 +20,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(xargs grep:*)",
       "Bash(tasklist:*)",
-      "Bash(xargs wc:*)"
+      "Bash(xargs wc:*)",
+      "Bash(find \"D:/Repositories/new crm/sentra-core\" -maxdepth 3 -name \"docker-compose*.yml\" -o -name \"Dockerfile*\" 2>/dev/null | head -30)"
     ]
   }
 }

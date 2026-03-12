@@ -7,8 +7,8 @@ import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import DOMPurify from 'dompurify';
-import { Search, Mail, Inbox as InboxIcon, Circle, Archive, ChevronDown, ChevronRight, Paperclip, AlertCircle, RefreshCw, Bold, Italic, List, ListOrdered, Link2, Strikethrough, Type, Underline as UnderlineIcon } from 'lucide-react';
-import { useThreads, useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useIdentities } from '@/hooks/use-comm';
+import { Search, Mail, Inbox as InboxIcon, Circle, Archive, ChevronDown, ChevronRight, Paperclip, AlertCircle, RefreshCw, Bold, Italic, List, ListOrdered, Link2, Strikethrough, Type, Underline as UnderlineIcon, SquarePen, MailOpen } from 'lucide-react';
+import { useThreads, useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities } from '@/hooks/use-comm';
 import { useDebounce } from '@/hooks/use-debounce';
 import { timeAgo } from '@/lib/format-date';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
@@ -222,6 +222,18 @@ function InboxContent() {
     <div className="flex h-[calc(100vh-120px)] gap-0 rounded-2xl overflow-hidden border border-white/10">
       {/* Left column — thread list */}
       <div className="w-[340px] shrink-0 flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-sm">
+        {/* Header with Compose button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <h2 className="text-sm font-semibold text-foreground">Inbox</h2>
+          <Button
+            size="sm"
+            onClick={() => setComposeOpen(true)}
+            className="gap-1.5 h-8 px-3 text-xs shadow-lg shadow-primary/20"
+          >
+            <SquarePen className="h-3.5 w-3.5" />
+            Compose
+          </Button>
+        </div>
         {/* Search */}
         <div className="p-4 border-b border-white/10">
           <div className="relative">
@@ -296,7 +308,7 @@ function InboxContent() {
               {threads.map((thread: CommThread) => {
                 const tid = thread.id ?? thread.gmailThreadId ?? '';
                 const isSelected = tid === selectedThreadId;
-                const hasUnread = thread.hasUnread || !thread.isRead;
+                const hasUnread = !!thread.hasUnread;
                 return (
                   <button
                     key={tid}
@@ -353,7 +365,7 @@ function InboxContent() {
           <div className="text-center space-y-3">
             <Mail className="h-12 w-12 mx-auto text-muted-foreground/20" />
             <p className="text-sm text-muted-foreground">Select a thread to read</p>
-            <p className="text-xs text-muted-foreground/50">Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-xs">c</kbd> to compose</p>
+            <p className="text-xs text-muted-foreground/50">Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-xs">c</kbd> to compose a new email</p>
           </div>
         )}
       </div>
@@ -370,6 +382,7 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
   const replyMutation = useReplyToMessage();
   const archiveMutation = useArchiveThread();
   const markRead = useMarkThreadRead();
+  const markUnread = useMarkThreadUnread();
   const [replyToolbarVisible, setReplyToolbarVisible] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
@@ -398,29 +411,29 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
     },
   });
 
+  const defaultIdentityId = identities
+    ? (identities.find((i) => i.isDefault) ?? identities[0])?.id ?? ''
+    : '';
   const [selectedIdentityId, setSelectedIdentityId] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [forwardMessage, setForwardMessage] = useState<CommMessage | null>(null);
+
+  // Derive the active identity — use state if set, else fall back to default
+  const activeIdentityId = selectedIdentityId || defaultIdentityId;
 
   const messages = messagesRes?.data ?? [];
   const lastMessage = messages[messages.length - 1];
 
   useEffect(() => {
     if (thread?.hasUnread) markRead.mutate(threadId);
-  }, [threadId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, thread?.hasUnread]);
 
   useEffect(() => {
     replyEditor?.commands.setContent('', { emitUpdate: false });
     setReplyToolbarVisible(false);
     setUploadedAttachments([]);
   }, [replyEditor, threadId]);
-
-  useEffect(() => {
-    if (identities && identities.length > 0 && !selectedIdentityId) {
-      const def = identities.find((i) => i.isDefault) ?? identities[0];
-      setSelectedIdentityId(def.id);
-    }
-  }, [identities]);
 
   useEffect(() => {
     if (lastMessage) {
@@ -488,7 +501,7 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
       attachmentS3Keys?: string[];
       replyAll?: boolean;
     } = {
-      identityId: selectedIdentityId,
+      identityId: activeIdentityId,
       bodyText,
       bodyHtml,
       attachmentS3Keys:
@@ -519,9 +532,21 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
             </>
           )}
         </div>
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => archiveMutation.mutate(threadId)}>
-          <Archive className="h-4 w-4 mr-1" /> Archive
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+            title={thread?.hasUnread ? 'Mark as read' : 'Mark as unread'}
+            onClick={() => thread?.hasUnread ? markRead.mutate(threadId) : markUnread.mutate(threadId)}
+          >
+            <MailOpen className="h-4 w-4 mr-1" />
+            {thread?.hasUnread ? 'Mark Read' : 'Mark Unread'}
+          </Button>
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => archiveMutation.mutate(threadId)}>
+            <Archive className="h-4 w-4 mr-1" /> Archive
+          </Button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -558,7 +583,7 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
       {/* Reply */}
       <div className="px-6 py-4 border-t border-white/10 space-y-3 shrink-0">
         {identities && identities.length > 0 && (
-          <select value={selectedIdentityId} onChange={(e) => setSelectedIdentityId(e.target.value)}
+          <select value={activeIdentityId} onChange={(e) => setSelectedIdentityId(e.target.value)}
             className="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-foreground focus:outline-none">
             {identities.map((id: CommIdentity) => (
               <option key={id.id} value={id.id}>{id.displayName} &lt;{id.email}&gt;</option>
@@ -615,10 +640,10 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
             <Paperclip className="mr-1.5 h-3.5 w-3.5" />
             {isUploadingAttachment ? 'Uploading...' : 'Attach'}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => void handleReply(true)} disabled={replyMutation.isPending || !selectedIdentityId}>
+          <Button size="sm" variant="ghost" onClick={() => void handleReply(true)} disabled={replyMutation.isPending || !activeIdentityId}>
             Reply All
           </Button>
-          <Button size="sm" onClick={() => void handleReply()} disabled={replyMutation.isPending || !selectedIdentityId}>
+          <Button size="sm" onClick={() => void handleReply()} disabled={replyMutation.isPending || !activeIdentityId}>
             {replyMutation.isPending ? 'Sending...' : 'Reply'}
           </Button>
         </div>

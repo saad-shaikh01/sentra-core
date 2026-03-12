@@ -10,12 +10,20 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { UserRole } from '@sentra-core/types';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import MailComposer from 'nodemailer/lib/mail-composer';
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+const MailComposerCtor: any = (() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+  const m = require('nodemailer/lib/mail-composer');
+  // Support both CommonJS (module.exports = Class) and ESM-interop (.default) shapes
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+  return m?.default ?? m;
+})();
 import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.schema';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
@@ -161,13 +169,10 @@ export class MessagesService {
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
-    const resp = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: rawMime },
-    });
+    const sendResp = await this.gmailSend(gmail, { raw: rawMime }, `identity ${identity._id}`, 'send');
 
-    const gmailMessageId = resp.data.id!;
-    const gmailThreadId = resp.data.threadId!;
+    const gmailMessageId = sendResp.id!;
+    const gmailThreadId = sendResp.threadId!;
 
     const message = await this.messageModel.findOneAndUpdate(
       { organizationId, gmailMessageId },
@@ -261,12 +266,14 @@ export class MessagesService {
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
-    const resp = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: rawMime, threadId: original.gmailThreadId },
-    });
+    const replyResp = await this.gmailSend(
+      gmail,
+      { raw: rawMime, threadId: original.gmailThreadId },
+      `identity ${identity._id}`,
+      'reply',
+    );
 
-    const gmailMessageId = resp.data.id!;
+    const gmailMessageId = replyResp.id!;
 
     const message = await this.messageModel.findOneAndUpdate(
       { organizationId, gmailMessageId },
@@ -362,13 +369,10 @@ export class MessagesService {
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
-    const resp = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: rawMime },
-    });
+    const fwdResp = await this.gmailSend(gmail, { raw: rawMime }, `identity ${identity._id}`, 'forward');
 
-    const gmailMessageId = resp.data.id!;
-    const gmailThreadId = resp.data.threadId!;
+    const gmailMessageId = fwdResp.id!;
+    const gmailThreadId = fwdResp.threadId!;
 
     const message = await this.messageModel.findOneAndUpdate(
       { organizationId, gmailMessageId },
@@ -424,6 +428,22 @@ export class MessagesService {
     });
 
     return message!;
+  }
+
+  private async gmailSend(
+    gmail: Awaited<ReturnType<typeof this.gmailApi.getGmailClient>>,
+    requestBody: { raw: string; threadId?: string },
+    context: string,
+    operation: string,
+  ): Promise<{ id: string; threadId: string }> {
+    try {
+      const resp = await gmail.users.messages.send({ userId: 'me', requestBody });
+      return { id: resp.data.id!, threadId: resp.data.threadId! };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Gmail ${operation} failed for ${context}: ${msg}`);
+      throw new ServiceUnavailableException(`Gmail ${operation} failed: ${msg}`);
+    }
   }
 
   private async getIdentityForSend(
@@ -529,7 +549,7 @@ export class MessagesService {
     threadId?: string;
     attachments?: Array<{ buffer: Buffer; filename: string; mimeType: string }>;
   }): Promise<string> {
-    const mailOptions: ConstructorParameters<typeof MailComposer>[0] = {
+    const mailOptions: Record<string, unknown> = {
       from: opts.from,
       to: opts.to.join(', '),
       subject: opts.subject,
@@ -552,12 +572,18 @@ export class MessagesService {
     if (opts.references) headers['References'] = `<${opts.references}>`;
     if (Object.keys(headers).length) mailOptions.headers = headers;
 
-    const composer = new MailComposer(mailOptions);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    const composer = new MailComposerCtor(mailOptions);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     const compiled = composer.compile();
 
     return new Promise<string>((resolve, reject) => {
-      compiled.build((err, message) => {
-        if (err) return reject(err);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      compiled.build((err: Error | null, message: Buffer) => {
+        if (err) {
+          this.logger.error(`MailComposer build failed: ${err.message}`);
+          return reject(new ServiceUnavailableException(`MIME build error: ${err.message}`));
+        }
         resolve(message.toString('base64url'));
       });
     });
