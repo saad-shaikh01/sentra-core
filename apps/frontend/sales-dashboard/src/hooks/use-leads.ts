@@ -17,6 +17,7 @@ interface ChangeLeadStatusVariables {
   id: string;
   status: LeadStatus;
   followUpDate?: string;
+  lostReason?: string;
 }
 
 export function useLeads(params?: Record<string, unknown>) {
@@ -78,8 +79,8 @@ export function useDeleteLead() {
 export function useChangeLeadStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status, followUpDate }: ChangeLeadStatusVariables) =>
-      api.changeLeadStatus(id, status, followUpDate),
+    mutationFn: ({ id, ...dto }: ChangeLeadStatusVariables) =>
+      api.changeLeadStatus(id, dto),
     onSuccess: (data, { id, status }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.setQueryData(leadsKeys.detail(id), data);
@@ -123,7 +124,7 @@ export function useConvertLead() {
       api.convertLead(id, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
-      toast.success('Lead converted to client');
+      toast.success('Client created. Grant portal access from the client profile when ready.');
     },
     onError: (e: Error) => toast.error('Conversion failed', e.message),
   });

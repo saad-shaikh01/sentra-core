@@ -38,6 +38,14 @@ export class SaleItemDto {
 
 export class CreateSaleDto {
   @IsOptional()
+  @IsUUID()
+  clientId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  leadId?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0.01)
   totalAmount?: number;
@@ -69,9 +77,6 @@ export class CreateSaleDto {
   @ValidateNested({ each: true })
   @Type(() => SaleItemDto)
   items?: SaleItemDto[];
-
-  @IsUUID()
-  clientId: string;
 
   @IsUUID()
   brandId: string;

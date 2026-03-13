@@ -250,8 +250,9 @@ class ApiClient {
   }
 
   // Organization endpoints
-  async getMembers() {
-    return this.fetch<any[]>('/organization/members');
+  async getMembers(params?: { role?: string }) {
+    const qs = buildQueryString(params);
+    return this.fetch<any[]>(`/organization/members${qs}`);
   }
 
   async updateMemberRole(userId: string, role: string) {
@@ -366,10 +367,13 @@ class ApiClient {
     return this.fetch<{ message: string }>(`/leads/${id}`, { method: 'DELETE' });
   }
 
-  async changeLeadStatus(id: string, status: string, followUpDate?: string) {
+  async changeLeadStatus(
+    id: string,
+    dto: { status: string; followUpDate?: string; lostReason?: string },
+  ) {
     return this.fetch<any>(`/leads/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, ...(followUpDate ? { followUpDate } : {}) }),
+      body: JSON.stringify(dto),
     });
   }
 
@@ -409,6 +413,32 @@ class ApiClient {
 
   async deleteClient(id: string) {
     return this.fetch<{ message: string }>(`/clients/${id}`, { method: 'DELETE' });
+  }
+
+  async assignClient(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/clients/${id}/assign`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async addClientNote(id: string, content: string) {
+    return this.fetch<any>(`/clients/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async grantPortalAccess(id: string) {
+    return this.fetch<{ message: string }>(`/clients/${id}/grant-portal-access`, {
+      method: 'POST',
+    });
+  }
+
+  async revokePortalAccess(id: string) {
+    return this.fetch<{ message: string }>(`/clients/${id}/revoke-portal-access`, {
+      method: 'POST',
+    });
   }
 
   // Sale endpoints

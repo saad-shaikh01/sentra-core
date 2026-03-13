@@ -5,7 +5,7 @@ import * as nodemailer from 'nodemailer';
 export interface SendMailOptions {
   to: string;
   subject: string;
-  template: 'WELCOME' | 'INVITATION' | 'PASSWORD_RESET';
+  template: 'WELCOME' | 'INVITATION' | 'PASSWORD_RESET' | 'CLIENT_PORTAL_INVITE';
   context: any;
 }
 
@@ -85,6 +85,24 @@ export class MailClientService {
               Reset Password
             </a>
             <p style="margin-top: 20px; font-size: 12px; color: #666;">If you didn't request this, you can safely ignore this email.</p>
+          </div>
+        `;
+
+      case 'CLIENT_PORTAL_INVITE':
+        return `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h1>${context.brandName} Client Portal</h1>
+            <p>Hello ${context.name},</p>
+            <p>Your portal access has been granted. Use the one-time verification code below to activate your access.</p>
+            <div style="margin: 24px 0; font-size: 28px; font-weight: 700; letter-spacing: 6px;">
+              ${context.otp}
+            </div>
+            <p>Open your portal here:</p>
+            <a href="${context.portalUrl}"
+               style="background: #0f766e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+              Open Client Portal
+            </a>
+            <p style="margin-top: 20px; font-size: 12px; color: #666;">This code expires in 30 minutes.</p>
           </div>
         `;
 

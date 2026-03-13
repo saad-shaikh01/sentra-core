@@ -21,7 +21,7 @@ import {
   ISignupResponse,
 } from '@sentra-core/types';
 import { v4 as uuidv4 } from 'uuid';
-import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
+import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto } from './dto';
 import { IamService } from '../iam';
 
 @Injectable()
@@ -252,6 +252,37 @@ export class AuthService {
     });
 
     return { message: 'Password has been reset successfully' };
+  }
+
+  async verifyClientOtp(dto: VerifyClientOtpDto): Promise<{ message: string }> {
+    const client = await this.prisma.client.findFirst({
+      where: {
+        email: dto.email,
+        portalAccess: true,
+        emailVerified: false,
+        emailOtpExpiry: { gte: new Date() },
+      },
+    });
+
+    if (!client || !client.emailOtp) {
+      throw new BadRequestException('Invalid or expired OTP');
+    }
+
+    const valid = await bcrypt.compare(dto.otp, client.emailOtp);
+    if (!valid) {
+      throw new BadRequestException('Invalid or expired OTP');
+    }
+
+    await this.prisma.client.update({
+      where: { id: client.id },
+      data: {
+        emailVerified: true,
+        emailOtp: null,
+        emailOtpExpiry: null,
+      },
+    });
+
+    return { message: 'Email verified. Please set your password to continue.' };
   }
 
   async refreshTokens(userId: string, refreshToken: string): Promise<IAuthTokens> {

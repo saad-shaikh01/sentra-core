@@ -1,10 +1,9 @@
-import { IsString, IsOptional, IsEmail, IsUrl, MinLength, MaxLength, IsEnum, IsDateString } from 'class-validator';
-import { LeadStatus } from '@sentra-core/types';
+import { IsString, IsOptional, IsEmail, IsUrl, MaxLength, IsEnum, IsDateString, IsUUID } from 'class-validator';
+import { LeadStatus, LeadType, LeadSource } from '@sentra-core/types';
 
 export class UpdateLeadDto {
   @IsOptional()
   @IsString()
-  @MinLength(2)
   @MaxLength(200)
   title?: string;
 
@@ -29,8 +28,16 @@ export class UpdateLeadDto {
   status?: LeadStatus;
 
   @IsOptional()
-  @IsString()
-  source?: string;
+  @IsEnum(LeadType)
+  leadType?: LeadType;
+
+  @IsOptional()
+  @IsEnum(LeadSource)
+  source?: LeadSource;
+
+  @IsOptional()
+  @IsDateString()
+  leadDate?: string;
 
   @IsOptional()
   @IsDateString()
@@ -40,6 +47,6 @@ export class UpdateLeadDto {
   data?: Record<string, unknown>;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   assignedToId?: string;
 }

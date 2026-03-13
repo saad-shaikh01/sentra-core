@@ -12,11 +12,12 @@ import { UpdateRoleDto } from './dto';
 export class OrganizationService {
   constructor(private prisma: PrismaService) {}
 
-  async getMembers(orgId: string): Promise<IOrganizationMember[]> {
+  async getMembers(orgId: string, role?: UserRole): Promise<IOrganizationMember[]> {
     const users = await this.prisma.user.findMany({
       where: {
         organizationId: orgId,
         isActive: true,
+        ...(role ? { role } : {}),
       },
       orderBy: { createdAt: 'asc' },
     });

@@ -12,10 +12,10 @@ export const organizationKeys = {
 };
 
 // Hook to get organization members
-export function useMembers() {
+export function useMembers(role?: UserRole) {
   return useQuery({
-    queryKey: organizationKeys.members(),
-    queryFn: (): Promise<IOrganizationMember[]> => api.getMembers(),
+    queryKey: [...organizationKeys.members(), role ?? 'all'],
+    queryFn: (): Promise<IOrganizationMember[]> => api.getMembers(role ? { role } : undefined),
     retry: false,
   });
 }

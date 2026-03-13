@@ -10,7 +10,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateLead, useUpdateLead } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
-import { ILeadDetail } from '@sentra-core/types';
+import { ILeadDetail, LeadSource, LeadType, UserRole } from '@sentra-core/types';
+
+const LEAD_TYPE_OPTIONS: Array<{ value: LeadType; label: string }> = [
+  { value: LeadType.CHAT, label: 'Chat' },
+  { value: LeadType.SIGNUP, label: 'Signup' },
+  { value: LeadType.SOCIAL, label: 'Social' },
+  { value: LeadType.REFERRAL, label: 'Referral' },
+  { value: LeadType.INBOUND, label: 'Inbound' },
+];
+
+const LEAD_SOURCE_OPTIONS: Array<{ value: LeadSource; label: string }> = [
+  { value: LeadSource.PPC, label: 'PPC' },
+  { value: LeadSource.SMM, label: 'SMM' },
+  { value: LeadSource.COLD_REFERRAL, label: 'Cold Referral' },
+];
+
+function toDateInputValue(value?: Date | string): string {
+  if (!value) {
+    return '';
+  }
+
+  return new Date(value).toISOString().split('T')[0];
+}
 
 interface LeadFormModalProps {
   open: boolean;
@@ -24,18 +46,22 @@ interface FormValues {
   email: string;
   phone: string;
   website: string;
-  source: string;
+  leadType: LeadType | '';
+  source: LeadSource | '';
+  leadDate: string;
   brandId: string;
   assignedToId: string;
 }
 
 interface LeadFormPayload extends Record<string, unknown> {
-  title: string;
+  title?: string;
   name?: string;
   email?: string;
   phone?: string;
   website?: string;
-  source?: string;
+  leadType?: LeadType;
+  source?: LeadSource;
+  leadDate?: string;
   assignedToId?: string;
 }
 
@@ -49,7 +75,9 @@ const defaultValues: FormValues = {
   email: '',
   phone: '',
   website: '',
+  leadType: '',
   source: '',
+  leadDate: '',
   brandId: '',
   assignedToId: '',
 };
@@ -59,7 +87,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const { data: brandsData } = useBrands({ limit: 100 });
-  const { data: members } = useMembers();
+  const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
 
   const {
     register,
@@ -73,19 +101,24 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
     defaultValues,
   });
   const brandId = watch('brandId');
+  const leadType = watch('leadType');
+  const source = watch('source');
   const assignedToId = watch('assignedToId');
+  const today = new Date().toISOString().split('T')[0];
 
   register('brandId', { required: 'Brand is required' });
 
   useEffect(() => {
     if (lead) {
       reset({
-        title: lead.title,
+        title: lead.title ?? '',
         name: lead.name ?? '',
         email: lead.email ?? '',
         phone: lead.phone ?? '',
         website: lead.website ?? '',
+        leadType: lead.leadType ?? '',
         source: lead.source ?? '',
+        leadDate: toDateInputValue(lead.leadDate),
         brandId: lead.brandId ?? '',
         assignedToId: lead.assignedToId ?? '',
       });
@@ -105,12 +138,14 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
     }
 
     const dto: LeadFormPayload = {
-      title: values.title,
+      ...(values.title.trim() && { title: values.title.trim() }),
       ...(values.name && { name: values.name }),
       ...(values.email && { email: values.email }),
       ...(values.phone && { phone: values.phone }),
       ...(values.website && { website: values.website }),
+      ...(values.leadType && { leadType: values.leadType }),
       ...(values.source && { source: values.source }),
+      ...(values.leadDate && { leadDate: values.leadDate }),
       ...(values.assignedToId && { assignedToId: values.assignedToId }),
     };
 
@@ -136,8 +171,8 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
         <div className="space-y-1.5">
-          <Label>Title *</Label>
-          <Input placeholder="Lead title" {...register('title', { required: 'Required' })} />
+          <Label>Title</Label>
+          <Input placeholder="Optional lead title" {...register('title')} />
           {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
         </div>
 
@@ -163,9 +198,47 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Source</Label>
-          <Input placeholder="e.g. Website, Referral" {...register('source')} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>Lead Type</Label>
+            <Select
+              value={leadType || 'none'}
+              onValueChange={(value) => setValue('leadType', value === 'none' ? '' : (value as LeadType))}
+            >
+              <SelectTrigger className="bg-white/5 border-white/10">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {LEAD_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Source</Label>
+            <Select
+              value={source || 'none'}
+              onValueChange={(value) => setValue('source', value === 'none' ? '' : (value as LeadSource))}
+            >
+              <SelectTrigger className="bg-white/5 border-white/10">
+                <SelectValue placeholder="Select source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {LEAD_SOURCE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Lead Date</Label>
+            <Input type="date" max={today} {...register('leadDate')} />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -188,13 +261,13 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           </div>
 
           <div className="space-y-1.5">
-            <Label>Assign To</Label>
+            <Label>Front Sell Agent</Label>
             <Select value={assignedToId} onValueChange={(v) => setValue('assignedToId', v)}>
               <SelectTrigger className="bg-white/5 border-white/10">
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
               <SelectContent>
-                {members?.map((m) => (
+                {frontSellAgents?.map((m) => (
                   <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                 ))}
               </SelectContent>

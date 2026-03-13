@@ -1,16 +1,14 @@
-import { IsString, IsEmail, IsOptional, MinLength } from 'class-validator';
+import { IsString, IsEmail, IsOptional, MinLength, IsNumber, IsEnum, IsUUID } from 'class-validator';
+import { PaymentPlanType } from '@sentra-core/types';
 
 export class ConvertLeadDto {
   @IsEmail()
   email: string;
 
-  @IsString()
-  @MinLength(6)
-  password: string;
-
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  companyName: string;
+  companyName?: string;
 
   @IsOptional()
   @IsString()
@@ -19,4 +17,25 @@ export class ConvertLeadDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  // Optional first-sale fields — if provided, a Sale is created immediately
+  @IsOptional()
+  @IsNumber()
+  dealAmount?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentPlanType)
+  paymentPlan?: PaymentPlanType;
+
+  @IsOptional()
+  @IsUUID()
+  brandId?: string; // Override brand for the sale (defaults to lead's brandId)
+
+  @IsOptional()
+  @IsUUID()
+  upsellAgentId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  projectManagerId?: string;
 }

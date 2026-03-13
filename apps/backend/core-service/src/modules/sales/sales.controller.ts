@@ -33,8 +33,8 @@ export class SalesController {
 
   @Post()
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, UserRole.PROJECT_MANAGER)
-  create(@Body() dto: CreateSaleDto, @CurrentUser('orgId') orgId: string): Promise<ISale> {
-    return this.salesService.create(orgId, dto);
+  create(@Body() dto: CreateSaleDto, @CurrentUser() user: JwtPayload): Promise<ISale> {
+    return this.salesService.create(user.orgId, user.sub, dto);
   }
 
   @Get()

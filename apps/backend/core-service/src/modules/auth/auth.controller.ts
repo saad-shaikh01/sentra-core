@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
+import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto } from './dto';
 import { Public } from './decorators';
 import { RefreshTokenGuard } from './guards';
 import { CurrentUser } from './decorators';
@@ -46,6 +46,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
     return this.authService.resetPassword(dto);
+  }
+
+  @Public()
+  @Post('client/verify-otp')
+  @HttpCode(HttpStatus.OK)
+  verifyClientOtp(@Body() dto: VerifyClientOtpDto): Promise<{ message: string }> {
+    return this.authService.verifyClientOtp(dto);
   }
 
   @UseGuards(RefreshTokenGuard)

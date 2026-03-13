@@ -1,0 +1,3 @@
+-- This migration is intentionally a no-op.
+-- The directory existed without a migration.sql, which causes Prisma reset/apply
+-- to fail with P3015. Keeping an explicit empty migration preserves history.

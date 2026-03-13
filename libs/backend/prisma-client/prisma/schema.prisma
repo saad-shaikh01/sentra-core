@@ -34,7 +34,43 @@ enum LeadStatus {
   CONTACTED
   PROPOSAL
   FOLLOW_UP
-  CLOSED
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum LeadType {
+  CHAT
+  SIGNUP
+  SOCIAL
+  REFERRAL
+  INBOUND
+}
+
+enum LeadSource {
+  PPC
+  SMM
+  COLD_REFERRAL
+}
+
+enum ClientStatus {
+  ACTIVE
+  COMPLETED
+  INACTIVE
+  REFUNDED
+  CHARGEBACK
+  BLACKLISTED
+}
+
+enum ClientActivityType {
+  CREATED
+  UPSELL_ASSIGNED
+  PM_ASSIGNED
+  STATUS_CHANGE
+  NOTE
+  PORTAL_ACCESS_GRANTED
+  PORTAL_ACCESS_REVOKED
+  CHARGEBACK_FILED
+  REFUND_ISSUED
 }
 
 enum SaleStatus {
@@ -42,6 +78,18 @@ enum SaleStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+  ON_HOLD
+  REFUNDED
+}
+
+enum SaleActivityType {
+  CREATED
+  STATUS_CHANGE
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  REFUND_ISSUED
+  CHARGEBACK_FILED
+  NOTE
 }
 
 enum PaymentPlanType {
@@ -69,12 +117,16 @@ enum TransactionStatus {
   SUCCESS
   FAILED
   REFUNDED
+  CHARGEBACK_FILED
+  CHARGEBACK_WON
+  CHARGEBACK_LOST
 }
 
 enum TransactionType {
   ONE_TIME
   RECURRING
   REFUND
+  CHARGEBACK
 }
 
 enum PlanType {
@@ -509,10 +561,14 @@ model User {
   createdAppRoles AppRole[] @relation("AppRoleCreatedBy")
   emailConfig UserEmailConfig? // Gmail Integration
 
-  assignedLeads  Lead[]
-  leadActivities LeadActivity[]
-  managedTeams   SalesTeamManager[] @relation("TeamManagers")
-  memberOfTeams  SalesTeamMember[]  @relation("TeamMembers")
+  assignedLeads      Lead[]
+  leadActivities     LeadActivity[]
+  clientActivities   ClientActivity[]
+  saleActivities     SaleActivity[]
+  upsellClients      Client[]           @relation("ClientUpsellAgent")
+  managedClients     Client[]           @relation("ClientProjectManager")
+  managedTeams       SalesTeamManager[] @relation("TeamManagers")
+  memberOfTeams      SalesTeamMember[]  @relation("TeamMembers")
 
   // Refresh Token (for JWT)
   refreshToken String?
@@ -745,15 +801,18 @@ model EmailAlias {
 // ==========================================
 
 model Lead {
-  id      String     @id @default(uuid())
-  title   String // "Website Inquiry - John"
-  name    String? // Client Name
-  email   String? // Client Email
-  phone   String? // Client Phone
-  website String? // Client Website
-  status  LeadStatus @default(NEW)
-  source  String? // "PPC", "FB_ADS"
-  data    Json? // Flexible Form Data (Extra fields)
+  id       String      @id @default(uuid())
+  title    String? // Optional: auto-generated from name/email/source if not provided
+  name     String? // Client Name
+  email    String? // Client Email
+  phone    String? // Client Phone
+  website  String? // Client Website
+  status   LeadStatus  @default(NEW)
+  leadType LeadType? // CHAT, SIGNUP, SOCIAL, REFERRAL, INBOUND
+  source   LeadSource? // PPC, SMM, COLD_REFERRAL
+  leadDate DateTime? // When the lead was originally captured
+  lostReason String? // Reason when status = CLOSED_LOST
+  data     Json? // Flexible Form Data (Extra fields)
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id])
@@ -795,14 +854,29 @@ model LeadActivity {
 }
 
 model Client {
-  id          String  @id @default(uuid())
+  id          String       @id @default(uuid())
   email       String
-  password    String // Portal Access (hashed)
   companyName String
   contactName String?
   phone       String?
   address     String?
   notes       String?
+  status      ClientStatus @default(ACTIVE)
+
+  // Portal access
+  portalAccess    Boolean   @default(false)
+  portalGrantedAt DateTime?
+  portalGrantedBy String?
+  emailVerified   Boolean   @default(false)
+  emailOtp        String?
+  emailOtpExpiry  DateTime?
+  mustSetPassword Boolean   @default(true)
+
+  // Assignment
+  upsellAgentId     String?
+  upsellAgent       User?   @relation("ClientUpsellAgent", fields: [upsellAgentId], references: [id])
+  projectManagerId  String?
+  projectManager    User?   @relation("ClientProjectManager", fields: [projectManagerId], references: [id])
 
   brandId String
   brand   Brand  @relation(fields: [brandId], references: [id])
@@ -810,12 +884,18 @@ model Client {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  sales Sale[]
+  sales      Sale[]
+  activities ClientActivity[]
+
+  deletedAt DateTime? // Soft-delete
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([email, organizationId])
+  @@index([organizationId, status])
+  @@index([upsellAgentId])
+  @@index([projectManagerId])
 }
 
 model Sale {
@@ -847,6 +927,9 @@ model Sale {
   items        SaleItem[]
   invoices     Invoice[]
   transactions PaymentTransaction[]
+  activities   SaleActivity[]
+
+  deletedAt DateTime? // Soft-delete
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -913,6 +996,47 @@ model PaymentTransaction {
 
   @@index([saleId])
   @@index([transactionId])
+}
+
+model ClientActivity {
+  id   String             @id @default(uuid())
+  type ClientActivityType
+  data Json // Context based on type
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  userId String // Who performed the action
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId, createdAt])
+}
+
+model SaleActivity {
+  id   String           @id @default(uuid())
+  type SaleActivityType
+  data Json
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([saleId, createdAt])
+}
+
+model InvoiceSequence {
+  id      String @id @default(uuid())
+  brandId String @unique
+  year    Int
+  lastSeq Int    @default(0)
+
+  @@index([brandId, year])
 }
 
 // ==========================================

@@ -1,10 +1,11 @@
-import { IsString, IsOptional, IsUUID, IsEmail, IsUrl, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsEmail, IsUrl, MaxLength, IsEnum, IsDateString } from 'class-validator';
+import { LeadType, LeadSource } from '@sentra-core/types';
 
 export class CreateLeadDto {
+  @IsOptional()
   @IsString()
-  @MinLength(2)
   @MaxLength(200)
-  title: string;
+  title?: string;
 
   @IsOptional()
   @IsString()
@@ -23,8 +24,16 @@ export class CreateLeadDto {
   website?: string;
 
   @IsOptional()
-  @IsString()
-  source?: string;
+  @IsEnum(LeadType)
+  leadType?: LeadType;
+
+  @IsOptional()
+  @IsEnum(LeadSource)
+  source?: LeadSource;
+
+  @IsOptional()
+  @IsDateString()
+  leadDate?: string;
 
   @IsOptional()
   data?: Record<string, unknown>;

@@ -12,7 +12,7 @@ interface LeadsKanbanCardProps {
 }
 
 export function LeadsKanbanCard({ lead, index, onClick }: LeadsKanbanCardProps) {
-  const age = timeAgo(lead.createdAt);
+  const age = timeAgo(lead.leadDate ?? lead.createdAt);
 
   const initials = lead.assigneeName
     ? lead.assigneeName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -33,23 +33,32 @@ export function LeadsKanbanCard({ lead, index, onClick }: LeadsKanbanCardProps) 
           `}
         >
           <div className="flex items-start justify-between gap-2 mb-3">
-            <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">{lead.title}</p>
+            <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
+              {lead.title ?? lead.name ?? lead.email ?? 'Untitled Lead'}
+            </p>
             <StatusBadge status={lead.status} className="shrink-0" />
           </div>
 
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {lead.brandName && (
+              <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                {lead.brandName}
+              </span>
+            )}
+            {lead.leadType && (
+              <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300">
+                {lead.leadType}
+              </span>
+            )}
+            {lead.source && (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">
+                {lead.source}
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {lead.brandName && (
-                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20">
-                  {lead.brandName}
-                </span>
-              )}
-              {lead.source && (
-                <span className="text-[10px] bg-white/5 text-muted-foreground px-2 py-0.5 rounded-full border border-white/10">
-                  {lead.source}
-                </span>
-              )}
-            </div>
+            <span className="text-xs text-muted-foreground">{lead.assigneeName ?? 'Unassigned'}</span>
 
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-muted-foreground">{age}</span>

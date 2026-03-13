@@ -28,7 +28,43 @@ export enum LeadStatus {
   CONTACTED = 'CONTACTED',
   PROPOSAL = 'PROPOSAL',
   FOLLOW_UP = 'FOLLOW_UP',
-  CLOSED = 'CLOSED',
+  CLOSED_WON = 'CLOSED_WON',
+  CLOSED_LOST = 'CLOSED_LOST',
+}
+
+export enum LeadType {
+  CHAT = 'CHAT',
+  SIGNUP = 'SIGNUP',
+  SOCIAL = 'SOCIAL',
+  REFERRAL = 'REFERRAL',
+  INBOUND = 'INBOUND',
+}
+
+export enum LeadSource {
+  PPC = 'PPC',
+  SMM = 'SMM',
+  COLD_REFERRAL = 'COLD_REFERRAL',
+}
+
+export enum ClientStatus {
+  ACTIVE = 'ACTIVE',
+  COMPLETED = 'COMPLETED',
+  INACTIVE = 'INACTIVE',
+  REFUNDED = 'REFUNDED',
+  CHARGEBACK = 'CHARGEBACK',
+  BLACKLISTED = 'BLACKLISTED',
+}
+
+export enum ClientActivityType {
+  CREATED = 'CREATED',
+  UPSELL_ASSIGNED = 'UPSELL_ASSIGNED',
+  PM_ASSIGNED = 'PM_ASSIGNED',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  NOTE = 'NOTE',
+  PORTAL_ACCESS_GRANTED = 'PORTAL_ACCESS_GRANTED',
+  PORTAL_ACCESS_REVOKED = 'PORTAL_ACCESS_REVOKED',
+  CHARGEBACK_FILED = 'CHARGEBACK_FILED',
+  REFUND_ISSUED = 'REFUND_ISSUED',
 }
 
 export enum SaleStatus {
@@ -36,6 +72,18 @@ export enum SaleStatus {
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
+  ON_HOLD = 'ON_HOLD',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum SaleActivityType {
+  CREATED = 'CREATED',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
+  PAYMENT_FAILED = 'PAYMENT_FAILED',
+  REFUND_ISSUED = 'REFUND_ISSUED',
+  CHARGEBACK_FILED = 'CHARGEBACK_FILED',
+  NOTE = 'NOTE',
 }
 
 export enum PaymentPlanType {
@@ -63,12 +111,16 @@ export enum TransactionStatus {
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
   REFUNDED = 'REFUNDED',
+  CHARGEBACK_FILED = 'CHARGEBACK_FILED',
+  CHARGEBACK_WON = 'CHARGEBACK_WON',
+  CHARGEBACK_LOST = 'CHARGEBACK_LOST',
 }
 
 export enum TransactionType {
   ONE_TIME = 'ONE_TIME',
   RECURRING = 'RECURRING',
   REFUND = 'REFUND',
+  CHARGEBACK = 'CHARGEBACK',
 }
 
 export const OrganizationOnboardingMode = {
@@ -102,11 +154,21 @@ export type DataScopeType = (typeof DataScopeType)[keyof typeof DataScopeType];
 // ==========================================
 
 export const LEAD_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
-  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED],
-  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED],
-  [LeadStatus.PROPOSAL]: [LeadStatus.FOLLOW_UP, LeadStatus.CLOSED, LeadStatus.CONTACTED],
-  [LeadStatus.FOLLOW_UP]: [LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.CLOSED],
-  [LeadStatus.CLOSED]: [],
+  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
+  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
+  [LeadStatus.PROPOSAL]: [LeadStatus.FOLLOW_UP, LeadStatus.CONTACTED, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
+  [LeadStatus.FOLLOW_UP]: [LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
+  [LeadStatus.CLOSED_WON]: [],   // terminal — converted
+  [LeadStatus.CLOSED_LOST]: [],  // terminal — lost
+};
+
+export const SALE_STATUS_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
+  [SaleStatus.PENDING]: [SaleStatus.ACTIVE, SaleStatus.CANCELLED, SaleStatus.ON_HOLD],
+  [SaleStatus.ACTIVE]: [SaleStatus.COMPLETED, SaleStatus.CANCELLED, SaleStatus.ON_HOLD, SaleStatus.REFUNDED],
+  [SaleStatus.ON_HOLD]: [SaleStatus.ACTIVE, SaleStatus.CANCELLED],
+  [SaleStatus.COMPLETED]: [SaleStatus.REFUNDED],
+  [SaleStatus.CANCELLED]: [],
+  [SaleStatus.REFUNDED]: [],
 };
 
 // ==========================================
@@ -303,13 +365,16 @@ export interface IBrand {
 
 export interface ILead {
   id: string;
-  title: string;
+  title?: string;
   name?: string;
   email?: string;
   phone?: string;
   website?: string;
   status: LeadStatus;
-  source?: string;
+  leadType?: LeadType;
+  source?: LeadSource;
+  leadDate?: Date | string;
+  lostReason?: string;
   data?: Record<string, unknown>;
   brandId: string;
   organizationId: string;
@@ -324,6 +389,7 @@ export interface ILeadAssignee {
   id: string;
   name: string;
   email: string;
+  avatarUrl?: string;
 }
 
 export interface ILeadDetail extends ILead {
@@ -337,6 +403,11 @@ export interface ILeadActivity {
   data: Record<string, unknown>;
   leadId: string;
   userId: string;
+  user?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
   createdAt: Date;
 }
 
@@ -352,10 +423,42 @@ export interface IClient {
   phone?: string;
   address?: string;
   notes?: string;
+  status: ClientStatus;
+  portalAccess: boolean;
+  portalGrantedAt?: Date | string;
+  portalGrantedBy?: string;
+  emailVerified: boolean;
+  mustSetPassword: boolean;
+  upsellAgentId?: string;
+  projectManagerId?: string;
+  upsellAgent?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
+  projectManager?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
   brandId: string;
   organizationId: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IClientActivity {
+  id: string;
+  type: ClientActivityType;
+  data: Record<string, unknown>;
+  clientId: string;
+  userId: string;
+  user?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
+  createdAt: Date;
 }
 
 // ==========================================
@@ -397,6 +500,19 @@ export interface ISaleWithRelations extends ISale {
   invoices: IInvoice[];
   transactions: IPaymentTransaction[];
   items: ISaleItem[];
+  paidAmount?: number;
+  remainingAmount?: number;
+  paidInvoiceCount?: number;
+}
+
+export interface ISaleActivity {
+  id: string;
+  type: SaleActivityType;
+  data: Record<string, unknown>;
+  saleId: string;
+  userId: string;
+  userName?: string;
+  createdAt: Date;
 }
 
 // ==========================================

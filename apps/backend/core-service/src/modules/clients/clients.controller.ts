@@ -14,9 +14,17 @@ import {
   CreateClientDto,
   UpdateClientDto,
   QueryClientsDto,
-  UpdateCredentialsDto,
+  AssignClientDto,
+  UpdateClientStatusDto,
+  AddClientNoteDto,
 } from './dto';
-import { UserRole, IClient, IPaginatedResponse, JwtPayload } from '@sentra-core/types';
+import {
+  UserRole,
+  IClient,
+  IClientActivity,
+  IPaginatedResponse,
+  JwtPayload,
+} from '@sentra-core/types';
 
 @Controller('clients')
 export class ClientsController {
@@ -25,18 +33,18 @@ export class ClientsController {
   @Post()
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
   create(
-    @CurrentUser('orgId') orgId: string,
+    @CurrentUser() user: JwtPayload,
     @Body() dto: CreateClientDto,
   ): Promise<IClient> {
-    return this.clientsService.create(orgId, dto);
+    return this.clientsService.create(user.orgId, user.sub, dto);
   }
 
   @Get()
   findAll(
-    @CurrentUser('orgId') orgId: string,
+    @CurrentUser() user: JwtPayload,
     @Query() query: QueryClientsDto,
   ): Promise<IPaginatedResponse<IClient>> {
-    return this.clientsService.findAll(orgId, query);
+    return this.clientsService.findAll(user.orgId, query, user.sub, user.role);
   }
 
   @Get(':id')
@@ -66,13 +74,50 @@ export class ClientsController {
     return this.clientsService.remove(id, orgId);
   }
 
-  @Patch(':id/credentials')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
-  updateCredentials(
+  @Patch(':id/assign')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  assign(
     @Param('id') id: string,
-    @CurrentUser('orgId') orgId: string,
-    @Body() dto: UpdateCredentialsDto,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AssignClientDto,
+  ): Promise<IClient> {
+    return this.clientsService.assign(id, user.orgId, user.sub, dto);
+  }
+
+  @Patch(':id/status')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  updateStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateClientStatusDto,
+  ): Promise<IClient> {
+    return this.clientsService.updateStatus(id, user.orgId, user.sub, dto.status);
+  }
+
+  @Post(':id/notes')
+  addNote(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AddClientNoteDto,
+  ): Promise<IClientActivity> {
+    return this.clientsService.addNote(id, user.orgId, user.sub, dto.content);
+  }
+
+  @Post(':id/grant-portal-access')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  grantPortalAccess(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
   ): Promise<{ message: string }> {
-    return this.clientsService.updateCredentials(id, orgId, dto);
+    return this.clientsService.grantPortalAccess(id, user.orgId, user.sub);
+  }
+
+  @Post(':id/revoke-portal-access')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  revokePortalAccess(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.clientsService.revokePortalAccess(id, user.orgId, user.sub);
   }
 }

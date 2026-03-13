@@ -152,4 +152,13 @@ export class LeadsController {
   ): Promise<ILeadActivity[]> {
     return this.leadsService.getActivities(id, orgId);
   }
+
+  @Delete(':id/notes/:activityId')
+  deleteNote(
+    @Param('id') leadId: string,
+    @Param('activityId') activityId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.leadsService.deleteNote(leadId, activityId, user.orgId, user.sub);
+  }
 }

@@ -1,4 +1,4 @@
-import { IsEnum, IsDateString, ValidateIf } from 'class-validator';
+import { IsEnum, IsDateString, IsString, MaxLength, ValidateIf } from 'class-validator';
 import { LeadStatus } from '@sentra-core/types';
 
 export class ChangeStatusDto {
@@ -9,4 +9,10 @@ export class ChangeStatusDto {
   @ValidateIf((o: ChangeStatusDto) => o.status === LeadStatus.FOLLOW_UP)
   @IsDateString()
   followUpDate?: string;
+
+  /** Required when status is CLOSED_LOST; ignored otherwise. */
+  @ValidateIf((o: ChangeStatusDto) => o.status === LeadStatus.CLOSED_LOST)
+  @IsString()
+  @MaxLength(500)
+  lostReason?: string;
 }

@@ -4,12 +4,33 @@ import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tan
 import { api } from '@/lib/api';
 import { ISale, ISaleWithRelations, IPaginatedResponse } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
+import { clientsKeys } from '@/hooks/use-clients';
+import { leadsKeys } from '@/hooks/use-leads';
 
 export const salesKeys = {
   all:    ['sales'] as const,
   lists:  () => [...salesKeys.all, 'list'] as const,
   list:   (params: object) => [...salesKeys.lists(), params] as const,
   detail: (id: string)     => [...salesKeys.all, 'detail', id] as const,
+};
+
+type CreateSaleInput = {
+  clientId?: string;
+  leadId?: string;
+  brandId: string;
+  totalAmount?: number;
+  currency?: string;
+  description?: string;
+  contractUrl?: string;
+  paymentPlan?: string;
+  installmentCount?: number;
+  items?: Array<{
+    name: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    customPrice?: number;
+  }>;
 };
 
 export function useSales(params?: Record<string, unknown>) {
@@ -33,9 +54,18 @@ export function useSale(id: string): UseQueryResult<ISaleWithRelations> {
 export function useCreateSale() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (dto: Record<string, unknown>) => api.createSale(dto),
-    onSuccess: () => {
+    mutationFn: (dto: CreateSaleInput) => api.createSale(dto),
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+
+      if (variables.leadId) {
+        queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: leadsKeys.detail(variables.leadId) });
+        queryClient.invalidateQueries({ queryKey: clientsKeys.lists() });
+        toast.success('Sale created for this lead');
+        return;
+      }
+
       toast.success('Sale created');
     },
     onError: (e: Error) => toast.error('Failed to create sale', e.message),

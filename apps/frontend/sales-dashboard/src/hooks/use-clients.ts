@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { IClient, IPaginatedResponse } from '@sentra-core/types';
+import { IClient, IClientActivity, IPaginatedResponse, ISale } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const clientsKeys = {
@@ -24,7 +24,7 @@ export function useClients(params?: Record<string, unknown>) {
 export function useClient(id: string) {
   return useQuery({
     queryKey: clientsKeys.detail(id),
-    queryFn:  () => api.getClient(id) as Promise<IClient>,
+    queryFn:  () => api.getClient(id) as Promise<IClient & { sales?: ISale[]; activities?: IClientActivity[] }>,
     enabled:  !!id,
     staleTime: 60_000,
   });
@@ -65,5 +65,57 @@ export function useDeleteClient() {
       toast.success('Client deleted');
     },
     onError: (e: Error) => toast.error('Failed to delete client', e.message),
+  });
+}
+
+export function useAssignClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...dto }: { id: string; upsellAgentId?: string | null; projectManagerId?: string | null }) =>
+      api.assignClient(id, dto),
+    onSuccess: (data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: clientsKeys.lists() });
+      queryClient.setQueryData(clientsKeys.detail(id), data);
+      toast.success('Assignments updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update assignments', e.message),
+  });
+}
+
+export function useAddClientNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) => api.addClientNote(id, content),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: clientsKeys.detail(id) });
+      toast.success('Note added');
+    },
+    onError: (e: Error) => toast.error('Failed to add note', e.message),
+  });
+}
+
+export function useGrantPortalAccess() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.grantPortalAccess(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: clientsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: clientsKeys.detail(id) });
+      toast.success('Portal invitation sent');
+    },
+    onError: (e: Error) => toast.error('Failed to grant portal access', e.message),
+  });
+}
+
+export function useRevokePortalAccess() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.revokePortalAccess(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: clientsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: clientsKeys.detail(id) });
+      toast.success('Portal access revoked');
+    },
+    onError: (e: Error) => toast.error('Failed to revoke portal access', e.message),
   });
 }

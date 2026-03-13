@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useLeads } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
-import { ILead, ILeadDetail, IOrganizationMember, LeadStatus } from '@sentra-core/types';
+import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
 import { LeadFormModal } from './_components/lead-form-modal';
@@ -20,12 +20,22 @@ import { cn } from '@/lib/utils';
 
 type ViewMode = 'kanban' | 'table';
 
+function formatEnumLabel(value: string) {
+  return value
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export default function LeadsPage() {
   const [params, setParams] = useQueryStates({
     page:         parseAsInteger.withDefault(1),
     limit:        parseAsInteger.withDefault(20),
     search:       parseAsString.withDefault(''),
     status:       parseAsStringEnum<LeadStatus>(Object.values(LeadStatus)),
+    source:       parseAsStringEnum<LeadSource>(Object.values(LeadSource)),
+    leadType:     parseAsStringEnum<LeadType>(Object.values(LeadType)),
     brandId:      parseAsString,
     assignedToId: parseAsString,
     dateFrom:     parseAsString,
@@ -42,16 +52,18 @@ export default function LeadsPage() {
     ...(isKanban ? { limit: 100 } : { page: params.page, limit: params.limit }),
     ...(debouncedSearch      ? { search: debouncedSearch }          : {}),
     ...(!isKanban && params.status       ? { status: params.status }             : {}),
+    ...(params.source        ? { source: params.source }           : {}),
+    ...(params.leadType      ? { leadType: params.leadType }       : {}),
     ...(params.brandId       ? { brandId: params.brandId }           : {}),
     ...(params.assignedToId  ? { assignedToId: params.assignedToId } : {}),
     ...(params.dateFrom      ? { dateFrom: params.dateFrom }         : {}),
     ...(params.dateTo        ? { dateTo: params.dateTo }             : {}),
   }), [isKanban, params.page, params.limit, debouncedSearch, params.status,
-       params.brandId, params.assignedToId, params.dateFrom, params.dateTo]);
+       params.source, params.leadType, params.brandId, params.assignedToId, params.dateFrom, params.dateTo]);
 
   const { data, isLoading, isError } = useLeads(queryParams);
   const { data: brandsData }  = useBrands({ limit: 100 });
-  const { data: members }     = useMembers();
+  const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
@@ -69,7 +81,7 @@ export default function LeadsPage() {
   const leadsEnriched = useMemo(() => {
     const brandMap  = Object.fromEntries(brandsData?.data.map((b) => [b.id, b.name]) ?? []);
     const memberMap = Object.fromEntries(
-      (members ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => [member.id, member.name])
+      (frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => [member.id, member.name])
     );
 
     return (data?.data ?? []).map((l) => ({
@@ -77,7 +89,7 @@ export default function LeadsPage() {
       brandName:    brandMap[l.brandId] ?? undefined,
       assigneeName: l.assignedToId ? (memberMap[l.assignedToId] ?? 'Assigned') : 'Unassigned',
     }));
-  }, [data?.data, brandsData?.data, members]);
+  }, [data?.data, brandsData?.data, frontSellAgents]);
 
   return (
     <div>
@@ -155,6 +167,36 @@ export default function LeadsPage() {
           </Select>
         )}
 
+        <Select
+          value={params.source ?? 'all'}
+          onValueChange={(value) => setParams({ source: value === 'all' ? null : (value as LeadSource), page: 1 })}
+        >
+          <SelectTrigger className="w-40 bg-white/5 border-white/10">
+            <SelectValue placeholder="All sources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            {Object.values(LeadSource).map((source) => (
+              <SelectItem key={source} value={source}>{formatEnumLabel(source)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={params.leadType ?? 'all'}
+          onValueChange={(value) => setParams({ leadType: value === 'all' ? null : (value as LeadType), page: 1 })}
+        >
+          <SelectTrigger className="w-40 bg-white/5 border-white/10">
+            <SelectValue placeholder="All lead types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All lead types</SelectItem>
+            {Object.values(LeadType).map((leadType) => (
+              <SelectItem key={leadType} value={leadType}>{formatEnumLabel(leadType)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {/* Brand */}
         <Select
           value={params.brandId ?? 'all'}
@@ -181,7 +223,7 @@ export default function LeadsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All assignees</SelectItem>
-            {(members ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
+            {(frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
               <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
             ))}
           </SelectContent>

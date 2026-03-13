@@ -23,7 +23,10 @@
       "Bash(xargs wc:*)",
       "Bash(find \"D:/Repositories/new crm/sentra-core\" -maxdepth 3 -name \"docker-compose*.yml\" -o -name \"Dockerfile*\" 2>/dev/null | head -30)",
       "WebSearch",
-      "Bash(grep -rn \"gmail\\\\|Gmail\\\\|settings/gmail\" \"D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src\" --include=\"*.tsx\" -l 2>/dev/null | grep -v \"page\\\\|test\")"
+      "Bash(grep -rn \"gmail\\\\|Gmail\\\\|settings/gmail\" \"D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src\" --include=\"*.tsx\" -l 2>/dev/null | grep -v \"page\\\\|test\")",
+      "Bash(find \"D:\\\\Repositories\\\\new crm\\\\sentra-core/libs\" -name \"*.ts\" -type f 2>/dev/null | xargs grep -l \"interface ILead\\\\|export.*LeadStatus\" | head -5)",
+      "Bash(cat \"C:\\\\Users\\\\Saif\\\\.claude\\\\projects\\\\D--Repositories-new-crm-sentra-core\\\\907bd563-1a23-43be-87d7-d8752c3183c3\\\\tool-results\\\\toolu_01DToMvPjKxESjoQRyRDyWzK.json\" 2>/dev/null | python3 -c \"\nimport json, sys\ndata = json.load\\(sys.stdin\\)\nfor item in data:\n    if item.get\\('type'\\) == 'text':\n        print\\(item['text']\\)\n\" 2>/dev/null || echo \"fallback\")",
+      "Bash(cd \"D:\\\\Repositories\\\\new crm\\\\sentra-core\" && npx prisma validate --schema=libs/backend/prisma-client/prisma/schema.prisma 2>&1)"
     ]
   }
 }

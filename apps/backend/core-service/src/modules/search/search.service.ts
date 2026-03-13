@@ -20,7 +20,7 @@ export class SearchService {
           deletedAt: null,
           OR: [
             { title: { contains: term, mode: 'insensitive' } },
-            { source: { contains: term, mode: 'insensitive' } },
+            { name: { contains: term, mode: 'insensitive' } },
           ],
         },
         select: { id: true, title: true, status: true, source: true },

@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { Prisma, PrismaService } from '@sentra-core/prisma-client';
 import {
   ISale,
   ISaleItem,
@@ -14,6 +14,9 @@ import {
   TransactionType,
   TransactionStatus,
   PaymentPlanType,
+  LeadActivityType,
+  LeadStatus,
+  ClientActivityType,
 } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
@@ -29,11 +32,10 @@ export class SalesService {
     private teams: TeamsService,
   ) {}
 
-  async create(orgId: string, dto: CreateSaleDto): Promise<ISale> {
-    // Validate client belongs to same org
-    const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
-    if (!client) throw new NotFoundException('Client not found');
-    if (client.organizationId !== orgId) throw new BadRequestException('Client belongs to another organization');
+  async create(orgId: string, actorId: string, dto: CreateSaleDto): Promise<ISale> {
+    if (!dto.clientId && !dto.leadId) {
+      throw new BadRequestException('Either clientId or leadId is required');
+    }
 
     const paymentPlan = dto.paymentPlan ?? PaymentPlanType.ONE_TIME;
 
@@ -47,41 +49,60 @@ export class SalesService {
     }
     if (!totalAmount) throw new BadRequestException('totalAmount is required when no items are provided');
 
-    const sale = await this.prisma.sale.create({
-      data: {
+    const clientId = dto.leadId
+      ? await this.resolveClientIdFromLead(orgId, actorId, dto.leadId)
+      : await this.resolveClientId(orgId, dto.clientId);
+
+    const sale = await this.prisma.$transaction(async (tx) => {
+      const createdSale = await tx.sale.create({
+        data: {
+          totalAmount,
+          currency: dto.currency || 'USD',
+          description: dto.description,
+          contractUrl: dto.contractUrl,
+          paymentPlan,
+          installmentCount: paymentPlan === PaymentPlanType.INSTALLMENTS ? (dto.installmentCount ?? 2) : null,
+          clientId,
+          brandId: dto.brandId,
+          organizationId: orgId,
+          items: dto.items
+            ? {
+                create: dto.items.map((item) => ({
+                  name: item.name,
+                  description: item.description,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  customPrice: item.customPrice,
+                })),
+              }
+            : undefined,
+        },
+        include: { items: true },
+      });
+
+      await this.generateInvoices(
+        tx,
+        createdSale.id,
         totalAmount,
-        currency: dto.currency || 'USD',
-        description: dto.description,
-        contractUrl: dto.contractUrl,
         paymentPlan,
-        installmentCount: paymentPlan === PaymentPlanType.INSTALLMENTS ? (dto.installmentCount ?? 2) : null,
-        clientId: dto.clientId,
-        brandId: dto.brandId,
-        organizationId: orgId,
-        items: dto.items
-          ? {
-              create: dto.items.map((item) => ({
-                name: item.name,
-                description: item.description,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                customPrice: item.customPrice,
-              })),
-            }
-          : undefined,
-      },
-      include: { items: true },
+        createdSale.installmentCount,
+        createdSale.currency,
+      );
+
+      return createdSale;
     });
 
-    // Auto-generate invoices based on payment plan
-    await this.generateInvoices(sale.id, totalAmount, paymentPlan, sale.installmentCount, sale.currency);
-
+    if (dto.leadId) {
+      await this.cache.delByPrefix(`leads:${orgId}:`);
+      await this.cache.delByPrefix(`clients:${orgId}:`);
+    }
     await this.cache.delByPrefix(`sales:${orgId}:`);
 
     return this.mapToISale(sale);
   }
 
   private async generateInvoices(
+    tx: Prisma.TransactionClient,
     saleId: string,
     totalAmount: number,
     plan: PaymentPlanType,
@@ -93,7 +114,7 @@ export class SalesService {
     if (plan === PaymentPlanType.ONE_TIME) {
       const dueDate = new Date(now);
       dueDate.setDate(dueDate.getDate() + 7); // due in 7 days
-      await this.prisma.invoice.create({
+      await tx.invoice.create({
         data: {
           invoiceNumber: `INV-${Date.now()}`,
           amount: totalAmount,
@@ -127,9 +148,128 @@ export class SalesService {
           notes: `Installment ${i + 1} of ${installmentCount}`,
         });
       }
-      await this.prisma.invoice.createMany({ data: invoices });
+      await tx.invoice.createMany({ data: invoices });
     }
     // SUBSCRIPTION plan: no invoices generated upfront — ARB handles billing
+  }
+
+  private async resolveClientId(orgId: string, clientId?: string): Promise<string> {
+    if (!clientId) {
+      throw new BadRequestException('clientId is required when leadId is not provided');
+    }
+
+    const client = await this.prisma.client.findFirst({
+      where: { id: clientId, organizationId: orgId, deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+
+    return client.id;
+  }
+
+  private async resolveClientIdFromLead(
+    orgId: string,
+    actorId: string,
+    leadId: string,
+  ): Promise<string> {
+    const lead = await this.prisma.lead.findUnique({ where: { id: leadId } });
+
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Lead not found');
+    }
+
+    if (lead.organizationId !== orgId) {
+      throw new ForbiddenException('Lead belongs to another organization');
+    }
+
+    if (lead.convertedClientId) {
+      const client = await this.prisma.client.findFirst({
+        where: { id: lead.convertedClientId, organizationId: orgId, deletedAt: null },
+        select: { id: true },
+      });
+
+      if (!client) {
+        throw new BadRequestException('Lead is linked to an invalid client record');
+      }
+
+      return client.id;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const reusableClient = lead.email
+        ? await tx.client.findFirst({
+            where: { email: lead.email, organizationId: orgId, deletedAt: null },
+            select: { id: true, companyName: true },
+          })
+        : null;
+
+      const client =
+        reusableClient ??
+        (await tx.client.create({
+          data: {
+            email: lead.email ?? this.buildPlaceholderEmail(lead.id),
+            companyName: this.buildLeadCompanyName(lead),
+            contactName: lead.name ?? undefined,
+            phone: lead.phone ?? undefined,
+            brandId: lead.brandId,
+            organizationId: orgId,
+            portalAccess: false,
+          },
+          select: { id: true, companyName: true },
+        }));
+
+      if (!reusableClient) {
+        await tx.clientActivity.create({
+          data: {
+            type: ClientActivityType.CREATED,
+            data: { companyName: client.companyName, trigger: 'first_sale' },
+            clientId: client.id,
+            userId: actorId,
+          },
+        });
+      }
+
+      await tx.lead.update({
+        where: { id: lead.id },
+        data: {
+          convertedClientId: client.id,
+          status: LeadStatus.CLOSED_WON,
+        },
+      });
+
+      await tx.leadActivity.create({
+        data: {
+          type: LeadActivityType.CONVERSION,
+          data: {
+            clientId: client.id,
+            companyName: client.companyName,
+            trigger: 'first_sale',
+          },
+          leadId: lead.id,
+          userId: actorId,
+        },
+      });
+
+      return client.id;
+    });
+  }
+
+  private buildPlaceholderEmail(leadId: string): string {
+    return `noemail-${leadId}@internal.sentra`;
+  }
+
+  private buildLeadCompanyName(lead: {
+    title: string | null;
+    name: string | null;
+    email: string | null;
+  }): string {
+    return lead.name?.trim()
+      || lead.title?.trim()
+      || lead.email?.trim()
+      || 'New Client';
   }
 
   async findAll(

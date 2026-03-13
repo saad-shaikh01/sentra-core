@@ -4,14 +4,14 @@ import {
   IsUUID,
   IsEmail,
   IsUrl,
-  MinLength,
   MaxLength,
+  IsEnum,
 } from 'class-validator';
+import { LeadSource, LeadType } from '@sentra-core/types';
 
 export class CaptureLeadDto {
   @IsOptional()
   @IsString()
-  @MinLength(2)
   @MaxLength(200)
   title?: string;
 
@@ -31,10 +31,13 @@ export class CaptureLeadDto {
   @IsUrl()
   website?: string;
 
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  source: string;
+  @IsOptional()
+  @IsEnum(LeadType)
+  leadType?: LeadType;
+
+  @IsOptional()
+  @IsEnum(LeadSource)
+  source?: LeadSource;
 
   @IsUUID()
   brandId: string;

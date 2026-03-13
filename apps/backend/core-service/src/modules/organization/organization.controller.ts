@@ -5,6 +5,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
 } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
 import { Roles, CurrentUser } from '../auth/decorators';
@@ -17,8 +18,11 @@ export class OrganizationController {
 
   @Get('members')
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
-  getMembers(@CurrentUser('orgId') orgId: string): Promise<IOrganizationMember[]> {
-    return this.organizationService.getMembers(orgId);
+  getMembers(
+    @CurrentUser('orgId') orgId: string,
+    @Query('role') role?: UserRole,
+  ): Promise<IOrganizationMember[]> {
+    return this.organizationService.getMembers(orgId, role);
   }
 
   @Patch('members/:userId/role')

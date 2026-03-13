@@ -5,10 +5,6 @@ export class CreateClientDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
-  password: string;
-
-  @IsString()
   @MinLength(2)
   @MaxLength(100)
   companyName: string;

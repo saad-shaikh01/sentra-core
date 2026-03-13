@@ -22,7 +22,8 @@ const COLUMNS: { status: LeadStatus; label: string }[] = [
   { status: LeadStatus.CONTACTED, label: 'Contacted' },
   { status: LeadStatus.PROPOSAL, label: 'Proposal' },
   { status: LeadStatus.FOLLOW_UP, label: 'Follow Up' },
-  { status: LeadStatus.CLOSED, label: 'Closed' },
+  { status: LeadStatus.CLOSED_WON, label: 'Won' },
+  { status: LeadStatus.CLOSED_LOST, label: 'Lost' },
 ];
 
 const COLUMN_COLORS: Record<LeadStatus, string> = {
@@ -30,7 +31,8 @@ const COLUMN_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.CONTACTED]: 'border-t-amber-500/60',
   [LeadStatus.PROPOSAL]: 'border-t-purple-500/60',
   [LeadStatus.FOLLOW_UP]: 'border-t-orange-500/60',
-  [LeadStatus.CLOSED]: 'border-t-emerald-500/60',
+  [LeadStatus.CLOSED_WON]: 'border-t-emerald-500/60',
+  [LeadStatus.CLOSED_LOST]: 'border-t-red-500/60',
 };
 
 interface LeadsKanbanProps {
@@ -42,6 +44,8 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
   const changeStatus = useChangeLeadStatus();
   const [pendingFollowUp, setPendingFollowUp] = useState<{ leadId: string } | null>(null);
   const [followUpDate, setFollowUpDate] = useState<string>('');
+  const [pendingLost, setPendingLost] = useState<{ leadId: string } | null>(null);
+  const [lostReason, setLostReason] = useState<string>('');
   const minFollowUpDate = new Date().toISOString().split('T')[0];
 
   const onDragEnd = (result: DropResult) => {
@@ -63,13 +67,18 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
       return;
     }
 
+    if (newStatus === LeadStatus.CLOSED_LOST) {
+      setPendingLost({ leadId: lead.id });
+      return;
+    }
+
     changeStatus.mutate({ id: draggableId, status: newStatus });
   };
 
   return (
     <>
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
           {COLUMNS.map(({ status, label }) => {
             const columnLeads = leads.filter((l) => l.status === status);
             return (
@@ -141,6 +150,59 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
                 });
                 setPendingFollowUp(null);
                 setFollowUpDate('');
+              }}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingLost !== null} onOpenChange={(open) => {
+        if (!open) {
+          setPendingLost(null);
+          setLostReason('');
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reason for Closing Lost</DialogTitle>
+            <DialogDescription>Provide a short reason before marking this lead as lost.</DialogDescription>
+          </DialogHeader>
+
+          <Input
+            value={lostReason}
+            maxLength={500}
+            placeholder="Reason for losing this lead"
+            onChange={(event) => setLostReason(event.target.value)}
+          />
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPendingLost(null);
+                setLostReason('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!lostReason.trim() || changeStatus.isPending}
+              onClick={() => {
+                if (!pendingLost || !lostReason.trim()) {
+                  return;
+                }
+
+                changeStatus.mutate({
+                  id: pendingLost.leadId,
+                  status: LeadStatus.CLOSED_LOST,
+                  lostReason: lostReason.trim(),
+                });
+                setPendingLost(null);
+                setLostReason('');
               }}
             >
               Confirm
