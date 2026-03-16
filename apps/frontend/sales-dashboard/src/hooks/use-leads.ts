@@ -110,10 +110,39 @@ export function useAddLeadNote() {
     mutationFn: ({ id, content }: { id: string; content: string }) =>
       api.addLeadNote(id, content),
     onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
       toast.success('Note added');
     },
     onError: (e: Error) => toast.error('Failed to add note', e.message),
+  });
+}
+
+export function useEditLeadNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, noteId, content }: { leadId: string; noteId: string; content: string }) =>
+      api.editLeadNote(leadId, noteId, content),
+    onSuccess: (_, { leadId }) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(leadId) });
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(leadId) });
+      toast.success('Note updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update note', e.message),
+  });
+}
+
+export function useDeleteLeadNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, noteId }: { leadId: string; noteId: string }) =>
+      api.deleteLeadNote(leadId, noteId),
+    onSuccess: (_, { leadId }) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(leadId) });
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(leadId) });
+      toast.success('Note deleted');
+    },
+    onError: (e: Error) => toast.error('Failed to delete note', e.message),
   });
 }
 

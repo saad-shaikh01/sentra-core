@@ -395,10 +395,13 @@ export class LeadsService {
     if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
     if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
 
+    const content = dto.content.trim();
+    if (!content) throw new BadRequestException('Note content is required');
+
     const activity = await this.prisma.leadActivity.create({
       data: {
         type: LeadActivityType.NOTE,
-        data: { content: dto.content },
+        data: { content },
         leadId: id,
         userId,
       },
@@ -599,11 +602,53 @@ export class LeadsService {
     if (activity.lead.organizationId !== orgId) throw new ForbiddenException('Access denied');
     if (activity.type !== LeadActivityType.NOTE) throw new BadRequestException('Activity is not a note');
     if (activity.userId !== userId) throw new ForbiddenException('Only the author can delete this note');
+    if (activity.leadId !== leadId) throw new BadRequestException('Note does not belong to this lead');
+    if (Date.now() - activity.createdAt.getTime() > 24 * 60 * 60 * 1000) {
+      throw new ForbiddenException('Notes can only be deleted within 24 hours');
+    }
 
     await this.prisma.leadActivity.delete({ where: { id: activityId } });
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return { message: 'Note deleted successfully' };
+  }
+
+  async editNote(
+    leadId: string,
+    activityId: string,
+    orgId: string,
+    userId: string,
+    dto: AddNoteDto,
+  ): Promise<ILeadActivity> {
+    const activity = await this.prisma.leadActivity.findUnique({
+      where: { id: activityId },
+      include: {
+        lead: true,
+        user: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+
+    if (!activity) throw new NotFoundException('Note not found');
+    if (activity.lead.organizationId !== orgId) throw new ForbiddenException('Access denied');
+    if (activity.type !== LeadActivityType.NOTE) throw new BadRequestException('Activity is not a note');
+    if (activity.userId !== userId) throw new ForbiddenException('Only the author can edit this note');
+    if (activity.leadId !== leadId) throw new BadRequestException('Note does not belong to this lead');
+    if (Date.now() - activity.createdAt.getTime() > 24 * 60 * 60 * 1000) {
+      throw new ForbiddenException('Notes can only be edited within 24 hours');
+    }
+
+    const content = dto.content.trim();
+    if (!content) throw new BadRequestException('Note content is required');
+
+    const updated = await this.prisma.leadActivity.update({
+      where: { id: activityId },
+      data: { data: { content } },
+      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+    });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+
+    return this.mapToILeadActivity(updated);
   }
 
   private mapToILead(lead: {

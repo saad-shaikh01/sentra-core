@@ -279,7 +279,6 @@ describe('LeadsService', () => {
     await expect(
       service.convert(leadId, orgId, userId, {
         email: 'existing@example.com',
-        password: 'Secret123',
         companyName: 'Existing Co',
         contactName: 'Existing Contact',
         phone: '+15551234567',

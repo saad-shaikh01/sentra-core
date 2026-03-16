@@ -58,6 +58,7 @@ interface InvoiceRecord {
 }
 
 const orgId = 'org-1';
+const actorId = 'user-1';
 const saleId = 'sale-1';
 const clientId = '11111111-1111-1111-1111-111111111111';
 const brandId = '22222222-2222-2222-2222-222222222222';
@@ -124,8 +125,9 @@ function makeCreateSaleDto(
 describe('SalesService', () => {
   let service: SalesService;
   let prismaMock: {
+    $transaction: jest.Mock<Promise<unknown>, [unknown]>;
     client: {
-      findUnique: jest.Mock<Promise<ClientRecord | null>, [unknown]>;
+      findFirst: jest.Mock<Promise<ClientRecord | null>, [unknown]>;
     };
     sale: {
       create: jest.Mock<Promise<SaleRecord>, [unknown]>;
@@ -167,8 +169,9 @@ describe('SalesService', () => {
 
   beforeEach(async () => {
     prismaMock = {
+      $transaction: jest.fn<Promise<unknown>, [unknown]>(),
       client: {
-        findUnique: jest.fn<Promise<ClientRecord | null>, [unknown]>(),
+        findFirst: jest.fn<Promise<ClientRecord | null>, [unknown]>(),
       },
       sale: {
         create: jest.fn<Promise<SaleRecord>, [unknown]>(),
@@ -190,6 +193,14 @@ describe('SalesService', () => {
         findMany: jest.fn<Promise<Array<{ convertedClientId: string | null }>>, [unknown]>(),
       },
     };
+
+    prismaMock.$transaction.mockImplementation(async (callback: unknown) => {
+      if (typeof callback === 'function') {
+        return callback(prismaMock);
+      }
+
+      return Promise.all(callback as Promise<unknown>[]);
+    });
 
     authorizeNetMock = {
       createCustomerProfile: jest.fn<Promise<unknown>, [unknown]>(),
@@ -225,7 +236,7 @@ describe('SalesService', () => {
   });
 
   it('TC-B1: create ONE_TIME sale generates one invoice.create call', async () => {
-    prismaMock.client.findUnique.mockResolvedValue(makeClient());
+    prismaMock.client.findFirst.mockResolvedValue(makeClient());
     prismaMock.sale.create.mockResolvedValue(
       makeSale({
         paymentPlan: PaymentPlanType.ONE_TIME,
@@ -239,14 +250,14 @@ describe('SalesService', () => {
       saleId,
     });
 
-    await service.create(orgId, makeCreateSaleDto(PaymentPlanType.ONE_TIME));
+    await service.create(orgId, actorId, makeCreateSaleDto(PaymentPlanType.ONE_TIME));
 
     expect(prismaMock.invoice.create).toHaveBeenCalledTimes(1);
     expect(prismaMock.invoice.createMany).not.toHaveBeenCalled();
   });
 
   it('TC-B2: create INSTALLMENTS sale does not call invoice.create and uses createMany', async () => {
-    prismaMock.client.findUnique.mockResolvedValue(makeClient());
+    prismaMock.client.findFirst.mockResolvedValue(makeClient());
     prismaMock.sale.create.mockResolvedValue(
       makeSale({
         paymentPlan: PaymentPlanType.INSTALLMENTS,
@@ -255,21 +266,21 @@ describe('SalesService', () => {
     );
     prismaMock.invoice.createMany.mockResolvedValue({ count: 3 });
 
-    await service.create(orgId, makeCreateSaleDto(PaymentPlanType.INSTALLMENTS));
+    await service.create(orgId, actorId, makeCreateSaleDto(PaymentPlanType.INSTALLMENTS));
 
     expect(prismaMock.invoice.create).toHaveBeenCalledTimes(0);
     expect(prismaMock.invoice.createMany).toHaveBeenCalledTimes(1);
   });
 
   it('TC-B3: create SUBSCRIPTION sale does not generate upfront invoices', async () => {
-    prismaMock.client.findUnique.mockResolvedValue(makeClient());
+    prismaMock.client.findFirst.mockResolvedValue(makeClient());
     prismaMock.sale.create.mockResolvedValue(
       makeSale({
         paymentPlan: PaymentPlanType.SUBSCRIPTION,
       }),
     );
 
-    await service.create(orgId, makeCreateSaleDto(PaymentPlanType.SUBSCRIPTION));
+    await service.create(orgId, actorId, makeCreateSaleDto(PaymentPlanType.SUBSCRIPTION));
 
     expect(prismaMock.invoice.create).toHaveBeenCalledTimes(0);
     expect(prismaMock.invoice.createMany).not.toHaveBeenCalled();

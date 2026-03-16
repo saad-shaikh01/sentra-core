@@ -385,6 +385,19 @@ class ApiClient {
     return this.fetch<any>(`/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) });
   }
 
+  async editLeadNote(leadId: string, noteId: string, content: string) {
+    return this.fetch<any>(`/leads/${leadId}/notes/${noteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async deleteLeadNote(leadId: string, noteId: string) {
+    return this.fetch<{ message: string }>(`/leads/${leadId}/notes/${noteId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async convertLead(id: string, dto: Record<string, unknown>) {
     return this.fetch<any>(`/leads/${id}/convert`, { method: 'POST', body: JSON.stringify(dto) });
   }

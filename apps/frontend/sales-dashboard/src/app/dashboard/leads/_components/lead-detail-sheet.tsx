@@ -21,6 +21,8 @@ import {
   useChangeLeadStatus,
   useAssignLead,
   useAddLeadNote,
+  useDeleteLeadNote,
+  useEditLeadNote,
 } from '@/hooks/use-leads';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
@@ -47,8 +49,10 @@ import {
   Pencil,
   Phone,
   RefreshCw,
+  Trash2,
   User,
   UserCheck,
+  X,
 } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
@@ -99,8 +103,12 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const changeStatus = useChangeLeadStatus();
   const assignLead = useAssignLead();
   const addNote = useAddLeadNote();
+  const editNote = useEditLeadNote();
+  const deleteNote = useDeleteLeadNote();
 
   const [note, setNote] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState('');
   const [convertOpen, setConvertOpen] = useState(false);
   const [createSaleOpen, setCreateSaleOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
@@ -151,6 +159,38 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
     await addNote.mutateAsync({ id: leadId, content: note.trim() });
     setNote('');
+  };
+
+  const startEditingNote = (activity: ILeadActivity) => {
+    const content = typeof activity.data.content === 'string' ? activity.data.content : '';
+    setEditingNoteId(activity.id);
+    setEditingNoteContent(content);
+  };
+
+  const cancelEditingNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteContent('');
+  };
+
+  const handleSaveEditedNote = async () => {
+    if (!leadId || !editingNoteId || !editingNoteContent.trim()) {
+      return;
+    }
+
+    await editNote.mutateAsync({
+      leadId,
+      noteId: editingNoteId,
+      content: editingNoteContent.trim(),
+    });
+    cancelEditingNote();
+  };
+
+  const canManageNote = (activity: ILeadActivity) => {
+    if (!user || activity.userId !== user.id) {
+      return false;
+    }
+
+    return Date.now() - new Date(activity.createdAt).getTime() <= 24 * 60 * 60 * 1000;
   };
 
   return (
@@ -366,26 +406,24 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
                   <div className="space-y-2">
                     <Label htmlFor="lead-note">Add Note</Label>
-                    <div className="flex gap-2">
-                      <Input
+                    <div className="space-y-2">
+                      <textarea
                         id="lead-note"
                         placeholder="Write a note for this lead"
                         value={note}
                         onChange={(event) => setNote(event.target.value)}
-                        className="border-white/10 bg-white/5"
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            handleAddNote();
-                          }
-                        }}
+                        rows={4}
+                        className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary"
                       />
-                      <Button
-                        size="sm"
-                        onClick={handleAddNote}
-                        disabled={!note.trim() || addNote.isPending}
-                      >
-                        Add
-                      </Button>
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={handleAddNote}
+                          disabled={!note.trim() || addNote.isPending}
+                        >
+                          Add
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -395,6 +433,8 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                     {discussionItems.map((item) => {
                       const actor = resolveActivityActor(item, memberMap);
                       const noteContent = typeof item.data.content === 'string' ? item.data.content : '';
+                      const isEditing = editingNoteId === item.id;
+                      const canEditOrDelete = canManageNote(item);
 
                       return (
                         <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -412,7 +452,53 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                               Note
                             </span>
                           </div>
-                          <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">{noteContent || 'No note content.'}</p>
+                          {isEditing ? (
+                            <div className="space-y-3">
+                              <textarea
+                                value={editingNoteContent}
+                                onChange={(event) => setEditingNoteContent(event.target.value)}
+                                rows={4}
+                                className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={cancelEditingNote}>
+                                  <X className="mr-2 h-3.5 w-3.5" />
+                                  Cancel
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={handleSaveEditedNote}
+                                  disabled={!editingNoteContent.trim() || editNote.isPending}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">{noteContent || 'No note content.'}</p>
+                              {canEditOrDelete ? (
+                                <div className="mt-3 flex justify-end gap-2">
+                                  <Button type="button" variant="outline" size="sm" onClick={() => startEditingNote(item)}>
+                                    <Pencil className="mr-2 h-3.5 w-3.5" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-red-500/30 text-red-300 hover:bg-red-500/10"
+                                    onClick={() => deleteNote.mutate({ leadId: lead.id, noteId: item.id })}
+                                    disabled={deleteNote.isPending}
+                                  >
+                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                    Delete
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </>
+                          )}
                         </div>
                       );
                     })}
