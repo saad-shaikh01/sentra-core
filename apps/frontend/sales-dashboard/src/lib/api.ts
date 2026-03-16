@@ -359,6 +359,13 @@ class ApiClient {
     return this.fetch<any>('/leads', { method: 'POST', body: JSON.stringify(dto) });
   }
 
+  async importLeads(formData: FormData) {
+    return this.fetch<any>('/leads/import', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
   async updateLead(id: string, dto: Record<string, unknown>) {
     return this.fetch<any>(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }

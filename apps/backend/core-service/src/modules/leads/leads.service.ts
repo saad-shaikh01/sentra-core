@@ -17,8 +17,12 @@ import {
   LEAD_STATUS_TRANSITIONS,
   ILead,
   ILeadActivity,
+  ILeadImportErrorDetail,
+  ILeadImportResult,
   IPaginatedResponse,
 } from '@sentra-core/types';
+import { isEmail, isURL } from 'class-validator';
+import * as XLSX from 'xlsx';
 import { buildPaginationResponse, CacheService } from '../../common';
 import { TeamsService } from '../teams';
 import {
@@ -30,7 +34,36 @@ import {
   AddNoteDto,
   ConvertLeadDto,
   CaptureLeadDto,
+  ImportLeadsDto,
 } from './dto';
+
+const IMPORT_ROW_LIMIT = 1000;
+const IMPORT_HEADER_ALIASES = {
+  name: ['name', 'contact_name'],
+  email: ['email'],
+  phone: ['phone'],
+  website: ['website'],
+  title: ['title'],
+  leadType: ['lead_type'],
+  source: ['source'],
+  leadDate: ['lead_date'],
+} as const;
+const IMPORT_KNOWN_HEADERS = new Set<string>([
+  ...IMPORT_HEADER_ALIASES.name,
+  ...IMPORT_HEADER_ALIASES.email,
+  ...IMPORT_HEADER_ALIASES.phone,
+  ...IMPORT_HEADER_ALIASES.website,
+  ...IMPORT_HEADER_ALIASES.title,
+  ...IMPORT_HEADER_ALIASES.leadType,
+  ...IMPORT_HEADER_ALIASES.source,
+  ...IMPORT_HEADER_ALIASES.leadDate,
+]);
+type LeadImportFile = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
 
 @Injectable()
 export class LeadsService {
@@ -45,8 +78,162 @@ export class LeadsService {
     return dto.source ? `Lead - ${base} - ${dto.source}` : `Lead - ${base}`;
   }
 
-  private toInputJson(data?: Record<string, unknown>): Prisma.InputJsonValue | undefined {
-    return data as Prisma.InputJsonValue | undefined;
+  private toInputJson(data?: Record<string, unknown>): Record<string, unknown> | undefined {
+    return data;
+  }
+
+  private normalizeImportHeader(header: string): string {
+    return header.trim().toLowerCase().replace(/\s+/g, '_');
+  }
+
+  private getImportStringValue(value: unknown): string | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    const stringValue = String(value).trim();
+    return stringValue ? stringValue : undefined;
+  }
+
+  private getImportCellValue(
+    row: Record<string, unknown>,
+    aliases: readonly string[],
+  ): unknown {
+    for (const alias of aliases) {
+      if (alias in row) {
+        return row[alias];
+      }
+    }
+
+    return undefined;
+  }
+
+  private parseImportedEnum<T extends string>(
+    rawValue: string | undefined,
+    allowedValues: T[],
+    fieldLabel: string,
+  ): T | undefined {
+    if (!rawValue) {
+      return undefined;
+    }
+
+    const normalizedValue = rawValue
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_') as T;
+
+    if (!allowedValues.includes(normalizedValue)) {
+      throw new BadRequestException(`Invalid ${fieldLabel} "${rawValue}"`);
+    }
+
+    return normalizedValue;
+  }
+
+  private parseImportedLeadDate(rawValue: unknown): Date | undefined {
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      return undefined;
+    }
+
+    if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+      return rawValue;
+    }
+
+    if (typeof rawValue === 'number') {
+      const parsedDate = XLSX.SSF.parse_date_code(rawValue);
+      if (!parsedDate) {
+        throw new BadRequestException('Invalid lead_date value');
+      }
+
+      return new Date(
+        Date.UTC(parsedDate.y, parsedDate.m - 1, parsedDate.d, parsedDate.H, parsedDate.M, parsedDate.S),
+      );
+    }
+
+    const stringValue = String(rawValue).trim();
+    if (!stringValue) {
+      return undefined;
+    }
+
+    const slashDateMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(stringValue);
+    if (slashDateMatch) {
+      const [, day, month, year] = slashDateMatch;
+      const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('Invalid lead_date value');
+      }
+
+      return parsed;
+    }
+
+    const isoDate = new Date(stringValue);
+    if (Number.isNaN(isoDate.getTime())) {
+      throw new BadRequestException('Invalid lead_date value');
+    }
+
+    return isoDate;
+  }
+
+  private parseImportFile(buffer: Buffer): Record<string, unknown>[] {
+    let workbook: XLSX.WorkBook;
+
+    try {
+      workbook = XLSX.read(buffer, {
+        type: 'buffer',
+        cellDates: true,
+      });
+    } catch {
+      throw new BadRequestException('Unable to read import file');
+    }
+
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new BadRequestException('Import file is empty');
+    }
+
+    const worksheet = workbook.Sheets[firstSheetName];
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+      defval: '',
+    });
+
+    if (rows.length === 0) {
+      throw new BadRequestException('Import file is empty');
+    }
+
+    if (rows.length > IMPORT_ROW_LIMIT) {
+      throw new BadRequestException(`Maximum ${IMPORT_ROW_LIMIT} rows allowed per import`);
+    }
+
+    return rows;
+  }
+
+  private async findExistingLeadEmails(orgId: string, emails: string[]): Promise<Set<string>> {
+    if (emails.length === 0) {
+      return new Set();
+    }
+
+    const existingLeads = await this.prisma.lead.findMany({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        OR: emails.map((email) => ({
+          email: {
+            equals: email,
+            mode: 'insensitive',
+          },
+        })),
+      },
+      select: { email: true },
+    });
+
+    return new Set(
+      existingLeads
+        .map((lead) => lead.email?.trim().toLowerCase())
+        .filter((email): email is string => !!email),
+    );
   }
 
   async create(
@@ -92,6 +279,163 @@ export class LeadsService {
     return this.mapToILead(lead);
   }
 
+  async import(
+    orgId: string,
+    userId: string,
+    dto: ImportLeadsDto,
+    file: LeadImportFile,
+  ): Promise<ILeadImportResult> {
+    const brand = await this.prisma.brand.findFirst({
+      where: {
+        id: dto.brandId,
+        organizationId: orgId,
+      },
+      select: { id: true },
+    });
+
+    if (!brand) {
+      throw new NotFoundException('Brand not found');
+    }
+
+    const rows = this.parseImportFile(file.buffer);
+    const normalizedRows = rows.map((row) =>
+      Object.entries(row).reduce<Record<string, unknown>>((acc, [key, value]) => {
+        acc[this.normalizeImportHeader(key)] = value;
+        return acc;
+      }, {}),
+    );
+
+    const importEmails = normalizedRows
+      .map((row) => this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.email)))
+      .filter((email): email is string => !!email)
+      .map((email) => email.toLowerCase());
+
+    const existingEmails = await this.findExistingLeadEmails(orgId, [...new Set(importEmails)]);
+    const seenEmails = new Set<string>();
+    const errorDetails: ILeadImportErrorDetail[] = [];
+    const leadsToCreate: Array<Record<string, unknown>> = [];
+    let duplicates = 0;
+
+    for (const [index, row] of normalizedRows.entries()) {
+      const rowNumber = index + 2;
+
+      try {
+        const name = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.name));
+        const email = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.email));
+        const phone = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.phone));
+        const website = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.website));
+        const title = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.title));
+        const rowLeadType = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.leadType));
+        const rowSource = this.getImportStringValue(this.getImportCellValue(row, IMPORT_HEADER_ALIASES.source));
+        const rawLeadDate = this.getImportCellValue(row, IMPORT_HEADER_ALIASES.leadDate);
+
+        if (!name && !email && !phone && !website && !title) {
+          throw new BadRequestException('Row is empty');
+        }
+
+        if (email && !isEmail(email)) {
+          throw new BadRequestException(`Invalid email "${email}"`);
+        }
+
+        if (website && !isURL(website, { require_protocol: true })) {
+          throw new BadRequestException(`Invalid website "${website}"`);
+        }
+
+        const leadType = this.parseImportedEnum(
+          rowLeadType ?? dto.leadType,
+          Object.values(LeadType),
+          'leadType',
+        );
+        const source = this.parseImportedEnum(
+          rowSource ?? dto.source,
+          Object.values(LeadSource),
+          'source',
+        );
+        const leadDate = this.parseImportedLeadDate(rawLeadDate) ?? new Date();
+        const normalizedEmail = email?.toLowerCase();
+
+        if (normalizedEmail) {
+          if (existingEmails.has(normalizedEmail) || seenEmails.has(normalizedEmail)) {
+            duplicates += 1;
+            continue;
+          }
+
+          seenEmails.add(normalizedEmail);
+        }
+
+        const extraData = Object.entries(row).reduce<Record<string, unknown>>((acc, [key, value]) => {
+          if (IMPORT_KNOWN_HEADERS.has(key) || value === undefined || value === null || value === '') {
+            return acc;
+          }
+
+          acc[key] = value instanceof Date ? value.toISOString() : value;
+          return acc;
+        }, {});
+
+        leadsToCreate.push({
+          title: title || this.generateTitle({ name, email, source }),
+          ...(name ? { name } : {}),
+          ...(email ? { email } : {}),
+          ...(phone ? { phone } : {}),
+          ...(website ? { website } : {}),
+          ...(leadType ? { leadType } : {}),
+          ...(source ? { source } : {}),
+          leadDate,
+          ...(Object.keys(extraData).length > 0 ? { data: this.toInputJson(extraData) } : {}),
+          status: LeadStatus.NEW,
+          brand: { connect: { id: brand.id } },
+          organization: { connect: { id: orgId } },
+        });
+      } catch (error) {
+        errorDetails.push({
+          row: rowNumber,
+          reason: error instanceof Error ? error.message : 'Invalid row',
+        });
+      }
+    }
+
+    let created = 0;
+
+    if (leadsToCreate.length > 0) {
+      const createdLeads = await this.prisma.$transaction(async (tx) => {
+        const leads = await Promise.all(
+          leadsToCreate.map((leadData) =>
+            tx.lead.create({
+              data: leadData as never,
+              select: { id: true },
+            }),
+          ),
+        );
+
+        await tx.leadActivity.createMany({
+          data: leads.map((lead) => ({
+            type: LeadActivityType.CREATED,
+            data: {
+              source: 'bulk_import',
+              filename: file.originalname,
+            },
+            leadId: lead.id,
+            userId,
+          })),
+        });
+
+        return leads;
+      });
+
+      created = createdLeads.length;
+    }
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+
+    return {
+      total: rows.length,
+      created,
+      duplicates,
+      errors: errorDetails.length,
+      errorDetails,
+    };
+  }
+
   async findAll(
     orgId: string,
     query: QueryLeadsDto,
@@ -107,7 +451,22 @@ export class LeadsService {
     const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search } = query;
 
     const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
-    const where: Prisma.LeadWhereInput = { organizationId: orgId, deletedAt: null };
+    const where: {
+      organizationId: string;
+      deletedAt: null;
+      assignedToId?: string | { in: string[] };
+      status?: LeadStatus;
+      leadType?: LeadType;
+      source?: LeadSource;
+      brandId?: string;
+      createdAt?: { gte?: Date; lte?: Date };
+      OR?: Array<
+        | { title: { contains: string; mode: 'insensitive' } }
+        | { name: { contains: string; mode: 'insensitive' } }
+        | { email: { contains: string; mode: 'insensitive' } }
+        | { phone: { contains: string; mode: 'insensitive' } }
+      >;
+    } = { organizationId: orgId, deletedAt: null };
 
     // Data visibility scoping
     if (agentRoles.includes(role)) {
@@ -663,7 +1022,7 @@ export class LeadsService {
     source: string | null;
     leadDate: Date | null;
     lostReason: string | null;
-    data: Prisma.JsonValue | null;
+    data: unknown;
     brandId: string;
     organizationId: string;
     assignedToId: string | null;
@@ -698,7 +1057,7 @@ export class LeadsService {
   private mapToILeadActivity(a: {
     id: string;
     type: string;
-    data: Prisma.JsonValue;
+    data: unknown;
     leadId: string;
     userId: string;
     createdAt: Date;

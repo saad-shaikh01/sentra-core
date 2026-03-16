@@ -411,6 +411,19 @@ export interface ILeadActivity {
   createdAt: Date;
 }
 
+export interface ILeadImportErrorDetail {
+  row: number;
+  reason: string;
+}
+
+export interface ILeadImportResult {
+  total: number;
+  created: number;
+  duplicates: number;
+  errors: number;
+  errorDetails: ILeadImportErrorDetail[];
+}
+
 // ==========================================
 // CLIENT INTERFACES
 // ==========================================

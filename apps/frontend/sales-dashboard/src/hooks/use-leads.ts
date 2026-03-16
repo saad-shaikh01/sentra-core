@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ILead, ILeadActivity, ILeadDetail, IPaginatedResponse, LeadStatus } from '@sentra-core/types';
+import { ILead, ILeadActivity, ILeadDetail, ILeadImportResult, IPaginatedResponse, LeadStatus } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const leadsKeys = {
@@ -47,6 +47,21 @@ export function useCreateLead() {
       toast.success('Lead created');
     },
     onError: (e: Error) => toast.error('Failed to create lead', e.message),
+  });
+}
+
+export function useImportLeads() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (formData: FormData) => api.importLeads(formData) as Promise<ILeadImportResult>,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      toast.success(
+        'Lead import completed',
+        `${data.created} created, ${data.duplicates} duplicates, ${data.errors} errors`,
+      );
+    },
+    onError: (e: Error) => toast.error('Lead import failed', e.message),
   });
 }
 
