@@ -45,6 +45,7 @@ export enum LeadSource {
   SMM = 'SMM',
   COLD_REFERRAL = 'COLD_REFERRAL',
   FACEBOOK_ADS = 'FACEBOOK_ADS',
+  WEBHOOK = 'WEBHOOK',
 }
 
 export enum ClientStatus {
@@ -433,6 +434,20 @@ export interface IFacebookIntegration {
   formId: string;
   label?: string;
   isActive: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface IGenericLeadWebhook {
+  id: string;
+  organizationId: string;
+  brandId: string;
+  label?: string;
+  defaultSource?: LeadSource;
+  defaultLeadType?: LeadType;
+  isActive: boolean;
+  webhookUrl?: string;
+  signingSecret?: string;
   createdAt: Date | string;
   updatedAt: Date | string;
 }

@@ -8,7 +8,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IFacebookIntegration, LeadSource, LeadType } from '@sentra-core/types';
+import {
+  IFacebookIntegration,
+  IGenericLeadWebhook,
+  LeadSource,
+  LeadType,
+} from '@sentra-core/types';
 import axios from 'axios';
 import {
   createCipheriv,
@@ -21,7 +26,9 @@ import {
 import { LeadsService } from '../leads/leads.service';
 import {
   CreateFacebookIntegrationDto,
+  CreateGenericLeadWebhookDto,
   UpdateFacebookIntegrationDto,
+  UpdateGenericLeadWebhookDto,
 } from './dto';
 
 type FacebookIntegrationRecord = {
@@ -56,6 +63,19 @@ type FacebookLeadResponse = {
     name: string;
     values?: string[];
   }>;
+};
+
+type GenericLeadWebhookRecord = {
+  id: string;
+  organizationId: string;
+  brandId: string;
+  label: string | null;
+  signingSecret: string;
+  defaultSource: string | null;
+  defaultLeadType: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 @Injectable()
@@ -117,6 +137,83 @@ export class LeadIntegrationsService {
       createdAt: integration.createdAt,
       updatedAt: integration.updatedAt,
     };
+  }
+
+  private getWebhookBaseUrl(): string {
+    return (
+      this.config.get<string>('PUBLIC_API_URL') ||
+      this.config.get<string>('API_BASE_URL') ||
+      'http://localhost:3001/api'
+    ).replace(/\/$/, '');
+  }
+
+  private mapToGenericLeadWebhook(
+    webhook: GenericLeadWebhookRecord,
+    includeSecret = false,
+  ): IGenericLeadWebhook {
+    return {
+      id: webhook.id,
+      organizationId: webhook.organizationId,
+      brandId: webhook.brandId,
+      label: webhook.label ?? undefined,
+      defaultSource: (webhook.defaultSource as LeadSource | null) ?? undefined,
+      defaultLeadType: (webhook.defaultLeadType as LeadType | null) ?? undefined,
+      isActive: webhook.isActive,
+      webhookUrl: `${this.getWebhookBaseUrl()}/webhooks/inbound-leads/${webhook.id}`,
+      signingSecret: includeSecret ? this.decryptValue(webhook.signingSecret) : undefined,
+      createdAt: webhook.createdAt,
+      updatedAt: webhook.updatedAt,
+    };
+  }
+
+  private verifyHmacSignature(signature: string, secret: string, payload: string): void {
+    if (!signature?.startsWith('sha256=')) {
+      throw new BadRequestException('Invalid webhook signature header');
+    }
+
+    const expectedSignature = createHmac('sha256', secret).update(payload).digest('hex');
+    const receivedSignature = signature.replace('sha256=', '');
+    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+    const receivedBuffer = Buffer.from(receivedSignature, 'hex');
+
+    if (
+      expectedBuffer.length !== receivedBuffer.length ||
+      !timingSafeEqual(expectedBuffer, receivedBuffer)
+    ) {
+      throw new BadRequestException('Invalid webhook signature');
+    }
+  }
+
+  private parseLeadSource(value?: string): LeadSource | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, '_') as LeadSource;
+    return Object.values(LeadSource).includes(normalized) ? normalized : undefined;
+  }
+
+  private parseLeadType(value?: string): LeadType | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, '_') as LeadType;
+    return Object.values(LeadType).includes(normalized) ? normalized : undefined;
+  }
+
+  private getPayloadString(
+    payload: Record<string, unknown>,
+    aliases: string[],
+  ): string | undefined {
+    for (const alias of aliases) {
+      const value = payload[alias];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    return undefined;
   }
 
   private async assertBrandBelongsToOrg(orgId: string, brandId: string): Promise<void> {
@@ -358,5 +455,146 @@ export class LeadIntegrationsService {
     }
 
     return { received: true, processed };
+  }
+
+  async createGenericLeadWebhook(
+    orgId: string,
+    dto: CreateGenericLeadWebhookDto,
+  ): Promise<IGenericLeadWebhook> {
+    await this.assertBrandBelongsToOrg(orgId, dto.brandId);
+
+    const signingSecret = randomBytes(24).toString('hex');
+    const webhook = await this.prisma.genericLeadWebhook.create({
+      data: {
+        organizationId: orgId,
+        brandId: dto.brandId,
+        label: dto.label?.trim() || null,
+        defaultSource: dto.defaultSource,
+        defaultLeadType: dto.defaultLeadType,
+        signingSecret: this.encryptValue(signingSecret),
+      },
+    });
+
+    return this.mapToGenericLeadWebhook(webhook, true);
+  }
+
+  async listGenericLeadWebhooks(orgId: string): Promise<IGenericLeadWebhook[]> {
+    const webhooks = await this.prisma.genericLeadWebhook.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return webhooks.map((webhook) => this.mapToGenericLeadWebhook(webhook));
+  }
+
+  async updateGenericLeadWebhook(
+    id: string,
+    orgId: string,
+    dto: UpdateGenericLeadWebhookDto,
+  ): Promise<IGenericLeadWebhook> {
+    const existing = await this.prisma.genericLeadWebhook.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Generic lead webhook not found');
+    }
+
+    if (existing.organizationId !== orgId) {
+      throw new ForbiddenException('Generic lead webhook belongs to another organization');
+    }
+
+    if (dto.brandId) {
+      await this.assertBrandBelongsToOrg(orgId, dto.brandId);
+    }
+
+    const updated = await this.prisma.genericLeadWebhook.update({
+      where: { id },
+      data: {
+        ...(dto.brandId ? { brandId: dto.brandId } : {}),
+        ...(dto.label !== undefined ? { label: dto.label.trim() || null } : {}),
+        ...(dto.defaultSource !== undefined ? { defaultSource: dto.defaultSource } : {}),
+        ...(dto.defaultLeadType !== undefined ? { defaultLeadType: dto.defaultLeadType } : {}),
+        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+      },
+    });
+
+    return this.mapToGenericLeadWebhook(updated);
+  }
+
+  async removeGenericLeadWebhook(id: string, orgId: string): Promise<{ message: string }> {
+    const existing = await this.prisma.genericLeadWebhook.findUnique({
+      where: { id },
+      select: { id: true, organizationId: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Generic lead webhook not found');
+    }
+
+    if (existing.organizationId !== orgId) {
+      throw new ForbiddenException('Generic lead webhook belongs to another organization');
+    }
+
+    await this.prisma.genericLeadWebhook.delete({ where: { id } });
+    return { message: 'Generic lead webhook removed successfully' };
+  }
+
+  async handleGenericLeadWebhook(
+    webhookId: string,
+    signature: string,
+    body: Record<string, unknown>,
+  ): Promise<{ received: true; created: true }> {
+    if (!signature) {
+      throw new BadRequestException('Missing webhook signature');
+    }
+
+    const webhook = await this.prisma.genericLeadWebhook.findUnique({
+      where: { id: webhookId },
+    });
+
+    if (!webhook || !webhook.isActive) {
+      throw new NotFoundException('Generic lead webhook not found');
+    }
+
+    const signingSecret = this.decryptValue(webhook.signingSecret);
+    this.verifyHmacSignature(signature, signingSecret, JSON.stringify(body));
+
+    const payload =
+      body.lead && typeof body.lead === 'object' && !Array.isArray(body.lead)
+        ? (body.lead as Record<string, unknown>)
+        : body;
+
+    const name = this.getPayloadString(payload, ['name', 'contact_name', 'contactName', 'full_name']);
+    const email = this.getPayloadString(payload, ['email']);
+    const phone = this.getPayloadString(payload, ['phone', 'phone_number', 'phoneNumber']);
+    const website = this.getPayloadString(payload, ['website', 'site', 'url']);
+    const title = this.getPayloadString(payload, ['title']);
+    const source =
+      this.parseLeadSource(this.getPayloadString(payload, ['source', 'lead_source', 'leadSource'])) ||
+      (webhook.defaultSource as LeadSource | null) ||
+      LeadSource.WEBHOOK;
+    const leadType =
+      this.parseLeadType(this.getPayloadString(payload, ['lead_type', 'leadType'])) ||
+      (webhook.defaultLeadType as LeadType | null) ||
+      LeadType.INBOUND;
+
+    await this.leadsService.capture({
+      name,
+      email,
+      phone,
+      website,
+      title,
+      source,
+      leadType,
+      brandId: webhook.brandId,
+      data: {
+        webhookId: webhook.id,
+        label: webhook.label,
+        payload,
+      },
+    });
+
+    return { received: true, created: true };
   }
 }

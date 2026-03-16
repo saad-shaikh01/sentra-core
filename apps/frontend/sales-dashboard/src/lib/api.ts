@@ -437,6 +437,30 @@ class ApiClient {
     });
   }
 
+  async getInboundLeadWebhooks() {
+    return this.fetch<any[]>('/integrations/inbound-webhooks');
+  }
+
+  async createInboundLeadWebhook(dto: Record<string, unknown>) {
+    return this.fetch<any>('/integrations/inbound-webhooks', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateInboundLeadWebhook(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/integrations/inbound-webhooks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteInboundLeadWebhook(id: string) {
+    return this.fetch<{ message: string }>(`/integrations/inbound-webhooks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Client endpoints
   async getClients(params?: Record<string, unknown>) {
     const qs = buildQueryString(params);

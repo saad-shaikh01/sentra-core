@@ -51,6 +51,7 @@ enum LeadSource {
   SMM
   COLD_REFERRAL
   FACEBOOK_ADS
+  WEBHOOK
 }
 
 enum ClientStatus {
@@ -421,6 +422,7 @@ model Organization {
   salesTeams  SalesTeam[]
   packages    ProductPackage[]
   facebookIntegrations FacebookIntegration[]
+  genericLeadWebhooks GenericLeadWebhook[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -529,6 +531,7 @@ model Brand {
   emailAliases EmailAlias[]
   packages     ProductPackage[]
   facebookIntegrations FacebookIntegration[]
+  genericLeadWebhooks GenericLeadWebhook[]
 
   members BrandAccess[]
 
@@ -871,6 +874,24 @@ model FacebookIntegration {
   updatedAt   DateTime @updatedAt
 
   @@unique([pageId, formId])
+  @@index([organizationId, isActive])
+  @@index([brandId])
+}
+
+model GenericLeadWebhook {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  label          String?
+  signingSecret  String
+  defaultSource  LeadSource?
+  defaultLeadType LeadType?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   @@index([organizationId, isActive])
   @@index([brandId])
 }

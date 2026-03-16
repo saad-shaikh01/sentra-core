@@ -25,6 +25,13 @@ describe('LeadIntegrationsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    genericLeadWebhook: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
   };
   const configMock = {
     get: jest.fn((key: string) => {
@@ -32,6 +39,7 @@ describe('LeadIntegrationsService', () => {
         LEAD_INTEGRATIONS_ENCRYPTION_KEY: 'test-encryption-key',
         FACEBOOK_APP_SECRET: 'facebook-secret',
         FACEBOOK_WEBHOOK_VERIFY_TOKEN: 'verify-me',
+        API_BASE_URL: 'http://localhost:3001/api',
       };
 
       return values[key];
@@ -206,5 +214,87 @@ describe('LeadIntegrationsService', () => {
     await expect(
       service.removeFacebookIntegration('fb-1', 'org-1'),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('creates a generic inbound webhook and returns the generated secret once', async () => {
+    prismaMock.brand.findFirst.mockResolvedValue({ id: 'brand-1' });
+    prismaMock.genericLeadWebhook.create.mockImplementation(async ({ data }: any) => ({
+      id: 'webhook-1',
+      organizationId: data.organizationId,
+      brandId: data.brandId,
+      label: data.label,
+      signingSecret: data.signingSecret,
+      defaultSource: data.defaultSource ?? null,
+      defaultLeadType: data.defaultLeadType ?? null,
+      isActive: true,
+      createdAt: new Date('2026-03-16T00:00:00.000Z'),
+      updatedAt: new Date('2026-03-16T00:00:00.000Z'),
+    }));
+
+    const webhook = await service.createGenericLeadWebhook('org-1', {
+      brandId: 'brand-1',
+      label: 'Zapier',
+      defaultSource: LeadSource.WEBHOOK,
+      defaultLeadType: LeadType.INBOUND,
+    });
+
+    expect(webhook.webhookUrl).toBe('http://localhost:3001/api/webhooks/inbound-leads/webhook-1');
+    expect(webhook.signingSecret).toBeTruthy();
+  });
+
+  it('handles a signed generic webhook payload and captures a lead', async () => {
+    const encryptedSecret = (service as any).encryptValue('inbound-secret');
+    prismaMock.genericLeadWebhook.findUnique.mockResolvedValue({
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      brandId: 'brand-1',
+      label: 'Typeform',
+      signingSecret: encryptedSecret,
+      defaultSource: LeadSource.WEBHOOK,
+      defaultLeadType: LeadType.INBOUND,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const body = {
+      name: 'Webhook Lead',
+      email: 'webhook@example.com',
+      phone: '+15550001111',
+    };
+    const signature = `sha256=${crypto.createHmac('sha256', 'inbound-secret').update(JSON.stringify(body)).digest('hex')}`;
+
+    const result = await service.handleGenericLeadWebhook('webhook-1', signature, body);
+
+    expect(result).toEqual({ received: true, created: true });
+    expect(leadsServiceMock.capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Webhook Lead',
+        email: 'webhook@example.com',
+        phone: '+15550001111',
+        source: LeadSource.WEBHOOK,
+        leadType: LeadType.INBOUND,
+        brandId: 'brand-1',
+      }),
+    );
+  });
+
+  it('rejects generic webhook payloads with invalid signatures', async () => {
+    prismaMock.genericLeadWebhook.findUnique.mockResolvedValue({
+      id: 'webhook-1',
+      organizationId: 'org-1',
+      brandId: 'brand-1',
+      label: null,
+      signingSecret: (service as any).encryptValue('inbound-secret'),
+      defaultSource: null,
+      defaultLeadType: null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      service.handleGenericLeadWebhook('webhook-1', 'sha256=invalid', { email: 'bad@example.com' }),
+    ).rejects.toThrow(BadRequestException);
   });
 });

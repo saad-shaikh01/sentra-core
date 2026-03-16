@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Headers, HttpCode, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { Public } from '../auth/decorators';
@@ -37,6 +37,25 @@ export class LeadIntegrationsWebhookController {
 
     return this.leadIntegrationsService.handleFacebookWebhook(
       webhookId ?? '',
+      signature ?? '',
+      req.body as Record<string, unknown>,
+    );
+  }
+
+  @Public()
+  @Post('inbound-leads/:id')
+  @HttpCode(200)
+  handleGenericLeadWebhook(
+    @Param('id') id: string,
+    @Headers('x-sentra-signature') signature?: string,
+    @Req() req?: Request,
+  ): Promise<{ received: true; created: true }> {
+    if (!req) {
+      throw new BadRequestException('Request body is required');
+    }
+
+    return this.leadIntegrationsService.handleGenericLeadWebhook(
+      id,
       signature ?? '',
       req.body as Record<string, unknown>,
     );

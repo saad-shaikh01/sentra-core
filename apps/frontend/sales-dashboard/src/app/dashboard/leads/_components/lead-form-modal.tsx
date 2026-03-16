@@ -25,6 +25,7 @@ const LEAD_SOURCE_OPTIONS: Array<{ value: LeadSource; label: string }> = [
   { value: LeadSource.SMM, label: 'SMM' },
   { value: LeadSource.COLD_REFERRAL, label: 'Cold Referral' },
   { value: LeadSource.FACEBOOK_ADS, label: 'Facebook Ads' },
+  { value: LeadSource.WEBHOOK, label: 'Webhook' },
 ];
 
 function toDateInputValue(value?: Date | string): string {
