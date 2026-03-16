@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { LeadStatus, UserRole } from '@sentra-core/types';
+import { LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
 import { CacheService } from '../../common';
 import { TeamsService } from '../teams';
 import { LeadsService } from './leads.service';
@@ -28,7 +28,19 @@ interface LeadRecord {
 }
 
 interface LeadWhereInput {
+  organizationId?: string;
+  deletedAt?: null;
   assignedToId?: string | { in: string[] };
+  leadDate?: {
+    gte?: Date;
+    lte?: Date;
+  };
+  OR?: Array<{
+    email?: {
+      equals: string;
+      mode?: 'insensitive';
+    };
+  }>;
 }
 
 type TransactionClient = {
@@ -36,10 +48,12 @@ type TransactionClient = {
     create: jest.Mock;
   };
   lead: {
+    create: jest.Mock;
     update: jest.Mock;
   };
   leadActivity: {
     create: jest.Mock;
+    createMany: jest.Mock;
   };
 };
 
@@ -92,7 +106,11 @@ function filterLeadsByWhere(leads: LeadRecord[], where?: LeadWhereInput): LeadRe
 describe('LeadsService', () => {
   let service: LeadsService;
   let prismaMock: {
+    brand: {
+      findFirst: jest.Mock;
+    };
     lead: {
+      create: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
       findMany: jest.Mock;
@@ -100,6 +118,7 @@ describe('LeadsService', () => {
     };
     leadActivity: {
       create: jest.Mock;
+      createMany: jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
@@ -124,15 +143,21 @@ describe('LeadsService', () => {
         create: jest.fn(),
       },
       lead: {
+        create: jest.fn(),
         update: jest.fn(),
       },
       leadActivity: {
         create: jest.fn(),
+        createMany: jest.fn(),
       },
     };
 
     prismaMock = {
+      brand: {
+        findFirst: jest.fn(),
+      },
       lead: {
+        create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
         findMany: jest.fn(),
@@ -140,6 +165,7 @@ describe('LeadsService', () => {
       },
       leadActivity: {
         create: jest.fn(),
+        createMany: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
@@ -286,5 +312,133 @@ describe('LeadsService', () => {
     ).rejects.toThrow(ConflictException);
 
     expect(transactionClient.lead.update).not.toHaveBeenCalled();
+  });
+
+  it('TC-B7: import creates leads from CSV rows and records created activities', async () => {
+    prismaMock.brand.findFirst.mockResolvedValue({ id: brandId });
+    prismaMock.lead.findMany.mockResolvedValue([]);
+    transactionClient.lead.create
+      .mockResolvedValueOnce({ id: 'lead-import-1' })
+      .mockResolvedValueOnce({ id: 'lead-import-2' });
+    transactionClient.leadActivity.createMany.mockResolvedValue({ count: 2 });
+
+    const file = {
+      originalname: 'leads.csv',
+      mimetype: 'text/csv',
+      size: 1024,
+      buffer: Buffer.from(
+        [
+          'name,email,lead_type,source,lead_date,company',
+          'Alice,alice@example.com,INBOUND,PPC,2026-03-01,Acme',
+          'Bob,bob@example.com,REFERRAL,COLD_REFERRAL,16/03/2026,Globex',
+        ].join('\n'),
+      ),
+    } as any;
+
+    const result = await service.import(orgId, userId, { brandId }, file);
+
+    expect(result).toEqual({
+      total: 2,
+      created: 2,
+      duplicates: 0,
+      errors: 0,
+      errorDetails: [],
+    });
+    expect(transactionClient.lead.create).toHaveBeenCalledTimes(2);
+    expect(transactionClient.leadActivity.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('TC-B8: import reports invalid leadType rows in errorDetails', async () => {
+    prismaMock.brand.findFirst.mockResolvedValue({ id: brandId });
+    prismaMock.lead.findMany.mockResolvedValue([]);
+
+    const file = {
+      originalname: 'leads.csv',
+      mimetype: 'text/csv',
+      size: 512,
+      buffer: Buffer.from(
+        [
+          'name,email,lead_type',
+          'Alice,alice@example.com,BAD_TYPE',
+        ].join('\n'),
+      ),
+    } as any;
+
+    const result = await service.import(
+      orgId,
+      userId,
+      { brandId, source: LeadSource.PPC },
+      file,
+    );
+
+    expect(result.created).toBe(0);
+    expect(result.errors).toBe(1);
+    expect(result.errorDetails).toEqual([
+      {
+        row: 2,
+        reason: 'Invalid leadType "BAD_TYPE"',
+      },
+    ]);
+  });
+
+  it('TC-B9: import skips duplicate emails from the same file and existing org leads', async () => {
+    prismaMock.brand.findFirst.mockResolvedValue({ id: brandId });
+    prismaMock.lead.findMany.mockResolvedValue([{ email: 'existing@example.com' }]);
+    transactionClient.lead.create.mockResolvedValue({ id: 'lead-import-1' });
+    transactionClient.leadActivity.createMany.mockResolvedValue({ count: 1 });
+
+    const file = {
+      originalname: 'leads.csv',
+      mimetype: 'text/csv',
+      size: 1024,
+      buffer: Buffer.from(
+        [
+          'name,email,lead_type',
+          'Existing,existing@example.com,INBOUND',
+          'Fresh,fresh@example.com,INBOUND',
+          'Fresh Copy,fresh@example.com,INBOUND',
+        ].join('\n'),
+      ),
+    } as any;
+
+    const result = await service.import(
+      orgId,
+      userId,
+      { brandId, leadType: LeadType.INBOUND },
+      file,
+    );
+
+    expect(result).toEqual({
+      total: 3,
+      created: 1,
+      duplicates: 2,
+      errors: 0,
+      errorDetails: [],
+    });
+    expect(transactionClient.lead.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('TC-B10: findAll date filters apply to leadDate instead of createdAt', async () => {
+    prismaMock.lead.findMany.mockResolvedValue([]);
+    prismaMock.lead.count.mockResolvedValue(0);
+
+    await service.findAll(
+      orgId,
+      {
+        page: 1,
+        limit: 20,
+        dateFrom: '2026-03-01',
+        dateTo: '2026-03-16',
+      },
+      adminId,
+      UserRole.ADMIN,
+    );
+
+    const findManyArgs = prismaMock.lead.findMany.mock.calls[0][0];
+    expect(findManyArgs.where.leadDate).toEqual({
+      gte: new Date('2026-03-01T00:00:00.000Z'),
+      lte: new Date('2026-03-16T23:59:59.999Z'),
+    });
+    expect(findManyArgs.where.createdAt).toBeUndefined();
   });
 });

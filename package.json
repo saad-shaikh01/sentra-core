@@ -142,6 +142,7 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",
     "uuid": "^9.0.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   }

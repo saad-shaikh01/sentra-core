@@ -7,7 +7,12 @@ import {
   Param,
   Body,
   Query,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { LeadsService } from './leads.service';
 import { Roles, CurrentUser, Public, AppAccess } from '../auth/decorators';
@@ -20,6 +25,7 @@ import {
   AddNoteDto,
   ConvertLeadDto,
   CaptureLeadDto,
+  ImportLeadsDto,
 } from './dto';
 import {
   UserRole,
@@ -27,8 +33,24 @@ import {
   JwtPayload,
   ILead,
   ILeadActivity,
+  ILeadImportResult,
   IPaginatedResponse,
 } from '@sentra-core/types';
+
+const ALLOWED_IMPORT_EXTENSIONS = ['.csv', '.xlsx'];
+const ALLOWED_IMPORT_MIME_TYPES = [
+  'text/csv',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
+type LeadImportFile = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
 
 @Controller('leads')
 @AppAccess(AppCode.SALES_DASHBOARD)
@@ -42,6 +64,36 @@ export class LeadsController {
     @Body() dto: CaptureLeadDto,
   ): Promise<{ id: string; message: string }> {
     return this.leadsService.capture(dto);
+  }
+
+  @Post('import')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @UseInterceptors(FileInterceptor('file'))
+  async importLeads(
+    @UploadedFile() file: LeadImportFile | undefined,
+    @Body() dto: ImportLeadsDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ILeadImportResult> {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    if (file.size > MAX_IMPORT_SIZE) {
+      throw new PayloadTooLargeException('File too large. Maximum 5 MB');
+    }
+
+    const extension = file.originalname.includes('.')
+      ? file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase()
+      : '';
+    if (!ALLOWED_IMPORT_EXTENSIONS.includes(extension)) {
+      throw new BadRequestException('Only CSV and XLSX files are allowed');
+    }
+
+    if (file.mimetype && !ALLOWED_IMPORT_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException('Unsupported file type');
+    }
+
+    return this.leadsService.import(user.orgId, user.sub, dto, file);
   }
 
   @Post()

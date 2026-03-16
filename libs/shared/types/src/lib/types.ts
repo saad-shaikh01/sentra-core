@@ -44,6 +44,8 @@ export enum LeadSource {
   PPC = 'PPC',
   SMM = 'SMM',
   COLD_REFERRAL = 'COLD_REFERRAL',
+  FACEBOOK_ADS = 'FACEBOOK_ADS',
+  WEBHOOK = 'WEBHOOK',
 }
 
 export enum ClientStatus {
@@ -409,6 +411,45 @@ export interface ILeadActivity {
     avatarUrl?: string;
   };
   createdAt: Date;
+}
+
+export interface ILeadImportErrorDetail {
+  row: number;
+  reason: string;
+}
+
+export interface ILeadImportResult {
+  total: number;
+  created: number;
+  duplicates: number;
+  errors: number;
+  errorDetails: ILeadImportErrorDetail[];
+}
+
+export interface IFacebookIntegration {
+  id: string;
+  organizationId: string;
+  brandId: string;
+  pageId: string;
+  formId: string;
+  label?: string;
+  isActive: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+export interface IGenericLeadWebhook {
+  id: string;
+  organizationId: string;
+  brandId: string;
+  label?: string;
+  defaultSource?: LeadSource;
+  defaultLeadType?: LeadType;
+  isActive: boolean;
+  webhookUrl?: string;
+  signingSecret?: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 // ==========================================

@@ -359,6 +359,13 @@ class ApiClient {
     return this.fetch<any>('/leads', { method: 'POST', body: JSON.stringify(dto) });
   }
 
+  async importLeads(formData: FormData) {
+    return this.fetch<any>('/leads/import', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
   async updateLead(id: string, dto: Record<string, unknown>) {
     return this.fetch<any>(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }
@@ -404,6 +411,54 @@ class ApiClient {
 
   async getLeadActivities(id: string) {
     return this.fetch<any[]>(`/leads/${id}/activities`);
+  }
+
+  async getFacebookIntegrations() {
+    return this.fetch<any[]>('/integrations/facebook');
+  }
+
+  async createFacebookIntegration(dto: Record<string, unknown>) {
+    return this.fetch<any>('/integrations/facebook', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateFacebookIntegration(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/integrations/facebook/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteFacebookIntegration(id: string) {
+    return this.fetch<{ message: string }>(`/integrations/facebook/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getInboundLeadWebhooks() {
+    return this.fetch<any[]>('/integrations/inbound-webhooks');
+  }
+
+  async createInboundLeadWebhook(dto: Record<string, unknown>) {
+    return this.fetch<any>('/integrations/inbound-webhooks', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateInboundLeadWebhook(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/integrations/inbound-webhooks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteInboundLeadWebhook(id: string) {
+    return this.fetch<{ message: string }>(`/integrations/inbound-webhooks/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   // Client endpoints

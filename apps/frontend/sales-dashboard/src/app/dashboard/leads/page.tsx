@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
-import { Plus, LayoutGrid, List } from 'lucide-react';
+import { Plus, LayoutGrid, List, Upload } from 'lucide-react';
 import { PageHeader, FilterBar, Pagination } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadTy
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
 import { LeadFormModal } from './_components/lead-form-modal';
+import { LeadImportModal } from './_components/lead-import-modal';
 import { LeadDetailSheet } from './_components/lead-detail-sheet';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,7 @@ export default function LeadsPage() {
   const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
   const [editLead, setEditLead] = useState<ILeadDetail | null>(null);
 
@@ -125,6 +127,9 @@ export default function LeadsPage() {
                 Table
               </button>
             </div>
+            <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" /> Import Leads
+            </Button>
             <Button onClick={() => {
               setEditLead(null);
               setModalOpen(true);
@@ -273,6 +278,7 @@ export default function LeadsPage() {
         onOpenChange={handleModalOpenChange}
         lead={editLead ?? undefined}
       />
+      <LeadImportModal open={importModalOpen} onOpenChange={setImportModalOpen} />
 
       <LeadDetailSheet
         leadId={detailLeadId}
