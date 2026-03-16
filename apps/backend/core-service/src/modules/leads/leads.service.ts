@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { Prisma, PrismaService } from '@sentra-core/prisma-client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { InputJsonValue, JsonValue, PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import {
   LeadStatus,
   LeadType,
@@ -78,8 +78,8 @@ export class LeadsService {
     return dto.source ? `Lead - ${base} - ${dto.source}` : `Lead - ${base}`;
   }
 
-  private toInputJson(data?: Record<string, unknown>): Record<string, unknown> | undefined {
-    return data;
+  private toInputJson(data?: Record<string, unknown>): InputJsonValue | undefined {
+    return data as InputJsonValue | undefined;
   }
 
   private normalizeImportHeader(header: string): string {
@@ -1022,7 +1022,7 @@ export class LeadsService {
     source: string | null;
     leadDate: Date | null;
     lostReason: string | null;
-    data: unknown;
+    data: JsonValue | null;
     brandId: string;
     organizationId: string;
     assignedToId: string | null;
@@ -1057,7 +1057,7 @@ export class LeadsService {
   private mapToILeadActivity(a: {
     id: string;
     type: string;
-    data: unknown;
+    data: JsonValue;
     leadId: string;
     userId: string;
     createdAt: Date;

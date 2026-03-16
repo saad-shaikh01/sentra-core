@@ -44,6 +44,7 @@ export enum LeadSource {
   PPC = 'PPC',
   SMM = 'SMM',
   COLD_REFERRAL = 'COLD_REFERRAL',
+  FACEBOOK_ADS = 'FACEBOOK_ADS',
 }
 
 export enum ClientStatus {
@@ -422,6 +423,18 @@ export interface ILeadImportResult {
   duplicates: number;
   errors: number;
   errorDetails: ILeadImportErrorDetail[];
+}
+
+export interface IFacebookIntegration {
+  id: string;
+  organizationId: string;
+  brandId: string;
+  pageId: string;
+  formId: string;
+  label?: string;
+  isActive: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 // ==========================================

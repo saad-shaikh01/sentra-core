@@ -23,6 +23,7 @@ import { TeamsModule } from '../modules/teams';
 import { PackagesModule } from '../modules/packages';
 import { SearchModule } from '../modules/search';
 import { AnalyticsModule } from '../modules/analytics';
+import { LeadIntegrationsModule } from '../modules/lead-integrations';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -71,6 +72,7 @@ function resolveEnvFiles(): string[] {
     PackagesModule,
     SearchModule,
     AnalyticsModule,
+    LeadIntegrationsModule,
   ],
   controllers: [AppController],
   providers: [

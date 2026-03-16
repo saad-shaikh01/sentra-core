@@ -413,6 +413,30 @@ class ApiClient {
     return this.fetch<any[]>(`/leads/${id}/activities`);
   }
 
+  async getFacebookIntegrations() {
+    return this.fetch<any[]>('/integrations/facebook');
+  }
+
+  async createFacebookIntegration(dto: Record<string, unknown>) {
+    return this.fetch<any>('/integrations/facebook', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateFacebookIntegration(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/integrations/facebook/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteFacebookIntegration(id: string) {
+    return this.fetch<{ message: string }>(`/integrations/facebook/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Client endpoints
   async getClients(params?: Record<string, unknown>) {
     const qs = buildQueryString(params);

@@ -23,6 +23,7 @@ const LEAD_SOURCE_OPTIONS: Array<{ value: LeadSource; label: string }> = [
   { value: LeadSource.PPC, label: 'PPC' },
   { value: LeadSource.SMM, label: 'SMM' },
   { value: LeadSource.COLD_REFERRAL, label: 'Cold Referral' },
+  { value: LeadSource.FACEBOOK_ADS, label: 'Facebook Ads' },
 ];
 
 const TEMPLATE_CSV = [
