@@ -43,4 +43,6 @@ Thumbs.db
 
 # Next.js
 .next
+.codex
+.codex-worktrees
 out
