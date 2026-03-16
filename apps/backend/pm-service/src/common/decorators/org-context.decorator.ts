@@ -18,6 +18,7 @@ export interface OrgContext {
   organizationId: string;
   userId: string;
   userRole?: string;
+  pmRole?: string;
 }
 
 export const GetOrgContext = createParamDecorator(
@@ -27,6 +28,7 @@ export const GetOrgContext = createParamDecorator(
       organizationId: req.headers['x-organization-id'] as string,
       userId: req.headers['x-user-id'] as string,
       userRole: req.headers['x-user-role'] as string | undefined,
+      pmRole: req.headers['x-pm-app-role'] as string | undefined,
     };
   },
 );

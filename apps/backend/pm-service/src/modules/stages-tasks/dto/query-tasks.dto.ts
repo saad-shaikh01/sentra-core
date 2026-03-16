@@ -1,6 +1,6 @@
 import { IsOptional, IsEnum, IsString, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PmTaskStatus, PmTaskPriority } from '../../../common/enums/pm.enums';
+import { PmTaskStatus, PmTaskPriority, PmDepartmentCode } from '../../../common/enums/pm.enums';
 
 export class QueryTasksDto {
   @IsOptional()
@@ -27,4 +27,8 @@ export class QueryTasksDto {
   @IsOptional()
   @IsString()
   assigneeId?: string;
+
+  @IsOptional()
+  @IsEnum(PmDepartmentCode)
+  departmentCode?: PmDepartmentCode;
 }

@@ -21,6 +21,8 @@ import {
   ClipboardCheck,
   Bell,
   Mail,
+  BarChart2,
+  Building,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -31,6 +33,7 @@ import { RoleGuard } from '@/components/role-guard';
 import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
 import { UserRole } from '@sentra-core/types';
 import { COMM_ENABLED } from '@/lib/feature-flags';
+import { usePmRole } from '@/hooks/use-dashboard';
 
 const navigation = [
   { name: 'Dashboard',   href: '/dashboard',             icon: LayoutDashboard },
@@ -63,6 +66,7 @@ const settingsNavigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const pmRole = usePmRole();
   const logoutMutation = useLogout();
   const sidebarOpen = useSidebarOpen();
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
@@ -172,6 +176,56 @@ export function Sidebar() {
             );
           })}
         </div>
+
+        {/* Admin section: Departments + Reports */}
+        {(pmRole === 'pm-admin' || pmRole === 'pm-project-manager') && (
+          <div className="pt-2">
+            {sidebarOpen && (
+              <div className="px-4 py-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">
+                  Management
+                </h3>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {[
+                { name: 'Departments', href: '/dashboard/departments', icon: Building },
+                ...(pmRole === 'pm-admin' ? [{ name: 'Reports', href: '/dashboard/reports', icon: BarChart2 }] : []),
+              ].map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 relative group',
+                      isActive
+                        ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
+                        : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                    )}
+                  >
+                    <item.icon className={cn('h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110', isActive && 'text-primary')} />
+                    {sidebarOpen && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -5 }}
+                      >
+                        {item.name}
+                      </motion.span>
+                    )}
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-active"
+                        className="absolute left-0 w-1 h-6 bg-primary rounded-r-full"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Settings Section */}
         <div className="pt-2">

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { IPaginatedResponse } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 export const pmKeys = {
   engagements: ['pm', 'engagements'] as const,
@@ -86,5 +87,19 @@ export function useMyTasks(params?: Record<string, unknown>) {
     queryFn:  () => api.getMyTasks(params) as Promise<IPaginatedResponse<any>>,
     placeholderData: (prev) => prev,
     staleTime: 30_000,
+  });
+}
+
+export function useNotificationCount() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['pm', 'notifications', 'count'],
+    queryFn: async () => {
+      const res = await api.getNotifications({ status: 'UNREAD', limit: 1 });
+      return (res as any)?.meta?.total ?? 0;
+    },
+    enabled: !!user?.organizationId,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
   });
 }

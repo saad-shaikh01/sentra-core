@@ -245,6 +245,17 @@ export class TasksController {
     return wrapSingle(log);
   }
 
+  // ── revisions ─────────────────────────────────────────────────────────────
+
+  @Get('tasks/:id/revisions')
+  async getRevisions(
+    @GetOrgContext() ctx: OrgContext,
+    @Param('id') id: string,
+  ) {
+    const data = await this.tasksService.getRevisions(ctx.organizationId, id);
+    return { data };
+  }
+
   @Get('tasks/:id/worklogs')
   async listWorklogs(
     @GetOrgContext() ctx: OrgContext,

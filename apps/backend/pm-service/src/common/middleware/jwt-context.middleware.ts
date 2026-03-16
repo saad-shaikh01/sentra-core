@@ -41,6 +41,9 @@ export class JwtContextMiddleware implements NestMiddleware {
         if (typeof payload['role'] === 'string') {
           req.headers['x-user-role'] = payload['role'];
         }
+        if (typeof payload['pmRole'] === 'string') {
+          req.headers['x-pm-app-role'] = payload['pmRole'];
+        }
       } catch {
         // Invalid token — OrgContextGuard will throw 401
       }

@@ -966,6 +966,66 @@ class ApiClient {
   async getCommAttachmentUrl(messageId: string, attachmentIndex: number) {
     return this.fetch<{ url: string; filename: string }>(`/messages/${messageId}/attachments/${attachmentIndex}`, { service: 'comm' });
   }
+
+  // PM — Task revisions
+  async getTaskRevisions(taskId: string) {
+    return this.fetch<{ data: any[] }>(`/tasks/${taskId}/revisions`, { service: 'pm' });
+  }
+
+  // PM — Departments
+  async getDepartments() {
+    return this.fetch<{ data: any[] }>('/departments', { service: 'pm' });
+  }
+
+  async addDepartmentMember(deptId: string, dto: { userId: string; role?: string }) {
+    return this.fetch<any>(`/departments/${deptId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async updateDepartmentMember(deptId: string, userId: string, dto: { role: string }) {
+    return this.fetch<any>(`/departments/${deptId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
+
+  async removeDepartmentMember(deptId: string, userId: string) {
+    return this.fetch<any>(`/departments/${deptId}/members/${userId}`, {
+      method: 'DELETE',
+      service: 'pm',
+    });
+  }
+
+  // PM — Deliverables
+  async getDeliverables(projectId: string) {
+    return this.fetch<{ data: any[] }>(`/projects/${projectId}/deliverables`, { service: 'pm' });
+  }
+
+  // PM — Reports
+  async getPmReports(type: 'project-health' | 'sla-breaches' | 'team-performance' | 'engagement-financials', params?: Record<string, unknown>) {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return this.fetch<any>(`/reports/${type}${qs}`, { service: 'pm' });
+  }
+
+  async resolveEscalation(id: string) {
+    return this.fetch<any>(`/reports/escalations/${id}/resolve`, {
+      method: 'PATCH',
+      service: 'pm',
+    });
+  }
+
+  // PM — Client portal
+  async createPortalAccess(dto: { projectId: string; email: string; clientId?: string; expiresAt?: string }) {
+    return this.fetch<any>('/client-portal/access', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'pm',
+    });
+  }
 }
 
 export const api = new ApiClient(CORE_API_URL, PM_API_URL, COMM_API_URL);

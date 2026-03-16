@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { DataTable, Column, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
-import { Eye, Clock } from 'lucide-react';
+import { Eye, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 
 export interface StageItem {
   id: string;
@@ -23,7 +25,51 @@ interface StageQueueTableProps {
   isError?: boolean;
 }
 
+function ExpandedTasks({ stageId }: { stageId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['stages', stageId, 'tasks'],
+    queryFn: () => api.getTasksByStage(stageId, { limit: 20 }),
+    staleTime: 30_000,
+  });
+
+  const tasks = (data as any)?.data ?? [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-1 py-1">
+        {[1, 2].map(i => <div key={i} className="h-8 bg-white/5 rounded-lg animate-pulse" />)}
+      </div>
+    );
+  }
+
+  if (tasks.length === 0) {
+    return <p className="text-xs text-muted-foreground py-2 px-1">No tasks in this stage.</p>;
+  }
+
+  return (
+    <div className="space-y-1 py-1">
+      {tasks.map((task: any) => {
+        const isOverdue = task.dueAt && new Date(task.dueAt) < new Date() && task.status !== 'COMPLETED';
+        return (
+          <div key={task.id} className={cn('flex items-center justify-between px-3 py-2 rounded-lg text-xs', isOverdue ? 'bg-red-500/5 border border-red-500/20' : 'bg-white/[0.02] border border-white/5')}>
+            <div className="flex items-center gap-2">
+              <div className={cn('h-1.5 w-1.5 rounded-full', task.status === 'COMPLETED' ? 'bg-green-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-muted-foreground/30')} />
+              <span className={cn('font-medium', isOverdue ? 'text-red-400' : 'text-foreground/80')}>{task.name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusBadge status={task.status} />
+              <span className="text-muted-foreground uppercase font-bold tracking-wider">{task.priority}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableProps) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
   const getDepartmentColor = (code: string) => {
     const colors: Record<string, string> = {
       DESIGN: 'text-pink-400 bg-pink-400/10',
@@ -36,7 +82,24 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
     return colors[code] || 'text-muted-foreground bg-white/5';
   };
 
-  const columns = useMemo<Column<StageItem>[]>(() => [
+  const toggleExpand = (id: string) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const columns: Column<StageItem>[] = [
+    {
+      key: 'expand',
+      header: '',
+      className: 'w-10',
+      render: (s) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 hover:bg-white/10"
+          onClick={(e) => { e.stopPropagation(); toggleExpand(s.id); }}
+        >
+          {expanded[s.id] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </Button>
+      ),
+    },
     {
       key: 'name',
       header: 'Stage Name',
@@ -46,6 +109,11 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
             {s.project.name} &bull; {s.project.serviceType}
           </span>
+          {expanded[s.id] && (
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <ExpandedTasks stageId={s.id} />
+            </div>
+          )}
         </div>
       ),
     },
@@ -98,7 +166,7 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
         </Link>
       ),
     },
-  ], []);
+  ];
 
   return (
     <DataTable

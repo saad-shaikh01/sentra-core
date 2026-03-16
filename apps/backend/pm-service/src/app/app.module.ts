@@ -31,6 +31,11 @@ import { ThreadsModule } from '../modules/threads/threads.module';
 import { FilesModule } from '../modules/files/files.module';
 import { PmRoleGuard } from '../common/guards/pm-role.guard';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
+import { DepartmentsModule } from '../modules/departments/departments.module';
+import { PipelineModule } from '../modules/pipeline/pipeline.module';
+import { PmGatewayModule } from '../modules/gateway/pm-gateway.module';
+import { ClientPortalModule } from '../modules/client-portal/client-portal.module';
+import { ReportsModule } from '../modules/reports/reports.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -88,6 +93,11 @@ function resolveEnvFiles(): string[] {
     ThreadsModule,                  // PM-BE-016
     FilesModule,                    // PM-BE-017
     NotificationsModule,
+    DepartmentsModule,              // PM-BE-019
+    PipelineModule,                 // PM-BE-022
+    PmGatewayModule,                // PM-BE-023
+    ClientPortalModule,             // PM-BE-024
+    ReportsModule,                  // PM-BE-025
   ],
   controllers: [AppController],
   providers: [

@@ -218,6 +218,7 @@ export class EngagementsService {
         ...(dto.priority !== undefined && { priority: dto.priority }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...('primaryBrandId' in dto && { primaryBrandId: dto.primaryBrandId ?? null }),
+        ...('saleId' in dto && { saleId: dto.saleId ?? null }),
       },
     });
 

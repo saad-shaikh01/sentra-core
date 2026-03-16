@@ -8,7 +8,7 @@ import {
   Min,
   IsDateString,
 } from 'class-validator';
-import { PmTaskPriority } from '../../../common/enums/pm.enums';
+import { PmTaskPriority, PmDepartmentCode } from '../../../common/enums/pm.enums';
 
 export class CreateTaskDto {
   @IsString()
@@ -43,4 +43,8 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   templateTaskId?: string;
+
+  @IsOptional()
+  @IsEnum(PmDepartmentCode)
+  departmentCode?: PmDepartmentCode;
 }

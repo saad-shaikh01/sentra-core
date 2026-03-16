@@ -2,50 +2,70 @@
 
 import { useState, useMemo } from 'react';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsBoolean } from 'nuqs';
-import { CheckSquare, AlertTriangle, Clock } from 'lucide-react';
+import { CheckSquare, AlertTriangle, Clock, AlertCircle } from 'lucide-react';
 import { PageHeader, FilterBar, Pagination } from '@/components/shared';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useMyTasks } from '@/hooks/use-pm-data';
 import { MyTasksTable, MyTask } from './_components/my-tasks-table';
 import { TaskDetailDrawer } from './_components/task-detail-drawer';
 
+const DEPARTMENTS = ['DESIGN', 'EDITING', 'MARKETING', 'DEVELOPMENT', 'QC', 'OPERATIONS'];
+
 export default function MyTasksPage() {
   const [params, setParams] = useQueryStates({
-    page:         parseAsInteger.withDefault(1),
-    limit:        parseAsInteger.withDefault(20),
-    status:       parseAsString,
-    priority:     parseAsString,
-    blocked:      parseAsBoolean.withDefault(false),
-    dueSoonHours: parseAsInteger,
+    page:           parseAsInteger.withDefault(1),
+    limit:          parseAsInteger.withDefault(20),
+    status:         parseAsString,
+    priority:       parseAsString,
+    blocked:        parseAsBoolean.withDefault(false),
+    dueSoonHours:   parseAsInteger,
+    departmentCode: parseAsString,
   });
 
   const queryParams = useMemo(() => ({
     page: params.page,
     limit: params.limit,
-    ...(params.status       ? { status: params.status } : {}),
-    ...(params.priority     ? { priority: params.priority } : {}),
-    ...(params.blocked      ? { blocked: true } : {}),
-    ...(params.dueSoonHours ? { dueSoonHours: params.dueSoonHours } : {}),
-  }), [params.page, params.limit, params.status, params.priority, params.blocked, params.dueSoonHours]);
+    ...(params.status           ? { status: params.status } : {}),
+    ...(params.priority         ? { priority: params.priority } : {}),
+    ...(params.blocked          ? { blocked: true } : {}),
+    ...(params.dueSoonHours     ? { dueSoonHours: params.dueSoonHours } : {}),
+    ...(params.departmentCode   ? { departmentCode: params.departmentCode } : {}),
+  }), [params.page, params.limit, params.status, params.priority, params.blocked, params.dueSoonHours, params.departmentCode]);
 
   const { data, isLoading, isError } = useMyTasks(queryParams);
 
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   const tasks = (data?.data ?? []) as MyTask[];
+  const total = data?.meta?.total ?? 0;
   const resolveTaskId = (task: MyTask) => task.id ?? task.taskId ?? null;
+
+  // Count overdue tasks from the current page
+  const overdueCount = useMemo(() => {
+    const now = new Date();
+    return tasks.filter((t: any) => t.dueAt && new Date(t.dueAt) < now && t.status !== 'COMPLETED').length;
+  }, [tasks]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="My Tasks"
         description="Your personal execution queue. Stay focused and deliver."
+        action={
+          overdueCount > 0 ? (
+            <Badge className="bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {overdueCount} overdue
+            </Badge>
+          ) : undefined
+        }
       />
 
       <FilterBar>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {/* Status Filter */}
           <Select
             value={params.status ?? 'all'}
@@ -80,6 +100,22 @@ export default function MyTasksPage() {
             </SelectContent>
           </Select>
 
+          {/* Department Filter */}
+          <Select
+            value={params.departmentCode ?? 'all'}
+            onValueChange={(v) => setParams({ departmentCode: v === 'all' ? null : v, page: 1 })}
+          >
+            <SelectTrigger className="w-44 bg-white/5 border-white/10">
+              <SelectValue placeholder="Department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {DEPARTMENTS.map((d) => (
+                <SelectItem key={d} value={d}>{d.charAt(0) + d.slice(1).toLowerCase()}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Quick Filters */}
           <div className="flex items-center gap-2 pl-4 border-l border-white/10">
             <Button
@@ -96,7 +132,7 @@ export default function MyTasksPage() {
               <Clock className="h-3.5 w-3.5 mr-2" />
               Due in 48h
             </Button>
-            
+
             <Button
               variant="outline"
               size="sm"
@@ -122,11 +158,11 @@ export default function MyTasksPage() {
           isError={isError}
           onRowClick={(t) => setDetailTaskId(resolveTaskId(t))}
         />
-        
+
         <div className="p-4 border-t border-white/5">
           <Pagination
             page={params.page}
-            total={data?.meta.total ?? 0}
+            total={total}
             limit={params.limit}
             onChange={(p) => setParams({ page: p })}
           />

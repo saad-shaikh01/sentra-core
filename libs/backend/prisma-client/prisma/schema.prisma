@@ -398,6 +398,11 @@ enum PmPerformancePeriodType {
   QUARTERLY
 }
 
+enum PmDeptMemberRole {
+  LEAD
+  MEMBER
+}
+
 // ==========================================
 // 1. MULTI-TENANCY CORE
 // ==========================================
@@ -1206,6 +1211,7 @@ model PmEngagement {
   description    String?
   status         PmEngagementStatus @default(DRAFT)
   priority       PmProjectPriority  @default(MEDIUM)
+  saleId         String?
   createdById    String
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
@@ -1215,6 +1221,7 @@ model PmEngagement {
   @@index([organizationId, status, createdAt])
   @@index([clientId])
   @@index([ownerBrandId])
+  @@index([saleId])
 }
 
 model PmProject {
@@ -1239,21 +1246,22 @@ model PmProject {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  engagement          PmEngagement             @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  template            PmServiceTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  stages              PmProjectStage[]
-  stageDependencies   PmStageDependency[]
-  tasks               PmTask[]
-  revisionRequests    PmRevisionRequest[]
-  deliverablePackages PmDeliverablePackage[]
-  approvalRequests    PmApprovalRequest[]
-  closureRecords      PmProjectClosureRecord[]
-  threads             PmConversationThread[]
-  fileAssets          PmFileAsset[]
-  notifications       PmNotification[]
-  activityLogs        PmActivityLog[]
-  escalationEvents    PmEscalationEvent[]
-  performanceEvents   PmPerformanceEvent[]
+  engagement            PmEngagement             @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  template              PmServiceTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  stages                PmProjectStage[]
+  stageDependencies     PmStageDependency[]
+  tasks                 PmTask[]
+  revisionRequests      PmRevisionRequest[]
+  deliverablePackages   PmDeliverablePackage[]
+  approvalRequests      PmApprovalRequest[]
+  closureRecords        PmProjectClosureRecord[]
+  threads               PmConversationThread[]
+  fileAssets            PmFileAsset[]
+  notifications         PmNotification[]
+  activityLogs          PmActivityLog[]
+  escalationEvents      PmEscalationEvent[]
+  performanceEvents     PmPerformanceEvent[]
+  clientPortalAccesses  PmClientPortalAccess[]
 
   @@index([organizationId, brandId, status, deliveryDueAt])
   @@index([engagementId])
@@ -1330,6 +1338,7 @@ model PmTask {
   dueAt          DateTime?
   submittedAt    DateTime?
   completedAt    DateTime?
+  departmentCode PmDepartmentCode?
   createdById    String
   updatedById    String?
   createdAt      DateTime       @default(now())
@@ -1350,6 +1359,7 @@ model PmTask {
   @@index([organizationId, assigneeId, status, dueAt])
   @@index([projectStageId, sortOrder, status])
   @@index([projectId, status])
+  @@index([organizationId, departmentCode, status])
 }
 
 model PmTaskAssignment {
@@ -1793,4 +1803,52 @@ model PmScoreSnapshot {
 
   @@index([userId, periodStart, periodEnd])
   @@index([organizationId, createdAt])
+}
+
+model PmDepartment {
+  id             String           @id @default(uuid())
+  organizationId String
+  code           PmDepartmentCode
+  name           String
+  description    String?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  members PmDepartmentMember[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+}
+
+model PmDepartmentMember {
+  id           String           @id @default(uuid())
+  departmentId String
+  userId       String
+  role         PmDeptMemberRole @default(MEMBER)
+  joinedAt     DateTime         @default(now())
+
+  department PmDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, userId])
+  @@index([departmentId])
+  @@index([userId])
+}
+
+model PmClientPortalAccess {
+  id             String    @id @default(uuid())
+  organizationId String
+  projectId      String
+  clientId       String?
+  email          String
+  token          String    @unique
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdById    String
+  createdAt      DateTime  @default(now())
+
+  project PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, isActive])
+  @@index([projectId])
 }

@@ -36,8 +36,10 @@ import { TaskDetailDrawer } from '../../my-tasks/_components/task-detail-drawer'
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
 import { useProjectClientEmail } from '@/hooks/use-comm';
+import { DeliverablesPanel } from './_components/deliverables-panel';
+import { Package } from 'lucide-react';
 
-type SideTab = 'threads' | 'files' | 'approvals' | 'activity' | 'emails';
+type SideTab = 'threads' | 'files' | 'approvals' | 'activity' | 'emails' | 'deliverables';
 type WorkflowView = 'list' | 'kanban';
 
 export default function ProjectDetailPage() {
@@ -256,8 +258,8 @@ export default function ProjectDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="flex items-center gap-2 border-b border-white/10 pb-px">
-            {(['threads', 'emails', 'files', 'approvals', 'activity'] as SideTab[]).map((tab) => (
+          <div className="flex items-center gap-2 border-b border-white/10 pb-px flex-wrap">
+            {(['threads', 'emails', 'files', 'deliverables', 'approvals', 'activity'] as SideTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -269,6 +271,7 @@ export default function ProjectDetailPage() {
                   {tab === 'threads' && <MessageSquare className="h-4 w-4" />}
                   {tab === 'emails' && <Mail className="h-4 w-4" />}
                   {tab === 'files' && <FileIcon className="h-4 w-4" />}
+                  {tab === 'deliverables' && <Package className="h-4 w-4" />}
                   {tab === 'approvals' && <ShieldCheck className="h-4 w-4" />}
                   {tab === 'activity' && <History className="h-4 w-4" />}
                   {tab}
@@ -306,6 +309,13 @@ export default function ProjectDetailPage() {
                   <h3 className="text-sm font-bold text-muted-foreground mb-3 uppercase tracking-wider">Project Files</h3>
                   <FileList scopeType="PROJECT" scopeId={id} />
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'deliverables' && (
+              <div className="p-6">
+                <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">Deliverable Packages</h3>
+                <DeliverablesPanel projectId={id} />
               </div>
             )}
 

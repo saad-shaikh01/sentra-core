@@ -366,6 +366,8 @@ export class SalesService {
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
 
+    const existingStatus = sale.status;
+
     const updated = await this.prisma.sale.update({
       where: { id },
       data: {
@@ -378,6 +380,26 @@ export class SalesService {
     });
 
     await this.cache.delByPrefix(`sales:${orgId}:`);
+
+    // Fire-and-forget HTTP call to pm-service when sale becomes ACTIVE (closed-won)
+    if (dto.status === 'ACTIVE' && existingStatus !== 'ACTIVE') {
+      const pmApiUrl = process.env.PM_SERVICE_URL || 'http://localhost:3003';
+      const serviceKey = process.env.INTERNAL_SERVICE_KEY || 'internal-service-key';
+      fetch(`${pmApiUrl}/api/pm/pipeline/sale-closed-won`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-service-key': serviceKey,
+        },
+        body: JSON.stringify({
+          saleId: id,
+          clientId: sale.clientId,
+          orgId,
+          totalAmount: sale.totalAmount ? Number(sale.totalAmount) : undefined,
+          description: sale.description ?? undefined,
+        }),
+      }).catch(() => {}); // fire-and-forget
+    }
 
     return this.mapToISale(updated);
   }

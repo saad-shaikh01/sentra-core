@@ -29,4 +29,8 @@ export class UpdateEngagementDto {
   @IsOptional()
   @IsUUID('4')
   primaryBrandId?: string;
+
+  @IsOptional()
+  @IsString()
+  saleId?: string;
 }

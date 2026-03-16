@@ -47,6 +47,7 @@ export type TaskSummary = {
   isRequired: boolean;
   isBlocked: boolean;
   dueAt: Date | null;
+  departmentCode: string | null;
   createdById: string;
   createdAt: Date;
 };
@@ -92,6 +93,7 @@ export class TasksService {
         requiresQc: dto.requiresQc ?? false,
         isRequired: dto.isRequired ?? true,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+        departmentCode: dto.departmentCode ?? null,
         ownerLeadId: null,
         assigneeId: null,
         createdById: userId,
@@ -111,7 +113,7 @@ export class TasksService {
     stageId: string,
     query: QueryTasksDto,
   ): Promise<PmPaginatedResponse<TaskSummary>> {
-    const { page = 1, limit = 20, status, priority, assigneeId } = query;
+    const { page = 1, limit = 20, status, priority, assigneeId, departmentCode } = query;
     const { skip, take } = toPrismaPagination(page, limit);
 
     const cacheKey = this.cache.buildKey(
@@ -119,7 +121,7 @@ export class TasksService {
       this.CACHE_RESOURCE,
       'stage',
       stageId,
-      this.cache.hashQuery({ page, limit, status, priority, assigneeId }),
+      this.cache.hashQuery({ page, limit, status, priority, assigneeId, departmentCode }),
     );
     const cached = await this.cache.get<PmPaginatedResponse<TaskSummary>>(cacheKey);
     if (cached) return cached;
@@ -130,6 +132,7 @@ export class TasksService {
       ...(status !== undefined && { status }),
       ...(priority !== undefined && { priority }),
       ...(assigneeId !== undefined && { assigneeId }),
+      ...(departmentCode !== undefined && { departmentCode }),
     };
 
     const [tasks, total] = await this.prisma.$transaction([
@@ -157,7 +160,7 @@ export class TasksService {
     projectId: string,
     query: QueryTasksDto,
   ): Promise<PmPaginatedResponse<TaskSummary>> {
-    const { page = 1, limit = 20, status, priority, assigneeId } = query;
+    const { page = 1, limit = 20, status, priority, assigneeId, departmentCode } = query;
     const { skip, take } = toPrismaPagination(page, limit);
 
     const where = {
@@ -166,6 +169,7 @@ export class TasksService {
       ...(status !== undefined && { status }),
       ...(priority !== undefined && { priority }),
       ...(assigneeId !== undefined && { assigneeId }),
+      ...(departmentCode !== undefined && { departmentCode }),
     };
 
     const [tasks, total] = await this.prisma.$transaction([
@@ -252,7 +256,8 @@ export class TasksService {
       dto.sortOrder !== undefined ||
       dto.requiresQc !== undefined ||
       dto.isRequired !== undefined ||
-      dto.dueAt !== undefined;
+      dto.dueAt !== undefined ||
+      dto.departmentCode !== undefined;
 
     if (!shouldUpdateFields) {
       return this.findOne(organizationId, taskId);
@@ -269,6 +274,7 @@ export class TasksService {
         ...(dto.requiresQc !== undefined && { requiresQc: dto.requiresQc }),
         ...(dto.isRequired !== undefined && { isRequired: dto.isRequired }),
         ...(dto.dueAt !== undefined && { dueAt: dto.dueAt ? new Date(dto.dueAt) : null }),
+        ...(dto.departmentCode !== undefined && { departmentCode: dto.departmentCode }),
         updatedById: userId,
       },
     });
@@ -583,6 +589,7 @@ export class TasksService {
       isRequired: true,
       isBlocked: true,
       dueAt: true,
+      departmentCode: true,
       createdById: true,
       createdAt: true,
     };
@@ -620,10 +627,23 @@ export class TasksService {
         requiresQc: true,
         projectId: true,
         projectStageId: true,
+        departmentCode: true,
       },
     });
     if (!task) throw new NotFoundException('Task not found');
     return task;
+  }
+
+  // -------------------------------------------------------------------------
+  // Revisions
+  // -------------------------------------------------------------------------
+
+  async getRevisions(organizationId: string, taskId: string) {
+    await this.assertExists(organizationId, taskId);
+    return this.prisma.pmRevisionRequest.findMany({
+      where: { taskId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   private async invalidateTask(organizationId: string, taskId: string) {

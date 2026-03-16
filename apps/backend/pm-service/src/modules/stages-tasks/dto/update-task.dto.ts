@@ -8,7 +8,7 @@ import {
   IsDateString,
   IsUUID,
 } from 'class-validator';
-import { PmTaskPriority, PmTaskStatus } from '../../../common/enums/pm.enums';
+import { PmTaskPriority, PmTaskStatus, PmDepartmentCode } from '../../../common/enums/pm.enums';
 
 export class UpdateTaskDto {
   @IsOptional()
@@ -47,4 +47,8 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsUUID('4')
   projectStageId?: string;
+
+  @IsOptional()
+  @IsEnum(PmDepartmentCode)
+  departmentCode?: PmDepartmentCode;
 }
