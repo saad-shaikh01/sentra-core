@@ -31,6 +31,10 @@ interface LeadWhereInput {
   organizationId?: string;
   deletedAt?: null;
   assignedToId?: string | { in: string[] };
+  leadDate?: {
+    gte?: Date;
+    lte?: Date;
+  };
   OR?: Array<{
     email?: {
       equals: string;
@@ -412,5 +416,29 @@ describe('LeadsService', () => {
       errorDetails: [],
     });
     expect(transactionClient.lead.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('TC-B10: findAll date filters apply to leadDate instead of createdAt', async () => {
+    prismaMock.lead.findMany.mockResolvedValue([]);
+    prismaMock.lead.count.mockResolvedValue(0);
+
+    await service.findAll(
+      orgId,
+      {
+        page: 1,
+        limit: 20,
+        dateFrom: '2026-03-01',
+        dateTo: '2026-03-16',
+      },
+      adminId,
+      UserRole.ADMIN,
+    );
+
+    const findManyArgs = prismaMock.lead.findMany.mock.calls[0][0];
+    expect(findManyArgs.where.leadDate).toEqual({
+      gte: new Date('2026-03-01T00:00:00.000Z'),
+      lte: new Date('2026-03-16T23:59:59.999Z'),
+    });
+    expect(findManyArgs.where.createdAt).toBeUndefined();
   });
 });

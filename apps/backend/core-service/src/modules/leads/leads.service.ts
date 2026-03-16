@@ -459,7 +459,7 @@ export class LeadsService {
       leadType?: LeadType;
       source?: LeadSource;
       brandId?: string;
-      createdAt?: { gte?: Date; lte?: Date };
+      leadDate?: { gte?: Date; lte?: Date };
       OR?: Array<
         | { title: { contains: string; mode: 'insensitive' } }
         | { name: { contains: string; mode: 'insensitive' } }
@@ -489,12 +489,12 @@ export class LeadsService {
     if (brandId) where.brandId = brandId;
 
     if (dateFrom || dateTo) {
-      where.createdAt = {};
+      where.leadDate = {};
       if (dateFrom) {
-        where.createdAt.gte = new Date(dateFrom);
+        where.leadDate.gte = new Date(`${dateFrom}T00:00:00.000Z`);
       }
       if (dateTo) {
-        where.createdAt.lte = new Date(dateTo);
+        where.leadDate.lte = new Date(`${dateTo}T23:59:59.999Z`);
       }
     }
 
