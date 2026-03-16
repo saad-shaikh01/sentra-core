@@ -161,4 +161,14 @@ export class LeadsController {
   ): Promise<{ message: string }> {
     return this.leadsService.deleteNote(leadId, activityId, user.orgId, user.sub);
   }
+
+  @Patch(':id/notes/:activityId')
+  editNote(
+    @Param('id') leadId: string,
+    @Param('activityId') activityId: string,
+    @Body() dto: AddNoteDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ILeadActivity> {
+    return this.leadsService.editNote(leadId, activityId, user.orgId, user.sub, dto);
+  }
 }
