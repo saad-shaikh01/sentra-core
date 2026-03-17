@@ -6,6 +6,8 @@ import { MailClientModule } from '@sentra-core/mail-client';
 import { IamModule } from '../iam';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { SessionsService } from './sessions.service';
+import { AdminSessionsController } from './admin-sessions.controller';
 import { JwtStrategy, JwtRefreshStrategy } from './strategies';
 import { AccessTokenGuard, RefreshTokenGuard, RolesGuard, AppAccessGuard } from './guards';
 
@@ -25,9 +27,10 @@ import { AccessTokenGuard, RefreshTokenGuard, RolesGuard, AppAccessGuard } from 
     MailClientModule,
     IamModule,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AdminSessionsController],
   providers: [
     AuthService,
+    SessionsService,
     JwtStrategy,
     JwtRefreshStrategy,
     AccessTokenGuard,

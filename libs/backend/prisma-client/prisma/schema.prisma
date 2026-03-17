@@ -22,6 +22,13 @@ enum UserRole {
   UPSELL_AGENT
 }
 
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -592,8 +599,15 @@ model User {
   managedTeams       SalesTeamManager[] @relation("TeamManagers")
   memberOfTeams      SalesTeamMember[]  @relation("TeamMembers")
 
-  // Refresh Token (for JWT)
-  refreshToken String?
+  // Status
+  status        UserStatus @default(ACTIVE)
+  suspendedAt   DateTime?
+  suspendedBy   String?
+  suspendReason String?
+  deactivatedAt DateTime?
+
+  // Refresh Tokens (sessions)
+  refreshTokens RefreshToken[]
 
   // Password Reset
   resetPasswordToken   String?   @unique
@@ -1892,4 +1906,30 @@ enum NotificationType {
   SALE_STATUS_CHANGED
   CHARGEBACK_FILED
   PAYMENT_RECEIVED
+}
+
+// ==========================================
+// AUTH - SESSION TABLE
+// ==========================================
+
+model RefreshToken {
+  id             String    @id @default(cuid())
+  userId         String
+  organizationId String?
+  appCode        String
+  tokenHash      String
+  deviceInfo     Json?
+  ipAddress      String?
+  lastUsedAt     DateTime?
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokedReason  String?
+  familyId       String
+  createdAt      DateTime  @default(now())
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
 }

@@ -76,6 +76,14 @@ export function useUser() {
   };
 }
 
+// Typed auth error for special cases
+export class AuthError extends Error {
+  constructor(message: string, public readonly code: string) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
 // Hook for login
 export function useLogin() {
   const queryClient = useQueryClient();
@@ -83,7 +91,20 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const response = await api.login(email, password);
+      let response: Awaited<ReturnType<typeof api.login>>;
+      try {
+        response = await api.login(email, password);
+      } catch (err: any) {
+        // Re-parse the raw fetch error to surface the code field
+        const rawCode = err?.code ?? err?.data?.code ?? null;
+        if (rawCode === 'ACCOUNT_SUSPENDED') {
+          throw new AuthError('Account suspended', 'ACCOUNT_SUSPENDED');
+        }
+        if (rawCode === 'ACCOUNT_DEACTIVATED') {
+          throw new AuthError('Account deactivated', 'ACCOUNT_DEACTIVATED');
+        }
+        throw err;
+      }
       api.setTokens(response.accessToken, response.refreshToken);
       const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
       return { user: response.user, appAccess };
@@ -91,6 +112,11 @@ export function useLogin() {
     onSuccess: ({ user, appAccess }) => {
       queryClient.setQueryData(authKeys.user(), user);
       routeAfterAuth(router, appAccess);
+    },
+    onError: (err: Error) => {
+      if (err instanceof AuthError && err.code === 'ACCOUNT_SUSPENDED') {
+        router.push('/auth/suspended');
+      }
     },
   });
 }

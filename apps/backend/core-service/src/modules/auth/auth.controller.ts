@@ -2,11 +2,15 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
+  Param,
   UseGuards,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto } from './dto';
@@ -23,15 +27,19 @@ export class AuthController {
   @Post('login')
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto): Promise<ILoginResponse> {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Req() req: Request): Promise<ILoginResponse> {
+    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || req.socket?.remoteAddress;
+    return this.authService.login(dto, userAgent, ip);
   }
 
   @Public()
   @Post('signup')
   @Throttle({ default: { ttl: 60000, limit: 5 } })
-  signup(@Body() dto: SignupDto): Promise<ISignupResponse> {
-    return this.authService.signup(dto);
+  signup(@Body() dto: SignupDto, @Req() req: Request): Promise<ISignupResponse> {
+    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || req.socket?.remoteAddress;
+    return this.authService.signup(dto, userAgent, ip);
   }
 
   @Public()
@@ -55,25 +63,65 @@ export class AuthController {
     return this.authService.verifyClientOtp(dto);
   }
 
-  @UseGuards(RefreshTokenGuard)
   @Public()
+  @UseGuards(RefreshTokenGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  refreshTokens(
-    @CurrentUser('sub') userId: string,
+  async refreshTokens(
     @CurrentUser() user: JwtPayload & { refreshToken: string },
+    @Req() req: Request,
   ): Promise<IAuthTokens> {
-    return this.authService.refreshTokens(userId, user.refreshToken);
+    const rawRefreshToken = user.refreshToken;
+    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || req.socket?.remoteAddress;
+    return this.authService.refreshTokens(rawRefreshToken, userAgent, ip);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  logout(@CurrentUser('sub') userId: string): Promise<{ message: string }> {
-    return this.authService.logout(userId);
+  logout(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
+    return this.authService.logout(user.jti || user.sub);
+  }
+
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  async logoutAll(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
+    await this.authService.logoutAllSessions(user.sub);
+    return { message: 'All sessions revoked' };
+  }
+
+  @Get('my-sessions')
+  async getMySessions(@CurrentUser() user: JwtPayload) {
+    return this.authService.getUserSessions(user.sub, user.orgId, 'active');
+  }
+
+  @Delete('sessions/others')
+  @HttpCode(HttpStatus.OK)
+  async revokeOtherSessions(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
+    await this.authService.revokeAllExcept(user.sub, user.jti || '');
+    return { message: 'Other sessions revoked' };
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.OK)
+  async revokeMySession(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    await this.authService.revokeOwnSession(id, user.sub);
+    return { message: 'Session revoked' };
   }
 
   @Get('apps')
   getApps(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('orgId') orgId: string,
+  ) {
+    return this.authService.getAvailableApps(userId, orgId);
+  }
+
+  @Get('my-apps')
+  getMyApps(
     @CurrentUser('sub') userId: string,
     @CurrentUser('orgId') orgId: string,
   ) {

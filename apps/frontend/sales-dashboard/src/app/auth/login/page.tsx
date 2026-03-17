@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useLogin } from '@/hooks/use-auth';
+import { useLogin, AuthError } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,11 +14,25 @@ export default function LoginPage() {
   const loginMutation = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [deactivatedError, setDeactivatedError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    loginMutation.mutate({ email, password });
+    setDeactivatedError(false);
+    loginMutation.mutate({ email, password }, {
+      onError: (err) => {
+        if (err instanceof AuthError && err.code === 'ACCOUNT_DEACTIVATED') {
+          setDeactivatedError(true);
+        }
+      },
+    });
   };
+
+  const errorMessage = deactivatedError
+    ? 'This account has been deactivated. Contact your administrator.'
+    : loginMutation.error && !(loginMutation.error instanceof AuthError && loginMutation.error.code === 'ACCOUNT_SUSPENDED')
+      ? (loginMutation.error.message || 'Login failed')
+      : null;
 
   return (
     <SpotlightBackground>
@@ -59,13 +73,13 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {loginMutation.error && (
+                {errorMessage && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     className="p-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg"
                   >
-                    {loginMutation.error.message || 'Login failed'}
+                    {errorMessage}
                   </motion.div>
                 )}
                 <div className="space-y-2">
@@ -80,7 +94,15 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <Link
+                      href="/auth/forgot-password"
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <Input
                     id="password"
                     type="password"
@@ -123,9 +145,6 @@ export default function LoginPage() {
               </form>
             </CardContent>
             <CardFooter className="flex flex-col space-y-2 text-center text-sm text-muted-foreground">
-              <Link href="/auth/forgot-password" className="hover:text-primary transition-colors">
-                Forgot your password?
-              </Link>
               <div>
                 Don&apos;t have an account?{' '}
                 <Link href="/auth/signup" className="text-primary hover:underline">

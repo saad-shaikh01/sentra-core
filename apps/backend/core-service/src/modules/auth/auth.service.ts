@@ -9,6 +9,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { createHash, randomUUID } from 'crypto';
+import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { MailClientService } from '@sentra-core/mail-client';
 import {
@@ -23,6 +25,24 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto } from './dto';
 import { IamService } from '../iam';
+import { CacheService } from '../../common/cache/cache.service';
+
+function hashToken(rawToken: string): string {
+  return createHash('sha256').update(rawToken).digest('hex');
+}
+
+function parseDeviceInfo(userAgent: string): object {
+  if (!userAgent) return { userAgent: '', deviceType: 'desktop' };
+  const parser = new UAParser(userAgent);
+  return {
+    browser: parser.getBrowser().name || 'Unknown',
+    browserVersion: parser.getBrowser().version || '',
+    os: parser.getOS().name || 'Unknown',
+    osVersion: parser.getOS().version || '',
+    deviceType: parser.getDevice().type || 'desktop',
+    userAgent: userAgent.substring(0, 200),
+  };
+}
 
 @Injectable()
 export class AuthService {
@@ -32,6 +52,7 @@ export class AuthService {
     private configService: ConfigService,
     private mailService: MailClientService,
     private iamService: IamService,
+    private cacheService: CacheService,
   ) {}
 
   private isPublicOwnerSignupEnabled(): boolean {
@@ -41,7 +62,7 @@ export class AuthService {
     return value === '1' || value === 'true' || value === 'yes';
   }
 
-  async login(dto: LoginDto): Promise<ILoginResponse> {
+  async login(dto: LoginDto, userAgent?: string, ip?: string): Promise<ILoginResponse> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: { organization: true },
@@ -52,7 +73,25 @@ export class AuthService {
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Account is deactivated');
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_DEACTIVATED',
+        message: 'This account has been deactivated.',
+      });
+    }
+
+    // Check user status (suspended/deactivated)
+    if (user.status === 'SUSPENDED') {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Your account has been suspended. Contact your administrator.',
+      });
+    }
+
+    if (user.status === 'DEACTIVATED') {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_DEACTIVATED',
+        message: 'This account has been deactivated.',
+      });
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
@@ -63,8 +102,22 @@ export class AuthService {
 
     const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
     const appCodes = appAccess.map((a) => a.appCode as AppCode);
-    const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role, appCodes);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    // Determine primary appCode for the refresh token
+    const primaryAppCode = appCodes[0] || 'SALES';
+    const deviceInfo = parseDeviceInfo(userAgent || '');
+
+    const tokens = await this.issueTokenPair(
+      user.id,
+      user.email,
+      user.organizationId,
+      user.role,
+      appCodes,
+      primaryAppCode,
+      deviceInfo,
+      ip || '',
+      null, // new familyId
+    );
 
     return {
       ...tokens,
@@ -88,7 +141,7 @@ export class AuthService {
     };
   }
 
-  async signup(dto: SignupDto): Promise<ISignupResponse> {
+  async signup(dto: SignupDto, userAgent?: string, ip?: string): Promise<ISignupResponse> {
     if (!this.isPublicOwnerSignupEnabled()) {
       throw new ForbiddenException(
         'Public owner signup is disabled. Ask organization admin for an invitation.',
@@ -130,6 +183,7 @@ export class AuthService {
           name: dto.name,
           role: UserRole.OWNER,
           organizationId: organization.id,
+          status: 'ACTIVE',
         },
         include: { organization: true },
       });
@@ -147,14 +201,20 @@ export class AuthService {
       result.user.id,
     );
     const appCodes = appAccess.map((a) => a.appCode as AppCode);
-    const tokens = await this.getTokens(
+    const primaryAppCode = appCodes[0] || 'SALES';
+    const deviceInfo = parseDeviceInfo(userAgent || '');
+
+    const tokens = await this.issueTokenPair(
       result.user.id,
       result.user.email,
       result.organization.id,
       result.user.role,
       appCodes,
+      primaryAppCode,
+      deviceInfo,
+      ip || '',
+      null,
     );
-    await this.updateRefreshToken(result.user.id, tokens.refreshToken);
 
     await this.mailService.sendMail({
       to: result.user.email,
@@ -200,7 +260,7 @@ export class AuthService {
 
     const resetToken = uuidv4();
     const resetPasswordExpires = new Date();
-    resetPasswordExpires.setHours(resetPasswordExpires.getHours() + 1); // 1 hour expiry
+    resetPasswordExpires.setHours(resetPasswordExpires.getHours() + 1);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -251,6 +311,12 @@ export class AuthService {
       },
     });
 
+    // Revoke all sessions on password change
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: 'PASSWORD_CHANGED' },
+    });
+
     return { message: 'Password has been reset successfully' };
   }
 
@@ -285,76 +351,294 @@ export class AuthService {
     return { message: 'Email verified. Please set your password to continue.' };
   }
 
-  async refreshTokens(userId: string, refreshToken: string): Promise<IAuthTokens> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+  async refreshTokens(rawRefreshToken: string, userAgent?: string, ip?: string): Promise<IAuthTokens> {
+    // 1. Decode without verification to get jti
+    let decoded: { sub?: string; jti?: string; familyId?: string } | null = null;
+    try {
+      decoded = this.jwtService.decode(rawRefreshToken) as { sub?: string; jti?: string; familyId?: string };
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
+    if (!decoded?.jti) throw new UnauthorizedException('Invalid token');
+
+    // 2. Load from DB
+    const storedToken = await this.prisma.refreshToken.findUnique({ where: { id: decoded.jti } });
+    if (!storedToken) throw new UnauthorizedException('Session not found');
+
+    // 3. Reuse detection (AUTH-002): if already ROTATED, revoke entire family
+    if (storedToken.revokedAt && storedToken.revokedReason === 'ROTATED') {
+      if (storedToken.familyId) {
+        await this.prisma.refreshToken.updateMany({
+          where: { familyId: storedToken.familyId, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: 'REUSE_DETECTED' },
+        });
+      }
+      throw new UnauthorizedException('Security event: session invalidated');
+    }
+
+    // 4. Check if revoked (any other reason)
+    if (storedToken.revokedAt) throw new UnauthorizedException('Session revoked');
+
+    // 5. Check expiry
+    if (storedToken.expiresAt < new Date()) throw new UnauthorizedException('Session expired');
+
+    // 6. Verify hash
+    if (storedToken.tokenHash !== hashToken(rawRefreshToken)) {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    // 7. Verify JWT signature
+    try {
+      this.jwtService.verify(rawRefreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    // 8. Update lastUsedAt (AUTH-002)
+    await this.prisma.refreshToken.update({
+      where: { id: decoded.jti },
+      data: { lastUsedAt: new Date() },
     });
 
-    if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Access denied');
+    // 9. Revoke old token
+    await this.prisma.refreshToken.update({
+      where: { id: decoded.jti },
+      data: { revokedAt: new Date(), revokedReason: 'ROTATED' },
+    });
+
+    // 10. Get user info for new token
+    const user = await this.prisma.user.findUnique({
+      where: { id: storedToken.userId },
+      select: { id: true, email: true, role: true, organizationId: true, isActive: true, status: true },
+    });
+
+    if (!user || !user.isActive) throw new UnauthorizedException('User not found');
+    if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Your account has been suspended. Contact your administrator.',
+      });
     }
 
-    const refreshTokenMatches = await bcrypt.compare(refreshToken, user.refreshToken);
-
-    if (!refreshTokenMatches) {
-      throw new UnauthorizedException('Access denied');
-    }
-
-    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
+    const appAccess = await this.iamService.getUserAppAccess(storedToken.organizationId || user.organizationId, user.id);
     const appCodes = appAccess.map((a) => a.appCode as AppCode);
-    const tokens = await this.getTokens(user.id, user.email, user.organizationId, user.role, appCodes);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-    return tokens;
+    // Determine device info
+    const deviceInfo = userAgent
+      ? parseDeviceInfo(userAgent)
+      : (storedToken.deviceInfo as object || {});
+
+    // 11. Issue new token pair (same familyId)
+    return this.issueTokenPair(
+      storedToken.userId,
+      user.email,
+      storedToken.organizationId || user.organizationId,
+      user.role,
+      appCodes,
+      storedToken.appCode,
+      deviceInfo,
+      ip || storedToken.ipAddress || '',
+      storedToken.familyId, // same familyId
+    );
   }
 
-  async logout(userId: string): Promise<{ message: string }> {
+  async logout(jti: string): Promise<{ message: string }> {
+    await this.prisma.refreshToken.updateMany({
+      where: { id: jti, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: 'LOGOUT' },
+    });
+    return { message: 'Logged out successfully' };
+  }
+
+  async logoutAllSessions(userId: string, reason: string = 'LOGOUT'): Promise<{ revokedCount: number }> {
+    const result = await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+    return { revokedCount: result.count };
+  }
+
+  async suspendUser(userId: string, adminId: string, organizationId: string, reason: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.status === 'SUSPENDED') throw new BadRequestException('User already suspended');
+    if (user.id === adminId) throw new BadRequestException('Cannot suspend yourself');
+
     await this.prisma.user.update({
       where: { id: userId },
-      data: { refreshToken: null },
+      data: {
+        status: 'SUSPENDED',
+        suspendedAt: new Date(),
+        suspendedBy: adminId,
+        suspendReason: reason,
+      },
     });
 
-    return { message: 'Logged out successfully' };
+    const revoked = await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: 'USER_SUSPENDED' },
+    });
+
+    // Add to Redis blacklist (TTL = 900s = 15 min, matches access token TTL)
+    // CacheService.set uses ms, so 900 * 1000
+    await this.cacheService.set(`suspended:${userId}`, '1', 900 * 1000);
+
+    return { message: 'User suspended and all sessions revoked', revokedSessions: revoked.count };
+  }
+
+  async unsuspendUser(userId: string, adminId: string, organizationId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.status !== 'SUSPENDED') throw new BadRequestException('User is not suspended');
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: 'ACTIVE',
+        suspendedAt: null,
+        suspendedBy: null,
+        suspendReason: null,
+      },
+    });
+
+    await this.cacheService.del(`suspended:${userId}`);
+
+    return { message: 'User unsuspended' };
   }
 
   async getAvailableApps(userId: string, orgId: string) {
     return this.iamService.getUserAppAccess(orgId, userId);
   }
 
-  private async getTokens(
+  async getUserSessions(userId: string, organizationId: string | null, status: 'active' | 'all' = 'active', page = 1, limit = 20) {
+    const where: Record<string, unknown> = { userId };
+    if (organizationId) where.organizationId = organizationId;
+
+    if (status === 'active') {
+      where.revokedAt = null;
+      where.expiresAt = { gt: new Date() };
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.refreshToken.findMany({
+        where,
+        orderBy: [{ revokedAt: 'asc' }, { lastUsedAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.refreshToken.count({ where }),
+    ]);
+
+    const now = new Date();
+    const appLabels: Record<string, string> = {
+      SALES: 'Sales Dashboard',
+      PM: 'PM Dashboard',
+      HRMS: 'HRMS',
+      ADMIN: 'Admin',
+      COMM: 'Comm',
+    };
+
+    const data = items.map((t) => ({
+      id: t.id,
+      appCode: t.appCode,
+      appLabel: appLabels[t.appCode] || t.appCode,
+      deviceInfo: t.deviceInfo,
+      ipAddress: t.ipAddress,
+      lastUsedAt: t.lastUsedAt?.toISOString() || null,
+      createdAt: t.createdAt.toISOString(),
+      expiresAt: t.expiresAt.toISOString(),
+      revokedAt: t.revokedAt?.toISOString() || null,
+      revokedReason: t.revokedReason,
+      isActive: !t.revokedAt && t.expiresAt > now,
+    }));
+
+    const active = data.filter((s) => s.isActive).length;
+
+    return {
+      data,
+      meta: {
+        total,
+        active,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async revokeOwnSession(sessionId: string, userId: string): Promise<void> {
+    const session = await this.prisma.refreshToken.findUnique({ where: { id: sessionId } });
+    if (!session || session.userId !== userId) throw new NotFoundException('Session not found');
+    if (session.revokedAt) throw new BadRequestException('Session already revoked');
+    await this.prisma.refreshToken.update({
+      where: { id: sessionId },
+      data: { revokedAt: new Date(), revokedReason: 'LOGOUT' },
+    });
+  }
+
+  async revokeAllExcept(userId: string, currentJti: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, id: { not: currentJti }, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: 'LOGOUT' },
+    });
+  }
+
+  private async issueTokenPair(
     userId: string,
     email: string,
-    orgId: string,
+    organizationId: string,
     role: string,
-    appCodes: AppCode[] = [],
+    appCodes: AppCode[],
+    appCode: string,
+    deviceInfo: object,
+    ip: string,
+    existingFamilyId: string | null,
   ): Promise<IAuthTokens> {
+    const familyId = existingFamilyId || randomUUID();
+    const jti = uuidv4();
+
+    const rawRefreshToken = await this.jwtService.signAsync(
+      { sub: userId, jti, familyId },
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: 604800,
+      },
+    );
+
+    await this.prisma.refreshToken.create({
+      data: {
+        id: jti,
+        userId,
+        organizationId,
+        appCode,
+        tokenHash: hashToken(rawRefreshToken),
+        deviceInfo,
+        ipAddress: ip,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        familyId,
+      },
+    });
+
     const payload: JwtPayload = {
       sub: userId,
       email,
-      orgId,
+      orgId: organizationId,
       role: role as UserRole,
       appCodes,
+      jti,
     };
 
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: 900, // 15 minutes
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: 604800, // 7 days
-      }),
-    ]);
-
-    return { accessToken, refreshToken };
-  }
-
-  private async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 12);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: hashedRefreshToken },
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      expiresIn: 900,
     });
+
+    return { accessToken, refreshToken: rawRefreshToken };
   }
 }

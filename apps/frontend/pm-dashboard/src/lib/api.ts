@@ -6,6 +6,8 @@ import {
   IUserProfile,
   UserRole,
 } from '@sentra-core/types';
+import { isRefreshing, setRefreshing, pendingQueue, processQueue } from './refresh-mutex';
+import { getTokens, setTokens as setTokensHelper, clearTokens as clearTokensHelper } from './tokens';
 
 const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:3001/api';
 const PM_API_URL   = process.env.NEXT_PUBLIC_PM_API_URL   || 'http://localhost:3003/api/pm';
@@ -167,52 +169,15 @@ class ApiClient {
   }
 
   private getAccessToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('accessToken');
-  }
-
-  private getRefreshToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('refreshToken');
+    return getTokens().accessToken;
   }
 
   setTokens(accessToken: string, refreshToken: string) {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    setTokensHelper(accessToken, refreshToken);
   }
 
   clearTokens() {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-  }
-
-  private async refreshAccessToken(): Promise<string | null> {
-    const refreshToken = this.getRefreshToken();
-    if (!refreshToken) return null;
-
-    try {
-      const response = await fetch(`${this.coreUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${refreshToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        this.clearTokens();
-        return null;
-      }
-
-      const data = await response.json();
-      this.setTokens(data.accessToken, data.refreshToken);
-      return data.accessToken;
-    } catch {
-      this.clearTokens();
-      return null;
-    }
+    clearTokensHelper();
   }
 
   async fetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
@@ -245,13 +210,56 @@ class ApiClient {
     });
 
     if (response.status === 401 && !skipAuth) {
-      const newAccessToken = await this.refreshAccessToken();
-      if (newAccessToken) {
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
-        response = await fetch(url, {
-          ...fetchOptions,
-          headers,
+      // Don't retry the refresh endpoint itself
+      if (url.includes('/auth/refresh')) {
+        clearTokensHelper();
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/login';
+        }
+        throw new Error('Session expired');
+      }
+
+      // If refresh already in progress, queue this request
+      if (isRefreshing) {
+        const newToken = await new Promise<string>((resolve, reject) => {
+          pendingQueue.push({ resolve, reject });
         });
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        response = await fetch(url, { ...fetchOptions, headers });
+      } else {
+        // Start refresh — set mutex
+        setRefreshing(true);
+        try {
+          const { refreshToken } = getTokens();
+          if (!refreshToken) throw new Error('No refresh token');
+
+          const refreshResponse = await fetch(`${this.coreUrl}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          if (!refreshResponse.ok) throw new Error('Refresh failed');
+
+          const data = await refreshResponse.json();
+          const { accessToken, refreshToken: newRefreshToken } =
+            data.data ?? data;
+
+          setTokensHelper(accessToken, newRefreshToken);
+          processQueue(null, accessToken);
+
+          (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+          response = await fetch(url, { ...fetchOptions, headers });
+        } catch (refreshError) {
+          processQueue(refreshError, null);
+          clearTokensHelper();
+          if (typeof window !== 'undefined') {
+            window.location.href = '/auth/login';
+          }
+          throw refreshError;
+        } finally {
+          setRefreshing(false);
+        }
       }
     }
 
@@ -1025,6 +1033,23 @@ class ApiClient {
       body: JSON.stringify(dto),
       service: 'pm',
     });
+  }
+
+  // Session management
+  async getMySessions() {
+    return this.fetch<any[]>('/auth/my-sessions');
+  }
+
+  async revokeSession(sessionId: string) {
+    return this.fetch<void>(`/auth/sessions/${sessionId}`, { method: 'DELETE' });
+  }
+
+  async revokeOtherSessions() {
+    return this.fetch<void>('/auth/sessions/others', { method: 'DELETE' });
+  }
+
+  async getMyApps() {
+    return this.fetch<any[]>('/auth/my-apps');
   }
 }
 

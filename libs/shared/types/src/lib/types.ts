@@ -214,8 +214,11 @@ export interface JwtPayload {
   sub: string; // userId
   email: string;
   orgId: string;
+  organizationId?: string; // alias for orgId
   role: UserRole;
   appCodes?: AppCode[];
+  jti?: string;
+  appCode?: string;
   iat?: number;
   exp?: number;
 }
