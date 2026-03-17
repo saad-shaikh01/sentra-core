@@ -543,6 +543,28 @@ class ApiClient {
     return this.fetch<any>(`/sales/${id}/cancel-subscription`, { method: 'POST' });
   }
 
+  async getSalesSummary(params?: { brandId?: string; dateFrom?: string; dateTo?: string }) {
+    const qs = buildQueryString(params ?? {});
+    return this.fetch<any>(`/sales/summary${qs}`);
+  }
+
+  async refundSale(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/sales/${id}/refund`, { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async chargebackSale(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/sales/${id}/chargeback`, { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async addSaleNote(id: string, note: string) {
+    return this.fetch<any>(`/sales/${id}/note`, { method: 'POST', body: JSON.stringify({ note }) });
+  }
+
+  async getInvoiceSummary(params?: { brandId?: string }) {
+    const qs = buildQueryString(params ?? {});
+    return this.fetch<any>(`/invoices/summary${qs}`);
+  }
+
   // Invoice endpoints
   async getInvoices(params?: Record<string, unknown>) {
     const qs = buildQueryString(params);
@@ -751,6 +773,18 @@ class ApiClient {
 
   async disconnectGSuite() {
     return this.fetch<void>('/gsuite/connection', { method: 'DELETE', service: 'comm' });
+  }
+
+  async getPublicInvoice(token: string) {
+    return this.fetch<any>(`/public/invoice/${token}`, { skipAuth: true });
+  }
+
+  async payPublicInvoice(token: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/public/invoice/${token}/pay`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      skipAuth: true,
+    });
   }
 
   async inviteUser(email: string, role: string) {

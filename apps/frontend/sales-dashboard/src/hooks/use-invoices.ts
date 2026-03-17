@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { IInvoice, IPaginatedResponse } from '@sentra-core/types';
+import { IInvoice, IInvoiceSummary, IPaginatedResponse } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const invoicesKeys = {
@@ -65,6 +65,14 @@ export function useDeleteInvoice() {
       toast.success('Invoice deleted');
     },
     onError: (e: Error) => toast.error('Failed to delete invoice', e.message),
+  });
+}
+
+export function useInvoiceSummary(params?: { brandId?: string }) {
+  return useQuery({
+    queryKey: [...invoicesKeys.all, 'summary', params ?? {}] as const,
+    queryFn: () => api.getInvoiceSummary(params) as Promise<IInvoiceSummary>,
+    staleTime: 60_000,
   });
 }
 

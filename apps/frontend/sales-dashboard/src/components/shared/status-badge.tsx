@@ -24,6 +24,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   [ClientStatus.REFUNDED]: { label: 'Refunded', className: 'bg-amber-500/20 text-amber-300 border-amber-500/20' },
   [ClientStatus.CHARGEBACK]: { label: 'Chargeback', className: 'bg-red-500/20 text-red-400 border-red-500/20' },
   [ClientStatus.BLACKLISTED]: { label: 'Blacklisted', className: 'bg-rose-950/70 text-rose-200 border-rose-900/60' },
+  // Sale statuses — DRAFT is new; ACTIVE/COMPLETED/REFUNDED share values with ClientStatus above
+  [SaleStatus.DRAFT]: { label: 'Draft', className: 'bg-slate-500/20 text-slate-300 border-slate-500/20' },
   [SaleStatus.PENDING]: { label: 'Pending', className: 'bg-amber-500/20 text-amber-400 border-amber-500/20' },
   [SaleStatus.ON_HOLD]: { label: 'On Hold', className: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/20' },
   [SaleStatus.CANCELLED]: { label: 'Cancelled', className: 'bg-red-500/20 text-red-400 border-red-500/20' },

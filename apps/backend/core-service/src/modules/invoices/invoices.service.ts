@@ -58,6 +58,63 @@ export class InvoicesService {
     return this.mapToIInvoice(invoice);
   }
 
+  async getSummary(orgId: string, brandId?: string) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const saleWhere = {
+      organizationId: orgId,
+      deletedAt: null,
+      ...(brandId ? { brandId } : {}),
+    };
+
+    const [unpaidAgg, overdueAgg, paidThisMonthAgg, upcomingDueAgg] = await Promise.all([
+      this.prisma.invoice.aggregate({
+        where: { status: InvoiceStatus.UNPAID, dueDate: { gte: now }, sale: { ...saleWhere } },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.invoice.aggregate({
+        where: {
+          OR: [
+            { status: InvoiceStatus.OVERDUE },
+            { status: InvoiceStatus.UNPAID, dueDate: { lt: now } },
+          ],
+          sale: { ...saleWhere },
+        },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.invoice.aggregate({
+        where: {
+          status: InvoiceStatus.PAID,
+          updatedAt: { gte: startOfMonth, lte: endOfMonth },
+          sale: { ...saleWhere },
+        },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.invoice.aggregate({
+        where: {
+          status: InvoiceStatus.UNPAID,
+          dueDate: { gte: now, lte: sevenDaysFromNow },
+          sale: { ...saleWhere },
+        },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    return {
+      unpaid: { count: unpaidAgg._count.id, total: Number(unpaidAgg._sum.amount ?? 0) },
+      overdue: { count: overdueAgg._count.id, total: Number(overdueAgg._sum.amount ?? 0) },
+      paidThisMonth: { count: paidThisMonthAgg._count.id, total: Number(paidThisMonthAgg._sum.amount ?? 0) },
+      upcomingDue: { count: upcomingDueAgg._count.id, total: Number(upcomingDueAgg._sum.amount ?? 0) },
+    };
+  }
+
   async findPublic(id: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },

@@ -581,6 +581,71 @@ export class SalesService {
     return result;
   }
 
+  async getSummary(
+    orgId: string,
+    query: { brandId?: string; dateFrom?: string; dateTo?: string },
+  ) {
+    const { brandId, dateFrom, dateTo } = query;
+    const baseWhere: Prisma.SaleWhereInput = {
+      organizationId: orgId,
+      deletedAt: null,
+      ...(brandId ? { brandId } : {}),
+      ...(dateFrom || dateTo
+        ? {
+            createdAt: {
+              ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+              ...(dateTo ? { lte: new Date(dateTo) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [completedAgg, activeAgg, pendingDraftAgg, cancelledAgg, refundedAgg] =
+      await Promise.all([
+        this.prisma.sale.aggregate({
+          where: { ...baseWhere, status: SaleStatus.COMPLETED },
+          _sum: { discountedTotal: true, totalAmount: true },
+          _count: { id: true },
+        }),
+        this.prisma.sale.aggregate({
+          where: { ...baseWhere, status: { in: [SaleStatus.ACTIVE, SaleStatus.ON_HOLD] } },
+          _sum: { discountedTotal: true, totalAmount: true },
+          _count: { id: true },
+        }),
+        this.prisma.sale.aggregate({
+          where: { ...baseWhere, status: { in: [SaleStatus.PENDING, SaleStatus.DRAFT] } },
+          _sum: { discountedTotal: true, totalAmount: true },
+          _count: { id: true },
+        }),
+        this.prisma.sale.aggregate({
+          where: { ...baseWhere, status: SaleStatus.CANCELLED },
+          _sum: { discountedTotal: true, totalAmount: true },
+          _count: { id: true },
+        }),
+        this.prisma.sale.aggregate({
+          where: { ...baseWhere, status: SaleStatus.REFUNDED },
+          _sum: { discountedTotal: true, totalAmount: true },
+          _count: { id: true },
+        }),
+      ]);
+
+    const resolveAmount = (agg: { _sum: { discountedTotal: unknown; totalAmount: unknown }; _count: { id: number } }) =>
+      Number((agg._sum.discountedTotal ?? agg._sum.totalAmount) ?? 0);
+
+    return {
+      totalRevenue: resolveAmount(completedAgg),
+      totalRevenueCount: completedAgg._count.id,
+      activeRevenue: resolveAmount(activeAgg),
+      activeRevenueCount: activeAgg._count.id,
+      pendingRevenue: resolveAmount(pendingDraftAgg),
+      pendingRevenueCount: pendingDraftAgg._count.id,
+      cancelledRevenue: resolveAmount(cancelledAgg),
+      cancelledCount: cancelledAgg._count.id,
+      refundedRevenue: resolveAmount(refundedAgg),
+      refundedCount: refundedAgg._count.id,
+    };
+  }
+
   async findOne(id: string, orgId: string) {
     const cacheKey = `sales:${orgId}:${id}`;
 

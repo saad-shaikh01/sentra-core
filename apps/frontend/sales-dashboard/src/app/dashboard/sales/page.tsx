@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge } from '@/components/shared';
@@ -16,6 +17,8 @@ import { hasMinimumRole, ISale, SaleStatus, UserRole } from '@sentra-core/types'
 import { SaleFormModal } from './_components/sale-form-modal';
 import { SaleDetailSheet } from './_components/sale-detail-sheet';
 import { QuickSaleModal } from './_components/quick-sale-modal';
+import { RevenueSummaryCards } from './_components/revenue-summary-cards';
+import { InvoiceOverviewWidget } from './_components/invoice-overview-widget';
 
 // Enriched row type shown in the table
 interface SaleRow extends ISale {
@@ -44,6 +47,7 @@ export default function SalesPage() {
     ...(params.dateTo   ? { dateTo:   params.dateTo }   : {}),
   }), [params]);
 
+  const router = useRouter();
   const { data, isLoading, isError } = useSales(queryParams);
   const { data: clientsData }    = useClients({ limit: 100 });
   const { data: brandsData }     = useBrands({ limit: 100 });
@@ -100,9 +104,24 @@ export default function SalesPage() {
           key:    'totalAmount',
           header: 'Amount',
           render: (s) => (
-            <span className="font-bold">
-              ${s.totalAmount}{' '}
-              <span className="text-muted-foreground font-normal">{s.currency}</span>
+            <div>
+              <span className="font-bold">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.totalAmount)}
+              </span>
+              {s.discountedTotal != null && s.discountedTotal !== s.totalAmount ? (
+                <div className="text-xs text-emerald-400">
+                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.discountedTotal)} net
+                </div>
+              ) : null}
+            </div>
+          ),
+        },
+        {
+          key:    'paymentPlan',
+          header: 'Plan',
+          render: (s) => (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-muted-foreground">
+              {s.paymentPlan === 'ONE_TIME' ? 'One-Time' : s.paymentPlan === 'INSTALLMENTS' ? `${s.installmentCount ?? '?'}x` : 'Sub'}
             </span>
           ),
         },
@@ -188,6 +207,13 @@ export default function SalesPage() {
         )}
       />
 
+      <RevenueSummaryCards
+        brandId={params.brandId ?? undefined}
+        dateFrom={params.dateFrom ?? undefined}
+        dateTo={params.dateTo ?? undefined}
+      />
+      <InvoiceOverviewWidget brandId={params.brandId ?? undefined} />
+
       <FilterBar>
         {/* Status */}
         <Select
@@ -265,7 +291,7 @@ export default function SalesPage() {
         data={salesRows}
         isLoading={isLoading}
         isError={isError}
-        onRowClick={(s) => setDetailSaleId(s.id)}
+        onRowClick={(s) => router.push(`/dashboard/sales/${s.id}`)}
         keyExtractor={(s) => s.id}
         emptyTitle="No sales yet"
         emptyDescription="Create your first sale to get started."

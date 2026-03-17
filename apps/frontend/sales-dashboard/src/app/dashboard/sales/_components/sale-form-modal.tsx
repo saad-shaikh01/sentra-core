@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { FormModal } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBrands } from '@/hooks/use-brands';
 import { useClients } from '@/hooks/use-clients';
 import { useCreateSale, useUpdateSale } from '@/hooks/use-sales';
-import { ISale } from '@sentra-core/types';
+import { useAuth } from '@/hooks/use-auth';
+import { useRouter } from 'next/navigation';
+import { ISale, SaleStatus, PaymentPlanType, DiscountType, UserRole } from '@sentra-core/types';
+import { Plus, Minus } from 'lucide-react';
 
 interface SaleFormModalProps {
   open: boolean;
@@ -23,18 +26,27 @@ interface SaleFormModalProps {
   prefillBrandId?: string;
 }
 
+interface ItemRow {
+  name: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  customPrice: string;
+}
+
 interface FormValues {
   clientId: string;
   brandId: string;
+  paymentPlan: PaymentPlanType;
+  installmentCount: string;
   totalAmount: string;
   currency: string;
   description: string;
-}
-
-interface UpdateSalePayload {
-  totalAmount: number;
-  currency?: string;
-  description?: string;
+  discountEnabled: boolean;
+  discountType: DiscountType | '';
+  discountValue: string;
+  status: SaleStatus;
+  items: ItemRow[];
 }
 
 export function SaleFormModal({
@@ -49,133 +61,192 @@ export function SaleFormModal({
 }: SaleFormModalProps) {
   const isEdit = !!sale;
   const isLeadMode = !isEdit && !!prefillLeadId;
-  const isLockedClient = isEdit || isLeadMode || !!prefillClientId;
+  const router = useRouter();
+  const { user } = useAuth();
+  const userRole = user?.role;
+  const isAgent = userRole === UserRole.FRONTSELL_AGENT || userRole === UserRole.UPSELL_AGENT;
 
   const createSale = useCreateSale();
   const updateSale = useUpdateSale();
   const { data: clientsData } = useClients({ limit: 100 });
   const { data: brandsData } = useBrands({ limit: 100 });
 
-  const { register, unregister, handleSubmit, reset, setValue, watch, formState: { errors } } =
-    useForm<FormValues>();
+  const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } =
+    useForm<FormValues>({
+      defaultValues: {
+        paymentPlan: PaymentPlanType.ONE_TIME,
+        status: SaleStatus.DRAFT,
+        discountEnabled: false,
+        discountType: '',
+        items: [],
+      },
+    });
 
-  const clientId = watch('clientId');
-  const brandId = watch('brandId');
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
-  const clientName =
-    prefillClientName
-    ?? clientsData?.data.find((client) => client.id === (sale?.clientId ?? prefillClientId))?.companyName
-    ?? sale?.clientId
-    ?? prefillClientId
-    ?? '';
-  const brandName =
-    brandsData?.data.find((brand) => brand.id === (sale?.brandId ?? prefillBrandId))?.name
-    ?? sale?.brandId
-    ?? prefillBrandId
-    ?? '';
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  useEffect(() => {
-    register('brandId', { required: 'Brand is required' });
+  const watchedItems = watch('items');
+  const watchedDiscountEnabled = watch('discountEnabled');
+  const watchedDiscountType = watch('discountType');
+  const watchedDiscountValue = watch('discountValue');
+  const watchedTotalAmount = watch('totalAmount');
+  const watchedPaymentPlan = watch('paymentPlan');
 
-    if (isLeadMode) {
-      unregister('clientId');
-      return;
+  // Live total calculation
+  const itemsSubtotal = watchedItems.reduce((sum, item) => {
+    const price = parseFloat(item.customPrice || item.unitPrice || '0');
+    const qty = parseInt(item.quantity || '1', 10);
+    return sum + price * qty;
+  }, 0);
+
+  const subtotal = watchedItems.length > 0 ? itemsSubtotal : parseFloat(watchedTotalAmount || '0');
+
+  let liveTotal = subtotal;
+  if (watchedDiscountEnabled && watchedDiscountValue) {
+    const dv = parseFloat(watchedDiscountValue);
+    if (watchedDiscountType === DiscountType.PERCENTAGE) {
+      liveTotal = subtotal * (1 - Math.min(dv, 100) / 100);
+    } else if (watchedDiscountType === DiscountType.FIXED_AMOUNT) {
+      liveTotal = Math.max(0, subtotal - dv);
     }
+  }
 
-    register('clientId', { required: 'Client is required' });
-  }, [isLeadMode, register, unregister]);
+  const formatCurrency = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
   useEffect(() => {
     if (open) {
+      setApiError(null);
       reset({
         clientId: sale?.clientId ?? prefillClientId ?? '',
         brandId: sale?.brandId ?? prefillBrandId ?? '',
+        paymentPlan: (sale?.paymentPlan as PaymentPlanType) ?? PaymentPlanType.ONE_TIME,
+        installmentCount: sale?.installmentCount?.toString() ?? '',
         totalAmount: sale?.totalAmount?.toString() ?? '',
         currency: sale?.currency ?? 'USD',
         description: sale?.description ?? '',
+        discountEnabled: !!(sale?.discountType),
+        discountType: (sale?.discountType as DiscountType) ?? '',
+        discountValue: sale?.discountValue?.toString() ?? '',
+        status: (sale?.status as SaleStatus) ?? SaleStatus.DRAFT,
+        items: (sale?.items ?? []).map((item) => ({
+          name: item.name,
+          description: item.description ?? '',
+          quantity: item.quantity.toString(),
+          unitPrice: item.unitPrice.toString(),
+          customPrice: item.customPrice?.toString() ?? '',
+        })),
       });
     }
-  }, [open, prefillBrandId, prefillClientId, reset, sale]);
+  }, [open, sale, prefillClientId, prefillBrandId, reset]);
 
   const mutation = isEdit ? updateSale : createSale;
-  const error = mutation.error?.message ?? null;
 
   const onSubmit = async (values: FormValues) => {
-    if (isEdit && sale) {
-      const dto: UpdateSalePayload & Record<string, unknown> = {
-        totalAmount: parseFloat(values.totalAmount),
-        ...(values.currency ? { currency: values.currency } : {}),
-        ...(values.description ? { description: values.description } : {}),
-      };
+    setApiError(null);
+    try {
+      const items = values.items.map((item) => ({
+        name: item.name,
+        description: item.description || undefined,
+        quantity: parseInt(item.quantity, 10),
+        unitPrice: parseFloat(item.unitPrice),
+        customPrice: item.customPrice ? parseFloat(item.customPrice) : undefined,
+      }));
 
-      await updateSale.mutateAsync({ id: sale.id, ...dto });
-    } else {
       const dto: Record<string, unknown> = {
-        ...(isLeadMode ? { leadId: prefillLeadId } : { clientId: values.clientId || prefillClientId }),
         brandId: values.brandId,
-        totalAmount: parseFloat(values.totalAmount),
+        paymentPlan: values.paymentPlan,
         currency: values.currency || 'USD',
         ...(values.description ? { description: values.description } : {}),
+        ...(values.paymentPlan === PaymentPlanType.INSTALLMENTS && values.installmentCount
+          ? { installmentCount: parseInt(values.installmentCount, 10) }
+          : {}),
+        ...(items.length > 0 ? { items } : { totalAmount: parseFloat(values.totalAmount) }),
+        ...(values.discountEnabled && values.discountType
+          ? { discountType: values.discountType, discountValue: parseFloat(values.discountValue) }
+          : {}),
       };
 
-      await createSale.mutateAsync(dto as {
-        clientId?: string;
-        leadId?: string;
-        brandId: string;
-        totalAmount: number;
-        currency?: string;
-        description?: string;
-      });
-    }
+      if (isEdit && sale) {
+        await updateSale.mutateAsync({ id: sale.id, ...dto });
+        onOpenChange(false);
+      } else {
+        const payload = {
+          ...dto,
+          status: values.status,
+          ...(isLeadMode ? { leadId: prefillLeadId } : { clientId: values.clientId || prefillClientId }),
+        };
 
-    onOpenChange(false);
+        const result = await createSale.mutateAsync(payload as never) as any;
+        onOpenChange(false);
+
+        // Store collision warning if present
+        if (result?.collisionWarning) {
+          const saleId = result?.id ?? result?.sale?.id;
+          if (saleId) {
+            sessionStorage.setItem(`collision-warning-${saleId}`, JSON.stringify(result.collisionWarning));
+          }
+        }
+
+        const newSaleId = result?.id ?? result?.sale?.id;
+        if (newSaleId) {
+          router.push(`/dashboard/sales/${newSaleId}`);
+        }
+      }
+    } catch (e: unknown) {
+      setApiError(e instanceof Error ? e.message : 'Failed to save sale');
+    }
   };
+
+  const clientId = watch('clientId');
+  const brandId = watch('brandId');
+  const clientName =
+    prefillClientName
+    ?? clientsData?.data.find((c) => c.id === (sale?.clientId ?? prefillClientId))?.companyName
+    ?? '';
+  const brandName =
+    brandsData?.data.find((b) => b.id === (sale?.brandId ?? prefillBrandId))?.name
+    ?? '';
 
   return (
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
       title={isEdit ? 'Edit Sale' : 'New Sale'}
-      error={error}
+      error={apiError}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="mt-2 space-y-4">
         {isLeadMode ? (
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
             <p className="text-sm font-medium text-emerald-200">Creating sale from lead</p>
             <p className="mt-1 text-xs leading-5 text-emerald-100/80">
-              This sale will be linked to {prefillLeadLabel ?? 'the selected lead'}. A client account
-              will be created automatically if this is the first sale for that lead.
+              Linked to {prefillLeadLabel ?? 'the selected lead'}.
             </p>
           </div>
         ) : null}
 
+        {/* Client + Brand */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Client {isLeadMode ? '' : '*'}</Label>
-            {isLockedClient ? (
+            {isEdit || isLeadMode || prefillClientId ? (
               <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
-                {isLeadMode ? prefillLeadLabel ?? 'Lead-linked sale' : clientName}
+                {isLeadMode ? prefillLeadLabel ?? 'Lead-linked sale' : clientName || clientId}
               </div>
             ) : (
               <>
-                <Select
-                  value={clientId}
-                  onValueChange={(value) => setValue('clientId', value, { shouldValidate: true })}
-                >
+                <Select value={clientId} onValueChange={(v) => setValue('clientId', v, { shouldValidate: true })}>
                   <SelectTrigger className="border-white/10 bg-white/5">
                     <SelectValue placeholder="Select client" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clientsData?.data.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.companyName}
-                      </SelectItem>
+                    {clientsData?.data.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.clientId ? (
-                  <p className="text-xs text-destructive">{errors.clientId.message}</p>
-                ) : null}
+                {errors.clientId ? <p className="text-xs text-destructive">{errors.clientId.message}</p> : null}
               </>
             )}
           </div>
@@ -184,62 +255,220 @@ export function SaleFormModal({
             <Label>Brand *</Label>
             {isEdit ? (
               <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
-                {brandName}
+                {brandName || brandId}
               </div>
             ) : (
               <>
-                <Select
-                  value={brandId}
-                  onValueChange={(value) => setValue('brandId', value, { shouldValidate: true })}
-                >
+                <Select value={brandId} onValueChange={(v) => setValue('brandId', v, { shouldValidate: true })}>
                   <SelectTrigger className="border-white/10 bg-white/5">
                     <SelectValue placeholder="Select brand" />
                   </SelectTrigger>
                   <SelectContent>
-                    {brandsData?.data.map((brand) => (
-                      <SelectItem key={brand.id} value={brand.id}>
-                        {brand.name}
-                      </SelectItem>
+                    {brandsData?.data.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.brandId ? (
-                  <p className="text-xs text-destructive">{errors.brandId.message}</p>
-                ) : null}
+                {errors.brandId ? <p className="text-xs text-destructive">{errors.brandId.message}</p> : null}
               </>
             )}
           </div>
         </div>
 
+        {/* Payment plan + status */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Total Amount *</Label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="0.00"
-              {...register('totalAmount', { required: 'Required' })}
-            />
-            {errors.totalAmount ? (
-              <p className="text-xs text-destructive">{errors.totalAmount.message}</p>
-            ) : null}
+            <Label>Payment Plan *</Label>
+            <Select
+              value={watch('paymentPlan')}
+              onValueChange={(v) => setValue('paymentPlan', v as PaymentPlanType)}
+              disabled={isEdit}
+            >
+              <SelectTrigger className="border-white/10 bg-white/5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PaymentPlanType.ONE_TIME}>One-Time</SelectItem>
+                <SelectItem value={PaymentPlanType.INSTALLMENTS}>Installments</SelectItem>
+                <SelectItem value={PaymentPlanType.SUBSCRIPTION}>Subscription</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-
           <div className="space-y-1.5">
-            <Label>Currency</Label>
-            <Input placeholder="USD" {...register('currency')} />
+            <Label>Status *</Label>
+            <Select
+              value={watch('status')}
+              onValueChange={(v) => setValue('status', v as SaleStatus)}
+            >
+              <SelectTrigger className="border-white/10 bg-white/5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SaleStatus.DRAFT}>Draft</SelectItem>
+                <SelectItem value={SaleStatus.PENDING}>Pending</SelectItem>
+                {!isAgent ? <SelectItem value={SaleStatus.ACTIVE}>Active</SelectItem> : null}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
+        {/* Installment count */}
+        {watchedPaymentPlan === PaymentPlanType.INSTALLMENTS ? (
+          <div className="space-y-1.5">
+            <Label>Number of Installments *</Label>
+            <Input
+              type="number"
+              min={2}
+              max={60}
+              placeholder="e.g. 3"
+              {...register('installmentCount', { required: 'Required for installment plans', min: { value: 2, message: 'Min 2' }, max: { value: 60, message: 'Max 60' } })}
+            />
+            {errors.installmentCount ? <p className="text-xs text-destructive">{errors.installmentCount.message}</p> : null}
+          </div>
+        ) : null}
+
+        {/* Items editor */}
+        {!isEdit ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Line Items (optional)</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs gap-1"
+                onClick={() => append({ name: '', description: '', quantity: '1', unitPrice: '', customPrice: '' })}
+              >
+                <Plus className="h-3 w-3" /> Add Item
+              </Button>
+            </div>
+            {fields.map((field, index) => (
+              <div key={field.id} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Item name *"
+                    {...register(`items.${index}.name`, { required: true })}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-red-400 hover:text-red-300 flex-shrink-0"
+                    onClick={() => remove(index)}
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input type="number" min={1} placeholder="Qty" {...register(`items.${index}.quantity`)} />
+                  <Input type="number" step="0.01" placeholder="Unit price" {...register(`items.${index}.unitPrice`, { required: true })} />
+                  <Input type="number" step="0.01" placeholder="Custom price" {...register(`items.${index}.customPrice`)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Total amount (manual if no items) */}
+        {fields.length === 0 ? (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Total Amount *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                {...register('totalAmount', { required: fields.length === 0 ? 'Required' : false })}
+              />
+              {errors.totalAmount ? <p className="text-xs text-destructive">{errors.totalAmount.message}</p> : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <Input placeholder="USD" {...register('currency')} />
+            </div>
+          </div>
+        ) : null}
+
+        {/* Discount section (hidden for agents) */}
+        {!isAgent ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="discountEnabled"
+                {...register('discountEnabled')}
+                className="h-3.5 w-3.5"
+              />
+              <Label htmlFor="discountEnabled" className="cursor-pointer">Apply Discount</Label>
+            </div>
+            {watchedDiscountEnabled ? (
+              <div className="grid grid-cols-2 gap-3 pl-5">
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select
+                    value={watchedDiscountType}
+                    onValueChange={(v) => setValue('discountType', v as DiscountType)}
+                  >
+                    <SelectTrigger className="border-white/10 bg-white/5">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DiscountType.PERCENTAGE}>Percentage (%)</SelectItem>
+                      <SelectItem value={DiscountType.FIXED_AMOUNT}>Fixed Amount ($)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Value *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder={watchedDiscountType === DiscountType.PERCENTAGE ? 'e.g. 10' : 'e.g. 500'}
+                    {...register('discountValue', {
+                      required: watchedDiscountEnabled,
+                      min: 0.01,
+                      max: watchedDiscountType === DiscountType.PERCENTAGE ? 100 : undefined,
+                    })}
+                  />
+                  {errors.discountValue ? <p className="text-xs text-destructive">Invalid discount value</p> : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Description */}
         <div className="space-y-1.5">
           <Label>Description</Label>
           <Input placeholder="Brief description..." {...register('description')} />
         </div>
 
+        {/* Live preview */}
+        {subtotal > 0 ? (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Summary</p>
+            {fields.length > 0 ? (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Items ({fields.length})</span>
+                <span>{formatCurrency(itemsSubtotal)}</span>
+              </div>
+            ) : null}
+            {watchedDiscountEnabled && watchedDiscountValue && liveTotal !== subtotal ? (
+              <div className="flex justify-between text-emerald-400">
+                <span>Discount</span>
+                <span>− {formatCurrency(subtotal - liveTotal)}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-between font-bold border-t border-white/10 pt-1 mt-1">
+              <span>Total</span>
+              <span>{formatCurrency(liveTotal)}</span>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Sale'}
           </Button>

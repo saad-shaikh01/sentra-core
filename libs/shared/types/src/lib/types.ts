@@ -666,6 +666,30 @@ export interface IProductPackage {
 }
 
 // ==========================================
+// SALES SUMMARY
+// ==========================================
+
+export interface ISalesSummary {
+  totalRevenue: number;
+  totalRevenueCount: number;
+  activeRevenue: number;
+  activeRevenueCount: number;
+  pendingRevenue: number;
+  pendingRevenueCount: number;
+  cancelledRevenue: number;
+  cancelledCount: number;
+  refundedRevenue: number;
+  refundedCount: number;
+}
+
+export interface IInvoiceSummary {
+  unpaid: { count: number; total: number };
+  overdue: { count: number; total: number };
+  paidThisMonth: { count: number; total: number };
+  upcomingDue: { count: number; total: number };
+}
+
+// ==========================================
 // ANALYTICS
 // ==========================================
 

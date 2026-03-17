@@ -20,6 +20,15 @@ import { UserRole, IInvoice, IPaginatedResponse } from '@sentra-core/types';
 export class InvoicesController {
   constructor(private invoicesService: InvoicesService) {}
 
+  @Get('summary')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, UserRole.PROJECT_MANAGER)
+  getSummary(
+    @CurrentUser('orgId') orgId: string,
+    @Query('brandId') brandId?: string,
+  ) {
+    return this.invoicesService.getSummary(orgId, brandId);
+  }
+
   @Get('public/:id')
   @Public()
   findPublic(@Param('id') id: string) {

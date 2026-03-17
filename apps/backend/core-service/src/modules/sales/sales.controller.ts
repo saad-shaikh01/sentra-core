@@ -57,6 +57,17 @@ export class SalesController {
     return this.salesService.create(user.orgId, user.sub, user.role, dto);
   }
 
+  @Get('summary')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, UserRole.PROJECT_MANAGER)
+  getSummary(
+    @Query('brandId') brandId: string | undefined,
+    @Query('dateFrom') dateFrom: string | undefined,
+    @Query('dateTo') dateTo: string | undefined,
+    @CurrentUser('orgId') orgId: string,
+  ) {
+    return this.salesService.getSummary(orgId, { brandId, dateFrom, dateTo });
+  }
+
   @Get()
   @Roles(
     UserRole.OWNER,

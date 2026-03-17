@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ISale, ISaleWithRelations, IPaginatedResponse } from '@sentra-core/types';
+import { ISale, ISaleWithRelations, ISalesSummary, IPaginatedResponse } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 import { clientsKeys } from '@/hooks/use-clients';
 import { leadsKeys } from '@/hooks/use-leads';
@@ -148,6 +148,54 @@ export function useCancelSubscription() {
       toast.success('Subscription cancelled');
     },
     onError: (e: Error) => toast.error('Failed to cancel subscription', e.message),
+  });
+}
+
+export function useSalesSummary(params?: { brandId?: string; dateFrom?: string; dateTo?: string }) {
+  return useQuery({
+    queryKey: [...salesKeys.all, 'summary', params ?? {}] as const,
+    queryFn: () => api.getSalesSummary(params) as Promise<ISalesSummary>,
+    staleTime: 60_000,
+  });
+}
+
+export function useRefundSale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
+      api.refundSale(id, dto),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      toast.success('Refund issued successfully');
+    },
+    onError: (e: Error) => toast.error('Refund failed', e.message),
+  });
+}
+
+export function useChargebackSale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
+      api.chargebackSale(id, dto),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
+      toast.success('Chargeback recorded');
+    },
+    onError: (e: Error) => toast.error('Chargeback failed', e.message),
+  });
+}
+
+export function useAddSaleNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) => api.addSaleNote(id, note),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
+      toast.success('Note added');
+    },
+    onError: (e: Error) => toast.error('Failed to add note', e.message),
   });
 }
 
