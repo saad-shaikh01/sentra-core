@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   CreateCustomerProfileParams,
   CreatePaymentProfileParams,
   ChargeCustomerProfileParams,
   CreateSubscriptionParams,
+  RefundTransactionParams,
   AuthorizeNetResponse,
 } from './authorize-net.types';
 
@@ -222,5 +223,12 @@ export class AuthorizeNetService {
       this.logger.error(`Failed to get subscription status: ${error.message}`);
       return { success: false, message: error.message };
     }
+  }
+
+  async refundTransaction(
+    _params: RefundTransactionParams,
+  ): Promise<AuthorizeNetResponse> {
+    // TODO: Implement gateway-backed Authorize.net refunds once the merchant flow is configured.
+    throw new NotImplementedException('Refund via gateway not yet configured');
   }
 }

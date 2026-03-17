@@ -3,3 +3,6 @@ export { UpdateSaleDto } from './update-sale.dto';
 export { QuerySalesDto } from './query-sales.dto';
 export { ChargeSaleDto } from './charge-sale.dto';
 export { CreateSubscriptionDto } from './create-subscription.dto';
+export { AddNoteDto } from './add-note.dto';
+export { CreateRefundDto, RefundType } from './create-refund.dto';
+export { CreateChargebackDto } from './create-chargeback.dto';

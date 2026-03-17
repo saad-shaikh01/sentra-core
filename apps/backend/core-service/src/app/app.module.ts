@@ -24,6 +24,8 @@ import { PackagesModule } from '../modules/packages';
 import { SearchModule } from '../modules/search';
 import { AnalyticsModule } from '../modules/analytics';
 import { LeadIntegrationsModule } from '../modules/lead-integrations';
+import { PublicPaymentsModule } from '../modules/public-payments/public-payments.module';
+import { WebhooksModule } from '../modules/webhooks/webhooks.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -73,6 +75,8 @@ function resolveEnvFiles(): string[] {
     SearchModule,
     AnalyticsModule,
     LeadIntegrationsModule,
+    PublicPaymentsModule,
+    WebhooksModule,
   ],
   controllers: [AppController],
   providers: [

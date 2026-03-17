@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
@@ -275,6 +276,23 @@ export class InvoicesService {
     return { transaction, paid: true };
   }
 
+  async regenerateToken(invoiceId: string, orgId: string): Promise<{ paymentToken: string }> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        sale: { organizationId: orgId },
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    const paymentToken = crypto.randomBytes(32).toString('hex');
+    await this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { paymentToken },
+    });
+    return { paymentToken };
+  }
+
   private mapToIInvoice(invoice: any): IInvoice {
     return {
       id: invoice.id,
@@ -284,6 +302,7 @@ export class InvoicesService {
       status: invoice.status as InvoiceStatus,
       pdfUrl: invoice.pdfUrl ?? undefined,
       notes: invoice.notes ?? undefined,
+      paymentToken: invoice.paymentToken ?? undefined,
       saleId: invoice.saleId,
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,

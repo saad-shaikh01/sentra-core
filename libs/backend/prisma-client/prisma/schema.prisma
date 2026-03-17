@@ -76,6 +76,7 @@ enum ClientActivityType {
 }
 
 enum SaleStatus {
+  DRAFT
   PENDING
   ACTIVE
   COMPLETED
@@ -92,12 +93,21 @@ enum SaleActivityType {
   REFUND_ISSUED
   CHARGEBACK_FILED
   NOTE
+  INVOICE_CREATED
+  INVOICE_UPDATED
+  MANUAL_ADJUSTMENT
+  DISCOUNT_APPLIED
 }
 
 enum PaymentPlanType {
   ONE_TIME
   INSTALLMENTS
   SUBSCRIPTION
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
 }
 
 enum InvoiceStatus {
@@ -127,6 +137,7 @@ enum TransactionStatus {
 enum TransactionType {
   ONE_TIME
   RECURRING
+  VOID
   REFUND
   CHARGEBACK
 }
@@ -957,6 +968,9 @@ model Sale {
   // Payment plan config
   paymentPlan     PaymentPlanType @default(ONE_TIME)
   installmentCount Int?            // Number of installments (null = 1)
+  discountType     DiscountType?
+  discountValue    Decimal?        @db.Decimal(10, 2)
+  discountedTotal  Decimal?        @db.Decimal(10, 2)
 
   // Authorize.net fields
   customerProfileId String?
@@ -994,6 +1008,8 @@ model SaleItem {
   quantity    Int      @default(1)
   unitPrice   Decimal  @db.Decimal(10, 2)
   customPrice Decimal? @db.Decimal(10, 2) // Price override for custom plans
+  packageId   String?
+  packageName String?
 
   saleId String
   sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -1012,6 +1028,7 @@ model Invoice {
   status        InvoiceStatus @default(UNPAID)
   pdfUrl        String?
   notes         String?
+  paymentToken  String?       @unique
 
   saleId String
   sale   Sale   @relation(fields: [saleId], references: [id])
@@ -1851,4 +1868,28 @@ model PmClientPortalAccess {
 
   @@index([organizationId, isActive])
   @@index([projectId])
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  type           NotificationType
+  message        String
+  saleId         String?
+  organizationId String
+  recipientId    String
+  isRead         Boolean          @default(false)
+  data           Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organizationId, recipientId])
+  @@index([organizationId, type])
+}
+
+enum NotificationType {
+  PAYMENT_FAILED
+  INVOICE_OVERDUE
+  SALE_STATUS_CHANGED
+  CHARGEBACK_FILED
+  PAYMENT_RECEIVED
 }

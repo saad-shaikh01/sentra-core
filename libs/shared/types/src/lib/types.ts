@@ -70,6 +70,7 @@ export enum ClientActivityType {
 }
 
 export enum SaleStatus {
+  DRAFT = 'DRAFT',
   PENDING = 'PENDING',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
@@ -86,12 +87,21 @@ export enum SaleActivityType {
   REFUND_ISSUED = 'REFUND_ISSUED',
   CHARGEBACK_FILED = 'CHARGEBACK_FILED',
   NOTE = 'NOTE',
+  INVOICE_CREATED = 'INVOICE_CREATED',
+  INVOICE_UPDATED = 'INVOICE_UPDATED',
+  MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
+  DISCOUNT_APPLIED = 'DISCOUNT_APPLIED',
 }
 
 export enum PaymentPlanType {
   ONE_TIME = 'ONE_TIME',
   INSTALLMENTS = 'INSTALLMENTS',
   SUBSCRIPTION = 'SUBSCRIPTION',
+}
+
+export enum DiscountType {
+  PERCENTAGE = 'PERCENTAGE',
+  FIXED_AMOUNT = 'FIXED_AMOUNT',
 }
 
 export enum InvoiceStatus {
@@ -121,6 +131,7 @@ export enum TransactionStatus {
 export enum TransactionType {
   ONE_TIME = 'ONE_TIME',
   RECURRING = 'RECURRING',
+  VOID = 'VOID',
   REFUND = 'REFUND',
   CHARGEBACK = 'CHARGEBACK',
 }
@@ -165,6 +176,7 @@ export const LEAD_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
 };
 
 export const SALE_STATUS_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
+  [SaleStatus.DRAFT]: [],
   [SaleStatus.PENDING]: [SaleStatus.ACTIVE, SaleStatus.CANCELLED, SaleStatus.ON_HOLD],
   [SaleStatus.ACTIVE]: [SaleStatus.COMPLETED, SaleStatus.CANCELLED, SaleStatus.ON_HOLD, SaleStatus.REFUNDED],
   [SaleStatus.ON_HOLD]: [SaleStatus.ACTIVE, SaleStatus.CANCELLED],
@@ -513,7 +525,15 @@ export interface ISaleItem {
   quantity: number;
   unitPrice: number;
   customPrice?: number;
+  packageId?: string;
+  packageName?: string;
   saleId: string;
+}
+
+export interface IClientCollisionWarning {
+  matched: boolean;
+  matchedClientId: string;
+  matchedClientName: string;
 }
 
 export interface ISale {
@@ -525,6 +545,9 @@ export interface ISale {
   contractUrl?: string;
   paymentPlan: PaymentPlanType;
   installmentCount?: number;
+  discountType?: DiscountType;
+  discountValue?: number;
+  discountedTotal?: number;
   clientId: string;
   brandId: string;
   organizationId: string;
@@ -532,8 +555,13 @@ export interface ISale {
   paymentProfileId?: string;
   subscriptionId?: string;
   items?: ISaleItem[];
+  activities?: ISaleActivity[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ISaleCreateResponse extends ISale {
+  collisionWarning?: IClientCollisionWarning;
 }
 
 export interface ISaleWithRelations extends ISale {
@@ -548,12 +576,10 @@ export interface ISaleWithRelations extends ISale {
 
 export interface ISaleActivity {
   id: string;
-  type: SaleActivityType;
+  type: string;
   data: Record<string, unknown>;
-  saleId: string;
   userId: string;
-  userName?: string;
-  createdAt: Date;
+  createdAt: Date | string;
 }
 
 // ==========================================
@@ -568,6 +594,7 @@ export interface IInvoice {
   status: InvoiceStatus;
   pdfUrl?: string;
   notes?: string;
+  paymentToken?: string;
   saleId: string;
   createdAt: Date;
   updatedAt: Date;

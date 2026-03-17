@@ -12,7 +12,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentPlanType } from '@sentra-core/types';
+import { DiscountType, PaymentPlanType, SaleStatus } from '@sentra-core/types';
 
 export class SaleItemDto {
   @IsString()
@@ -34,6 +34,14 @@ export class SaleItemDto {
   @IsNumber()
   @Min(0)
   customPrice?: number;
+
+  @IsOptional()
+  @IsString()
+  packageId?: string;
+
+  @IsOptional()
+  @IsString()
+  packageName?: string;
 }
 
 export class CreateSaleDto {
@@ -57,6 +65,19 @@ export class CreateSaleDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsEnum(SaleStatus)
+  status?: SaleStatus;
+
+  @IsOptional()
+  @IsEnum(DiscountType)
+  discountType?: DiscountType | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountValue?: number | null;
 
   @IsOptional()
   @IsUrl()

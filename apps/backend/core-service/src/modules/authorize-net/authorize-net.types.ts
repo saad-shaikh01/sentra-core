@@ -29,6 +29,12 @@ export interface CreateSubscriptionParams {
   paymentProfileId: string;
 }
 
+export interface RefundTransactionParams {
+  transactionId: string;
+  amount: number;
+  cardLastFour?: string;
+}
+
 export interface AuthorizeNetResponse {
   success: boolean;
   transactionId?: string;

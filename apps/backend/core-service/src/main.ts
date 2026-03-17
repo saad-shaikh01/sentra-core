@@ -7,6 +7,7 @@ import { Logger, ValidationPipe, INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { PrismaService } from '@sentra-core/prisma-client';
+import * as bodyParser from 'body-parser';
 
 const CORS_STATIC_ORIGINS = [
   'http://localhost:4200',
@@ -46,6 +47,8 @@ async function refreshCorsOrigins(app: INestApplication): Promise<void> {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use('/api/webhooks/authorize-net', bodyParser.raw({ type: '*/*' }));
 
   app.useGlobalPipes(
     new ValidationPipe({

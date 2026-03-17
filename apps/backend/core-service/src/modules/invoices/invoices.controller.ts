@@ -75,4 +75,13 @@ export class InvoicesController {
   pay(@Param('id') id: string, @CurrentUser('orgId') orgId: string) {
     return this.invoicesService.pay(id, orgId);
   }
+
+  @Post(':id/regenerate-token')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  async regenerateToken(
+    @Param('id') id: string,
+    @CurrentUser('orgId') orgId: string,
+  ): Promise<{ paymentToken: string }> {
+    return this.invoicesService.regenerateToken(id, orgId);
+  }
 }
