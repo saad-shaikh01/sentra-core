@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
@@ -80,7 +81,8 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   logout(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
-    return this.authService.logout(user.jti || user.sub);
+    if (!user.jti) throw new UnauthorizedException('Session identifier missing');
+    return this.authService.logout(user.jti);
   }
 
   @Post('logout-all')
@@ -98,7 +100,8 @@ export class AuthController {
   @Delete('sessions/others')
   @HttpCode(HttpStatus.OK)
   async revokeOtherSessions(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
-    await this.authService.revokeAllExcept(user.sub, user.jti || '');
+    if (!user.jti) throw new UnauthorizedException('Session identifier missing');
+    await this.authService.revokeAllExcept(user.sub, user.jti);
     return { message: 'Other sessions revoked' };
   }
 

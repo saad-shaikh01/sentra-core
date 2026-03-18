@@ -1,6 +1,7 @@
 'use client';
 
-import { Bell, Search, Command, Mail } from 'lucide-react';
+import { useState } from 'react';
+import { Bell, Search, Command, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,10 +10,12 @@ import { useNotifications } from '@/hooks/use-notifications';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useUIStore } from '@/stores/ui-store';
+import { MySessionsModal } from '@/components/my-sessions-modal';
 
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const { data: unreadRes } = useNotifications({ page: 1, limit: 1, status: 'UNREAD' });
   const unreadCount = unreadRes?.meta?.total ?? 0;
   const commUnreadCount = useUIStore((state) => state.commUnreadCount);
@@ -24,8 +27,10 @@ export function TopNav() {
 
   // Simple breadcrumb logic
   const segments = pathname.split('/').filter(Boolean);
-  
+
   return (
+    <>
+    <MySessionsModal open={sessionsOpen} onClose={() => setSessionsOpen(false)} />
     <header className="h-20 border-b border-white/5 bg-black/20 backdrop-blur-xl flex items-center justify-between px-8 sticky top-0 z-40">
       <div className="flex items-center gap-4">
         <nav className="flex items-center gap-2 text-sm">
@@ -110,13 +115,19 @@ export function TopNav() {
           </Button>
           
           <div className="h-6 w-px bg-white/10 mx-2" />
-          
-          <Button variant="shine" size="sm" className="hidden lg:flex gap-2">
-            <Search className="h-4 w-4" />
-            Quick Search
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-xl hover:bg-white/10"
+            title="My Sessions"
+            onClick={() => setSessionsOpen(true)}
+          >
+            <User className="h-5 w-5 text-muted-foreground" />
           </Button>
         </div>
       </div>
     </header>
+    </>
   );
 }

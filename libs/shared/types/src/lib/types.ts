@@ -217,7 +217,7 @@ export interface JwtPayload {
   organizationId?: string; // alias for orgId
   role: UserRole;
   appCodes?: AppCode[];
-  jti?: string;
+  jti: string;
   appCode?: string;
   iat?: number;
   exp?: number;

@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, Search, Command } from 'lucide-react';
+import { Bell, Search, Command, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePathname } from 'next/navigation';
 import { AppSwitcher } from '@/components/app-switcher';
 import { CommandPalette } from '@/components/command-palette';
+import { MySessionsModal } from '@/components/my-sessions-modal';
 
 export function TopNav() {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   // Simple breadcrumb logic
   const segments = pathname.split('/').filter(Boolean);
@@ -28,6 +30,7 @@ export function TopNav() {
   return (
     <>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <MySessionsModal open={sessionsOpen} onClose={() => setSessionsOpen(false)} />
 
       <header className="h-20 border-b border-white/5 bg-black/20 backdrop-blur-xl flex items-center justify-between px-8 sticky top-0 z-40">
         <div className="flex items-center gap-4">
@@ -72,13 +75,13 @@ export function TopNav() {
             <div className="h-6 w-px bg-white/10 mx-2" />
 
             <Button
-              variant="shine"
-              size="sm"
-              className="hidden lg:flex gap-2"
-              onClick={() => setPaletteOpen(true)}
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-xl hover:bg-white/10"
+              title="My Sessions"
+              onClick={() => setSessionsOpen(true)}
             >
-              <Search className="h-4 w-4" />
-              Quick Search
+              <User className="h-5 w-5 text-muted-foreground" />
             </Button>
           </div>
         </div>
