@@ -5,6 +5,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -14,7 +15,7 @@ import {
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto } from './dto';
+import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto, AcceptInviteDto } from './dto';
 import { Public } from './decorators';
 import { RefreshTokenGuard } from './guards';
 import { CurrentUser } from './decorators';
@@ -62,6 +63,22 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   verifyClientOtp(@Body() dto: VerifyClientOtpDto): Promise<{ message: string }> {
     return this.authService.verifyClientOtp(dto);
+  }
+
+  @Public()
+  @Get('invite-info')
+  @HttpCode(HttpStatus.OK)
+  async getInviteInfo(@Query('token') token: string) {
+    return { data: await this.authService.getInviteInfo(token) };
+  }
+
+  @Public()
+  @Post('accept-invite')
+  @HttpCode(HttpStatus.OK)
+  acceptInvite(@Body() dto: AcceptInviteDto, @Req() req: Request): Promise<IAuthTokens> {
+    const userAgent = req.headers['user-agent'];
+    const ip = req.ip || req.socket?.remoteAddress;
+    return this.authService.acceptInvite(dto.token, dto.password, dto.confirmPassword, userAgent, ip);
   }
 
   @Public()
@@ -124,10 +141,18 @@ export class AuthController {
   }
 
   @Get('my-apps')
-  getMyApps(
+  async getMyApps(
     @CurrentUser('sub') userId: string,
     @CurrentUser('orgId') orgId: string,
   ) {
-    return this.authService.getAvailableApps(userId, orgId);
+    return { data: await this.authService.getMyApps(userId, orgId) };
+  }
+
+  @Get('my-permissions')
+  async getMyPermissions(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('orgId') orgId: string,
+  ) {
+    return { data: await this.authService.getMyPermissions(userId, orgId) };
   }
 }

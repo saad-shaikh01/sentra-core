@@ -24,6 +24,10 @@ export class QueryLeadsDto extends PaginationQueryDto {
   brandId?: string;
 
   @IsOptional()
+  @IsUUID()
+  teamId?: string;
+
+  @IsOptional()
   @IsDateString()
   dateFrom?: string;
 

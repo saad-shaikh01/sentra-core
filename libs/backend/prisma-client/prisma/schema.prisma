@@ -282,6 +282,11 @@ enum PmChecklistType {
   QC_REVIEW
 }
 
+enum TeamMemberRole {
+  MEMBER
+  LEAD
+}
+
 enum PmAssignmentType {
   MANUAL
   CLAIM
@@ -442,6 +447,9 @@ model Organization {
   userAppAccesses UserAppAccess[]
   userAppRoles UserAppRole[]
   userScopeGrants UserScopeGrant[]
+  teamTypes   TeamType[]
+  teams       Team[]
+  departments Department[]
   salesTeams  SalesTeam[]
   packages    ProductPackage[]
   facebookIntegrations FacebookIntegration[]
@@ -570,6 +578,8 @@ model User {
   email    String   @unique
   password String // Hashed
   name     String
+  firstName String?
+  lastName  String?
   role     UserRole @default(FRONTSELL_AGENT)
 
   // Profile Fields
@@ -581,6 +591,8 @@ model User {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   // Permissions & Access
   accessScope BrandAccess[]
@@ -589,6 +601,7 @@ model User {
   scopeGrants UserScopeGrant[]
   createdAppRoles AppRole[] @relation("AppRoleCreatedBy")
   emailConfig UserEmailConfig? // Gmail Integration
+  userInvitation UserInvitation?
 
   assignedLeads      Lead[]
   leadActivities     LeadActivity[]
@@ -596,6 +609,8 @@ model User {
   saleActivities     SaleActivity[]
   upsellClients      Client[]           @relation("ClientUpsellAgent")
   managedClients     Client[]           @relation("ClientProjectManager")
+  managedHrmsTeams   Team[]             @relation("HrmsTeamManager")
+  hrmsTeamMemberships TeamMember[]
   managedTeams       SalesTeamManager[] @relation("TeamManagers")
   memberOfTeams      SalesTeamMember[]  @relation("TeamMembers")
 
@@ -605,6 +620,7 @@ model User {
   suspendedBy   String?
   suspendReason String?
   deactivatedAt DateTime?
+  deactivatedBy String?
 
   // Refresh Tokens (sessions)
   refreshTokens RefreshToken[]
@@ -617,6 +633,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, email])
+  @@index([organizationId, departmentId])
 }
 
 model BrandAccess {
@@ -650,6 +667,92 @@ model Invitation {
 
   @@index([organizationId, email])
   @@index([token])
+}
+
+model UserInvitation {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  organizationId String
+  tokenHash      String
+  invitedBy      String
+  invitedAt      DateTime @default(now())
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  cancelledAt    DateTime?
+  emailSentAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([tokenHash])
+}
+
+model TeamType {
+  id             String   @id @default(cuid())
+  organizationId String?
+  name           String
+  slug           String
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teams        Team[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  typeId         String
+  description    String?
+  managerId      String?
+  isActive       Boolean  @default(true)
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teamType     TeamType     @relation(fields: [typeId], references: [id])
+  manager      User?        @relation("HrmsTeamManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members      TeamMember[]
+  leads        Lead[]       @relation("LeadTeam")
+
+  @@index([organizationId])
+  @@index([typeId])
+  @@index([managerId])
+}
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  teamId   String
+  userId   String
+  role     TeamMemberRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Department {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees    User[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model AppRegistry {
@@ -691,7 +794,7 @@ model PermissionCatalog {
 
 model AppRole {
   id             String  @id @default(uuid())
-  organizationId String
+  organizationId String?
   appId          String
   name           String
   slug           String
@@ -700,7 +803,7 @@ model AppRole {
   isActive       Boolean @default(true)
   createdById    String?
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   app          AppRegistry        @relation(fields: [appId], references: [id], onDelete: Cascade)
   createdBy    User?              @relation("AppRoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   permissions  AppRolePermission[]
@@ -734,6 +837,9 @@ model UserAppAccess {
   appId          String
   isEnabled      Boolean @default(true)
   isDefault      Boolean @default(false)
+  grantedBy      String?
+  revokedAt      DateTime?
+  revokedBy      String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -754,6 +860,8 @@ model UserAppRole {
   appId          String
   appRoleId      String
   isPrimary      Boolean @default(false)
+  assignedBy     String?
+  assignedAt     DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -858,6 +966,8 @@ model Lead {
 
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+  teamId       String?
+  team         Team?   @relation("LeadTeam", fields: [teamId], references: [id])
 
   convertedClientId String? @unique // Link if converted
 
@@ -871,6 +981,7 @@ model Lead {
 
   @@index([organizationId, brandId, status]) // Performance Index for Dashboard
   @@index([organizationId, deletedAt])       // Soft-delete filter index
+  @@index([teamId])
 }
 
 model LeadActivity {

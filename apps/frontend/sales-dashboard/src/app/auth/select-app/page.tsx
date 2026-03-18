@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { api } from '@/lib/api';
@@ -23,8 +24,8 @@ export default function SelectAppPage() {
   const router = useRouter();
 
   const appsQuery = useQuery({
-    queryKey: ['auth', 'apps'],
-    queryFn: () => api.getAvailableApps(),
+    queryKey: ['auth', 'my-apps'],
+    queryFn: () => api.getMyApps(),
     retry: false,
   });
 
@@ -42,8 +43,8 @@ export default function SelectAppPage() {
       const app = apps[0];
       if (app.appCode === CURRENT_APP_CODE) {
         router.replace('/dashboard');
-      } else if (app.baseUrl && typeof window !== 'undefined') {
-        window.location.href = `${app.baseUrl}/dashboard`;
+      } else if ((app.appUrl || app.baseUrl) && typeof window !== 'undefined') {
+        window.location.href = `${app.appUrl || app.baseUrl}/dashboard`;
       } else {
         router.replace('/dashboard');
       }
@@ -101,8 +102,8 @@ export default function SelectAppPage() {
                   onClick={() => {
                     if (app.appCode === CURRENT_APP_CODE) {
                       router.push('/dashboard');
-                    } else if (app.baseUrl && typeof window !== 'undefined') {
-                      window.location.href = `${app.baseUrl}/dashboard`;
+                    } else if ((app.appUrl || app.baseUrl) && typeof window !== 'undefined') {
+                      window.location.href = `${app.appUrl || app.baseUrl}/dashboard`;
                     } else {
                       router.push('/dashboard');
                     }
@@ -112,6 +113,17 @@ export default function SelectAppPage() {
                   {meta.description && (
                     <span className="text-xs text-muted-foreground">{meta.description}</span>
                   )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {app.roles.length > 0 ? (
+                      app.roles.map((role) => (
+                        <Badge key={role.id} variant="secondary" className="text-[11px]">
+                          {role.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground">No roles assigned</span>
+                    )}
+                  </div>
                 </button>
               );
             })}

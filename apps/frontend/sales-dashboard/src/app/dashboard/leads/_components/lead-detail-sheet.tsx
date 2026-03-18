@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DetailSheet, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
+import { TeamAssignmentSelect } from './team-assignment-select';
 
 interface LeadDetailSheetProps {
   leadId: string | null;
@@ -116,6 +117,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const [followUpDate, setFollowUpDate] = useState('');
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
   const [lostReason, setLostReason] = useState('');
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   const allowedTransitions = lead ? LEAD_STATUS_TRANSITIONS[lead.status] : [];
   const minFollowUpDate = new Date().toISOString().split('T')[0];
@@ -125,6 +127,10 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const canCreateSale = userRole ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) : false;
   const showReadOnlyAssignee = !!userRole && !canAssign;
   const isLeadClosed = lead?.status === LeadStatus.CLOSED_WON || lead?.status === LeadStatus.CLOSED_LOST;
+
+  useEffect(() => {
+    setTeamId(lead?.teamId ?? null);
+  }, [lead?.teamId]);
 
   const memberMap = useMemo(() => {
     return new Map((members ?? []).map((member) => [member.id, member]));
@@ -355,6 +361,15 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                     value={<span className="text-sm">{lead.assignedTo?.name ?? (lead.assignedToId ? 'Assigned' : 'Unassigned')}</span>}
                   />
                 ) : null}
+
+                <div className="space-y-1">
+                  <p className="text-[10px] font-medium uppercase text-muted-foreground">Team</p>
+                  <TeamAssignmentSelect
+                    value={teamId}
+                    leadId={lead.id}
+                    onSuccess={setTeamId}
+                  />
+                </div>
 
                 {canCreateSale || (canConvert && !isLeadClosed && !lead.convertedClientId) ? (
                   <div className="flex gap-2">

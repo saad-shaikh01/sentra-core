@@ -1,0 +1,2 @@
+-- Placeholder migration restored to satisfy Prisma migration history.
+-- The effective HRMS user-field changes live in the later 20260319093000 migration.

@@ -8,16 +8,15 @@ import { IUserProfile } from '@sentra-core/types';
 
 const CURRENT_APP_CODE = 'PM_DASHBOARD';
 
-type AppAccessItem = {
+type AppRouteTarget = {
   appCode: string;
-  appName: string;
   baseUrl?: string;
   isDefault: boolean;
 };
 
-function routeAfterAuth(router: ReturnType<typeof useRouter>, appAccess?: AppAccessItem[]) {
+function routeAfterAuth(router: ReturnType<typeof useRouter>, appAccess?: AppRouteTarget[]) {
   if (!appAccess || appAccess.length === 0) {
-    router.push('/dashboard');
+    router.push('/app-picker');
     return;
   }
 
@@ -106,7 +105,7 @@ export function useLogin() {
         throw err;
       }
       api.setTokens(response.accessToken, response.refreshToken);
-      const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
+      const appAccess = response.appAccess ?? (await api.getMyApps().catch(() => []));
       return { user: response.user, appAccess };
     },
     onSuccess: ({ user, appAccess }) => {
@@ -135,7 +134,7 @@ export function useSignup() {
     }) => {
       const response = await api.signup(data);
       api.setTokens(response.accessToken, response.refreshToken);
-      const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
+      const appAccess = response.appAccess ?? (await api.getMyApps().catch(() => []));
       return { user: response.user, appAccess };
     },
     onSuccess: ({ user, appAccess }) => {
@@ -178,7 +177,7 @@ export function useAcceptInvitation() {
     mutationFn: async (data: { token: string; name: string; password: string }) => {
       const response = await api.acceptInvitation(data);
       api.setTokens(response.accessToken, response.refreshToken);
-      const appAccess = response.appAccess ?? (await api.getAvailableApps().catch(() => []));
+      const appAccess = response.appAccess ?? (await api.getMyApps().catch(() => []));
       return { user: response.user, appAccess };
     },
     onSuccess: ({ user, appAccess }) => {

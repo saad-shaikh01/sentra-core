@@ -1,0 +1,53 @@
+{
+  "name": "hrms-dashboard",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/frontend/hrms-dashboard",
+  "projectType": "application",
+  "tags": ["frontend", "hrms"],
+  "targets": {
+    "build": {
+      "executor": "@nx/next:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/apps/frontend/hrms-dashboard"
+      },
+      "configurations": {
+        "development": {
+          "outputPath": "dist/apps/frontend/hrms-dashboard"
+        },
+        "production": {}
+      }
+    },
+    "serve": {
+      "executor": "@nx/next:server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "hrms-dashboard:build",
+        "dev": true,
+        "port": 3005
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "hrms-dashboard:build:development",
+          "dev": true,
+          "port": 3005
+        },
+        "production": {
+          "buildTarget": "hrms-dashboard:build:production",
+          "dev": false
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": [
+          "apps/frontend/hrms-dashboard/src/**/*.{ts,tsx,js,jsx}",
+          "apps/frontend/hrms-dashboard/*.{js,jsx,mjs,cjs}"
+        ]
+      }
+    }
+  }
+}

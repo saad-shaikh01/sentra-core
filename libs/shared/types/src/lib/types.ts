@@ -315,6 +315,18 @@ export interface IUserAppAccess {
   isDefault: boolean;
 }
 
+export interface IMyAppRoleSummary {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface IMyAppAccess extends IUserAppAccess {
+  appLabel: string;
+  appUrl?: string;
+  roles: IMyAppRoleSummary[];
+}
+
 export interface IUserAppRole {
   appCode: AppCode;
   roleId: string;
@@ -396,6 +408,7 @@ export interface ILead {
   brandId: string;
   organizationId: string;
   assignedToId?: string;
+  teamId?: string;
   convertedClientId?: string;
   followUpDate?: Date | string;
   createdAt: Date | string;

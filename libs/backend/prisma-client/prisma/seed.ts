@@ -78,6 +78,9 @@ async function main() {
   // ── 0. CLEANUP ───────────────────────────────────────────────────────────
   // We delete in reverse order of dependencies
   console.log('🧹  Cleaning up existing data...');
+  await prisma.teamMember.deleteMany();
+  await prisma.team.deleteMany();
+  await prisma.teamType.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.saleItem.deleteMany();
   await prisma.paymentTransaction.deleteMany();
@@ -94,6 +97,7 @@ async function main() {
   await prisma.userScopeGrant.deleteMany();
   await prisma.brandAccess.deleteMany();
   await prisma.brand.deleteMany();
+  await prisma.department.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.deleteMany();
   // AppRegistry is usually static, but we can leave it or upsert it

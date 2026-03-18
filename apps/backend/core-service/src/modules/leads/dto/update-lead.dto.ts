@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsUrl, MaxLength, IsEnum, IsDateString, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsUrl, MaxLength, IsEnum, IsDateString, IsUUID, ValidateIf } from 'class-validator';
 import { LeadStatus, LeadType, LeadSource } from '@sentra-core/types';
 
 export class UpdateLeadDto {
@@ -49,4 +49,9 @@ export class UpdateLeadDto {
   @IsOptional()
   @IsUUID()
   assignedToId?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => o.teamId !== null)
+  @IsUUID()
+  teamId?: string | null;
 }

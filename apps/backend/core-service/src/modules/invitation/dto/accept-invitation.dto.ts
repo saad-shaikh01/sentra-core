@@ -1,20 +1,26 @@
-import { IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class AcceptInvitationDto {
   @IsString()
-  token: string;
+  token!: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(100)
-  name: string;
+  name?: string;
 
   @IsString()
-  @MinLength(6)
-  password: string;
+  @MinLength(8)
+  password!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  confirmPassword?: string;
 }
 
 export class LinkInvitationDto {
   @IsString()
-  token: string;
+  token!: string;
 }

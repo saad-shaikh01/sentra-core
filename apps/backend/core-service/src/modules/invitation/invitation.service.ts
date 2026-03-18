@@ -10,6 +10,7 @@ import { MailClientService } from '@sentra-core/mail-client';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import {
   UserRole,
@@ -19,6 +20,7 @@ import {
   ILoginResponse,
 } from '@sentra-core/types';
 import { CreateInvitationDto, AcceptInvitationDto, LinkInvitationDto } from './dto';
+import { AuthService } from '../auth';
 import { IamService } from '../iam';
 
 @Injectable()
@@ -28,6 +30,7 @@ export class InvitationService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private mailService: MailClientService,
+    private authService: AuthService,
     private iamService: IamService,
   ) {}
 
@@ -195,11 +198,24 @@ export class InvitationService {
   }
 
   async acceptInvitation(dto: AcceptInvitationDto): Promise<ILoginResponse> {
+    const token = dto.token?.trim();
+    if (!token) {
+      throw new BadRequestException('Invalid or expired invitation link');
+    }
+    if (dto.confirmPassword !== undefined && dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const hrmsAccepted = await this.acceptHrmsInvitation(token, dto);
+    if (hrmsAccepted) {
+      return hrmsAccepted;
+    }
+
     const inviteV2Enabled = this.isInviteV2Enabled();
 
     const invitation: any = inviteV2Enabled
       ? await this.prisma.invitation.findUnique({
-          where: { token: dto.token },
+          where: { token },
           include: {
             organization: true,
             bundles: {
@@ -210,7 +226,7 @@ export class InvitationService {
           },
         })
       : await this.prisma.invitation.findUnique({
-          where: { token: dto.token },
+          where: { token },
           include: {
             organization: true,
           },
@@ -242,6 +258,10 @@ export class InvitationService {
       );
     }
 
+    if (!dto.name?.trim()) {
+      throw new BadRequestException('Name is required');
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -249,7 +269,7 @@ export class InvitationService {
         data: {
           email: invitation.email,
           password: hashedPassword,
-          name: dto.name,
+          name: dto.name!.trim(),
           role: invitation.role ?? UserRole.FRONTSELL_AGENT,
           organizationId: invitation.organizationId,
         },
@@ -272,39 +292,7 @@ export class InvitationService {
       );
     }
 
-    const tokens = await this.getTokens(
-      result.id,
-      result.email,
-      result.organizationId,
-      result.role,
-    );
-
-    await this.updateRefreshToken(result.id, tokens.refreshToken);
-    const appAccess = await this.iamService.getUserAppAccess(
-      result.organizationId,
-      result.id,
-    );
-
-    return {
-      ...tokens,
-      user: {
-        id: result.id,
-        email: result.email,
-        name: result.name,
-        role: result.role as UserRole,
-        avatarUrl: result.avatarUrl,
-        jobTitle: result.jobTitle,
-        phone: result.phone,
-        bio: result.bio,
-        isActive: result.isActive,
-        organizationId: result.organizationId,
-        organization: result.organization,
-        createdAt: result.createdAt,
-        updatedAt: result.updatedAt,
-        appAccess,
-      },
-      appAccess,
-    };
+    return this.authService.loginAfterInviteAcceptance(result.id);
   }
 
   async linkInvitation(
@@ -450,38 +438,63 @@ export class InvitationService {
     return { message: 'Invitation cancelled successfully' };
   }
 
-  private async getTokens(
-    userId: string,
-    email: string,
-    orgId: string,
-    role: string,
-  ) {
-    const payload = {
-      sub: userId,
-      email,
-      orgId,
-      role: role as UserRole,
-    };
+  private async acceptHrmsInvitation(
+    rawToken: string,
+    dto: AcceptInvitationDto,
+  ): Promise<ILoginResponse | null> {
+    const invitation = await this.prisma.userInvitation.findFirst({
+      where: {
+        tokenHash: this.hashToken(rawToken),
+      },
+      include: {
+        user: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
 
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: 900, // 15 minutes
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: 604800, // 7 days
-      }),
-    ]);
+    if (!invitation) {
+      return null;
+    }
 
-    return { accessToken, refreshToken };
+    if (invitation.acceptedAt) {
+      throw new BadRequestException('This invitation has already been used');
+    }
+    if (invitation.cancelledAt) {
+      throw new BadRequestException('This invitation has been cancelled');
+    }
+    if (invitation.expiresAt < new Date()) {
+      throw new BadRequestException(
+        'This invitation has expired. Please ask your admin to resend it.',
+      );
+    }
+    if (invitation.user.status === 'DEACTIVATED') {
+      throw new BadRequestException('Cannot accept an invitation for a deactivated user');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: invitation.userId },
+        data: {
+          password: hashedPassword,
+          status: 'ACTIVE',
+          isActive: true,
+        },
+      });
+
+      await tx.userInvitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      });
+    });
+
+    return this.authService.loginAfterInviteAcceptance(invitation.userId);
   }
 
-  private async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 12);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: hashedRefreshToken },
-    });
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 }

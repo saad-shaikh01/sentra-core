@@ -26,6 +26,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientOtpDto } from './dto';
 import { IamService } from '../iam';
 import { CacheService } from '../../common/cache/cache.service';
+import { PermissionsService } from '../../common';
 
 function hashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -53,6 +54,7 @@ export class AuthService {
     private mailService: MailClientService,
     private iamService: IamService,
     private cacheService: CacheService,
+    private permissionsService: PermissionsService,
   ) {}
 
   private isPublicOwnerSignupEnabled(): boolean {
@@ -117,6 +119,73 @@ export class AuthService {
       deviceInfo,
       ip || '',
       null, // new familyId
+    );
+
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role as UserRole,
+        avatarUrl: user.avatarUrl,
+        jobTitle: user.jobTitle,
+        phone: user.phone,
+        bio: user.bio,
+        isActive: user.isActive,
+        organizationId: user.organizationId,
+        organization: user.organization,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        appAccess,
+      },
+      appAccess,
+    };
+  }
+
+  async loginAfterInviteAcceptance(
+    userId: string,
+    userAgent?: string,
+    ip?: string,
+  ): Promise<ILoginResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { organization: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.isActive || user.status === 'DEACTIVATED') {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_DEACTIVATED',
+        message: 'This account has been deactivated.',
+      });
+    }
+
+    if (user.status === 'SUSPENDED') {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Your account has been suspended. Contact your administrator.',
+      });
+    }
+
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
+    const appCodes = appAccess.map((access) => access.appCode as AppCode);
+    const primaryAppCode = appCodes[0] || AppCode.HRMS;
+    const deviceInfo = parseDeviceInfo(userAgent || '');
+
+    const tokens = await this.issueTokenPair(
+      user.id,
+      user.email,
+      user.organizationId,
+      user.role,
+      appCodes,
+      primaryAppCode,
+      deviceInfo,
+      ip || '',
+      null,
     );
 
     return {
@@ -516,6 +585,14 @@ export class AuthService {
     return this.iamService.getUserAppAccess(orgId, userId);
   }
 
+  async getMyApps(userId: string, orgId: string) {
+    return this.iamService.getMyApps(userId, orgId);
+  }
+
+  async getMyPermissions(userId: string, orgId: string) {
+    return this.permissionsService.getUserPermissions(userId, orgId);
+  }
+
   async getUserSessions(userId: string, organizationId: string | null, status: 'active' | 'all' = 'active', page = 1, limit = 20) {
     const where: Record<string, unknown> = { userId };
     if (organizationId) where.organizationId = organizationId;
@@ -587,6 +664,130 @@ export class AuthService {
       where: { userId, id: { not: currentJti }, revokedAt: null },
       data: { revokedAt: new Date(), revokedReason: 'LOGOUT' },
     });
+  }
+
+  async acceptInvite(
+    token: string,
+    password: string,
+    confirmPassword: string,
+    userAgent?: string,
+    ip?: string,
+  ): Promise<IAuthTokens> {
+    if (!token || token.trim() === '') {
+      throw new BadRequestException('Invalid or expired invitation link');
+    }
+
+    if (password !== confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    const invitation = await this.prisma.userInvitation.findFirst({
+      where: { tokenHash },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!invitation) {
+      throw new BadRequestException('Invalid or expired invitation link');
+    }
+    if (invitation.acceptedAt) {
+      throw new BadRequestException('This invitation has already been used');
+    }
+    if (invitation.cancelledAt) {
+      throw new BadRequestException('This invitation has been cancelled');
+    }
+    if (invitation.expiresAt < new Date()) {
+      throw new BadRequestException(
+        'This invitation has expired. Please ask your admin to resend it.',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: invitation.userId },
+        data: { password: hashedPassword, status: 'ACTIVE', isActive: true },
+      });
+      await tx.userInvitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      });
+    });
+
+    const user = invitation.user;
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
+    const appCodes = appAccess.map((a) => a.appCode as AppCode);
+    const primaryAppCode = appCodes[0] || 'SALES';
+    const deviceInfo = parseDeviceInfo(userAgent || '');
+
+    return this.issueTokenPair(
+      user.id,
+      user.email,
+      user.organizationId,
+      user.role,
+      appCodes,
+      primaryAppCode,
+      deviceInfo,
+      ip || '',
+      null,
+    );
+  }
+
+  async getInviteInfo(
+    token: string,
+  ): Promise<{ firstName: string; email: string; orgName: string }> {
+    if (!token?.trim()) {
+      throw new BadRequestException({ code: 'INVALID', message: 'No token provided' });
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const invitation = await this.prisma.userInvitation.findFirst({
+      where: { tokenHash },
+      include: {
+        user: { select: { firstName: true, name: true, email: true } },
+      },
+    });
+
+    if (!invitation) {
+      throw new BadRequestException({
+        code: 'INVALID',
+        message: 'Invalid or expired invitation',
+      });
+    }
+
+    if (invitation.acceptedAt) {
+      throw new BadRequestException({
+        code: 'ALREADY_USED',
+        message: 'This invitation has already been used',
+      });
+    }
+
+    if (invitation.cancelledAt || invitation.expiresAt < new Date()) {
+      throw new BadRequestException({
+        code: 'INVALID',
+        message: 'Invitation expired or cancelled',
+      });
+    }
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: invitation.organizationId },
+      select: { name: true },
+    });
+
+    const firstName =
+      invitation.user.firstName?.trim() ||
+      invitation.user.name?.trim().split(/\s+/)[0] ||
+      '';
+
+    return {
+      firstName,
+      email: invitation.user.email,
+      orgName: org?.name ?? '',
+    };
   }
 
   private async issueTokenPair(

@@ -16,6 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { LeadsService } from './leads.service';
 import { Roles, CurrentUser, Public, AppAccess } from '../auth/decorators';
+import { Permissions } from '../../common';
 import {
   CreateLeadDto,
   UpdateLeadDto,
@@ -97,13 +98,7 @@ export class LeadsController {
   }
 
   @Post()
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.PROJECT_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-  )
+  @Permissions('sales:leads:create')
   create(
     @Body() dto: CreateLeadDto,
     @CurrentUser() user: JwtPayload,
@@ -128,13 +123,7 @@ export class LeadsController {
   }
 
   @Patch(':id')
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.PROJECT_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-  )
+  @Permissions('sales:leads:edit_own')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateLeadDto,
@@ -144,7 +133,7 @@ export class LeadsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:leads:delete')
   remove(
     @Param('id') id: string,
     @CurrentUser('orgId') orgId: string,
@@ -169,7 +158,7 @@ export class LeadsController {
   }
 
   @Patch(':id/assign')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:leads:assign')
   assign(
     @Param('id') id: string,
     @Body() dto: AssignLeadDto,
@@ -203,6 +192,23 @@ export class LeadsController {
     @CurrentUser('orgId') orgId: string,
   ): Promise<ILeadActivity[]> {
     return this.leadsService.getActivities(id, orgId);
+  }
+
+  @Get('teams/:teamId/stats')
+  @Permissions('sales:teams:view')
+  getTeamStats(
+    @Param('teamId') teamId: string,
+    @Query('period') period: string,
+    @CurrentUser('orgId') orgId: string,
+  ): Promise<{
+    teamId: string;
+    period: string;
+    totalLeads: number;
+    wonLeads: number;
+    lostLeads: number;
+    conversionRate: string;
+  }> {
+    return this.leadsService.getTeamStats(teamId, orgId, period ?? 'this_month');
   }
 
   @Delete(':id/notes/:activityId')

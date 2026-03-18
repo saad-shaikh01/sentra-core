@@ -1,8 +1,10 @@
 import { isRefreshing, setRefreshing, pendingQueue, processQueue } from './refresh-mutex';
 import { getTokens, setTokens as setTokensHelper, clearTokens as clearTokensHelper } from './tokens';
+import { IMyAppAccess } from '@sentra-core/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 const COMM_API_URL = process.env.NEXT_PUBLIC_COMM_API_URL || 'http://localhost:3002/api/comm';
+const HRMS_API_URL = process.env.NEXT_PUBLIC_HRMS_API_URL || 'http://localhost:3004/api/hrms';
 
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
@@ -49,10 +51,16 @@ export type AppBundleInput = {
 class ApiClient {
   private baseUrl: string;
   private commUrl: string;
+  private refreshBaseUrl: string;
 
-  constructor(baseUrl: string, commUrl: string = COMM_API_URL) {
+  constructor(
+    baseUrl: string,
+    commUrl: string = COMM_API_URL,
+    refreshBaseUrl: string = API_BASE_URL,
+  ) {
     this.baseUrl = baseUrl;
     this.commUrl = commUrl;
+    this.refreshBaseUrl = refreshBaseUrl;
   }
 
   private getAccessToken(): string | null {
@@ -118,7 +126,7 @@ class ApiClient {
           const { refreshToken } = getTokens();
           if (!refreshToken) throw new Error('No refresh token');
 
-          const refreshResponse = await fetch(`${this.baseUrl}/auth/refresh`, {
+          const refreshResponse = await fetch(`${this.refreshBaseUrl}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken }),
@@ -422,6 +430,10 @@ class ApiClient {
     return this.fetch<any[]>(`/leads/${id}/activities`);
   }
 
+  async getTeamStats(teamId: string, period = 'this_month') {
+    return this.fetch<any>(`/leads/teams/${teamId}/stats?period=${encodeURIComponent(period)}`);
+  }
+
   async getFacebookIntegrations() {
     return this.fetch<any[]>('/integrations/facebook');
   }
@@ -717,8 +729,13 @@ class ApiClient {
   }
 
   // Teams endpoints
-  async getTeams() {
-    return this.fetch<any[]>('/teams');
+  async getTeams(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/teams${qs}`);
+  }
+
+  async getTeam(id: string) {
+    return this.fetch<any>(`/teams/${id}`);
   }
 
   async createTeam(dto: Record<string, unknown>) {
@@ -731,6 +748,33 @@ class ApiClient {
 
   async deleteTeam(id: string) {
     return this.fetch<{ message: string }>(`/teams/${id}`, { method: 'DELETE' });
+  }
+
+  async addTeamMember(teamId: string, dto: { userId: string; role?: string }) {
+    return this.fetch<any>(`/teams/${teamId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateTeamMember(teamId: string, userId: string, dto: { role: string }) {
+    return this.fetch<any>(`/teams/${teamId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async removeTeamMember(teamId: string, userId: string) {
+    return this.fetch<any>(`/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
+  }
+
+  async getTeamTypes() {
+    return this.fetch<any>('/team-types');
+  }
+
+  async getEmployees(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/employees${qs}`);
   }
 
   // Packages endpoints
@@ -817,8 +861,15 @@ class ApiClient {
   }
 
   async getMyApps() {
-    return this.fetch<any[]>('/auth/my-apps');
+    const response = await this.fetch<{ data: IMyAppAccess[] }>('/auth/my-apps');
+    return response.data;
+  }
+
+  async getMyPermissions() {
+    const response = await this.fetch<{ data: string[] }>('/auth/my-permissions');
+    return response.data;
   }
 }
 
-export const api = new ApiClient(API_BASE_URL, COMM_API_URL);
+export const api = new ApiClient(API_BASE_URL, COMM_API_URL, API_BASE_URL);
+export const hrmsApi = new ApiClient(HRMS_API_URL, COMM_API_URL, API_BASE_URL);

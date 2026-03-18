@@ -34,7 +34,8 @@
       "Bash(find:*)",
       "Bash(npm list:*)",
       "Bash(cd:*)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(grep -rn PermissionsService 'D:/Repositories/new crm/sentra-core/apps/backend/core-service/src/modules/' --include=*.module.ts)"
     ]
   }
 }

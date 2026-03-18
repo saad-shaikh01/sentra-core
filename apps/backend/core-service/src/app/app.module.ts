@@ -17,7 +17,7 @@ import { SalesModule } from '../modules/sales';
 import { InvoicesModule } from '../modules/invoices';
 import { AuthorizeNetModule } from '../modules/authorize-net';
 import { IamModule } from '../modules/iam';
-import { SentraCacheModule } from '../common';
+import { PermissionsGuard, SentraCacheModule } from '../common';
 import { InternalContactsModule } from '../modules/internal-contacts/internal-contacts.module';
 import { TeamsModule } from '../modules/teams';
 import { PackagesModule } from '../modules/packages';
@@ -26,6 +26,7 @@ import { AnalyticsModule } from '../modules/analytics';
 import { LeadIntegrationsModule } from '../modules/lead-integrations';
 import { PublicPaymentsModule } from '../modules/public-payments/public-payments.module';
 import { WebhooksModule } from '../modules/webhooks/webhooks.module';
+import { RbacModule } from '../modules/rbac';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -77,6 +78,7 @@ function resolveEnvFiles(): string[] {
     LeadIntegrationsModule,
     PublicPaymentsModule,
     WebhooksModule,
+    RbacModule,
   ],
   controllers: [AppController],
   providers: [
@@ -88,6 +90,10 @@ function resolveEnvFiles(): string[] {
     {
       provide: APP_GUARD,
       useClass: AccessTokenGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard,
     },
     {
       provide: APP_GUARD,

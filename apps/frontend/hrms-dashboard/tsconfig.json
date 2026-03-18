@@ -1,0 +1,58 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "strict": true,
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "types": ["jest", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/components/ui": ["./src/components/ui/index.ts"],
+      "@/components/ui/*": ["./src/components/ui/*"],
+      "@/components/shared": ["./src/components/shared/index.ts"],
+      "@/components/shared/*": ["./src/components/shared/*"],
+      "@/*": ["./src/*"],
+      "@sentra-core/frontend-ui": ["../../../libs/frontend/ui/src/index.ts"],
+      "@sentra-core/frontend-data-display": [
+        "../../../libs/frontend/ui/src/data-display.ts"
+      ],
+      "@sentra-core/types": ["../../../libs/shared/types/src/index.ts"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
+    "../../../apps/frontend/hrms-dashboard/.next/types/**/*.ts",
+    "../../../dist/apps/frontend/hrms-dashboard/.next/types/**/*.ts",
+    "next-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "jest.config.ts",
+    "jest.config.cts",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts",
+    "component-shims/**/*",
+    "src/components/shared/comm/**/*"
+  ]
+}

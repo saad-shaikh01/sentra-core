@@ -1,4 +1,5 @@
 import {
+  IMyAppAccess,
   IInvitation,
   ILoginResponse,
   IOrganizationMember,
@@ -1049,7 +1050,8 @@ class ApiClient {
   }
 
   async getMyApps() {
-    return this.fetch<any[]>('/auth/my-apps');
+    const response = await this.fetch<{ data: IMyAppAccess[] }>('/auth/my-apps');
+    return response.data;
   }
 }
 

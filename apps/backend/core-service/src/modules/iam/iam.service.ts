@@ -15,6 +15,7 @@ import {
   JwtPayload,
   UserRole,
 } from '@sentra-core/types';
+import { CacheService } from '../../common/cache/cache.service';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateIamInvitationDto, InviteAppBundleDto, UpdateUserEntitlementsDto } from './dto';
 
@@ -82,6 +83,7 @@ export class IamService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly mailService: MailClientService,
+    private readonly cacheService: CacheService,
   ) {}
 
   private isFeatureEnabled(): boolean {
@@ -201,6 +203,61 @@ export class IamService {
       name: row.name,
       baseUrl: row.baseUrl,
     }]));
+  }
+
+  private normalizeAppCodeInput(value: string): AppCode {
+    const normalized = value.trim().toUpperCase();
+    const aliases: Record<string, AppCode> = {
+      SALES: AppCode.SALES_DASHBOARD,
+      SALES_DASHBOARD: AppCode.SALES_DASHBOARD,
+      PM: AppCode.PM_DASHBOARD,
+      PM_DASHBOARD: AppCode.PM_DASHBOARD,
+      HRMS: AppCode.HRMS,
+      ADMIN: AppCode.CLIENT_PORTAL,
+      CLIENT_PORTAL: AppCode.CLIENT_PORTAL,
+      COMM: AppCode.COMM_SERVICE,
+      COMM_SERVICE: AppCode.COMM_SERVICE,
+    };
+
+    const appCode = aliases[normalized];
+    if (!appCode) {
+      throw new BadRequestException(`Unknown app code: ${value}`);
+    }
+
+    return appCode;
+  }
+
+  private async resolveAppByCode(
+    appCode: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string; code: AppCode; name: string; baseUrl: string | null }> {
+    const resolved = this.normalizeAppCodeInput(appCode);
+    const appMap = await this.resolveAppsByCodes([resolved], tx);
+    const app = appMap.get(resolved);
+    if (!app) {
+      throw new NotFoundException(`Application not found: ${appCode}`);
+    }
+    return app;
+  }
+
+  private async assertUserInOrg(
+    userId: string,
+    organizationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const db = tx ?? this.prisma;
+    const user = await db.user.findFirst({
+      where: { id: userId, organizationId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found in organization');
+    }
+  }
+
+  private async invalidatePermissionsCache(userId: string, organizationId: string): Promise<void> {
+    await this.cacheService.del(`perms:${userId}:${organizationId}`);
   }
 
   private async getUserPermissionKeys(
@@ -634,6 +691,7 @@ export class IamService {
     roleIds: string[] | undefined,
     scopeGrants: InviteAppBundleDto['scopeGrants'] | undefined,
     isDefault: boolean,
+    actorUserId?: string,
   ): Promise<void> {
     await tx.userAppAccess.upsert({
       where: {
@@ -646,6 +704,9 @@ export class IamService {
       update: {
         isEnabled: true,
         isDefault,
+        grantedBy: actorUserId ?? null,
+        revokedAt: null,
+        revokedBy: null,
       },
       create: {
         organizationId,
@@ -653,6 +714,7 @@ export class IamService {
         appId,
         isEnabled: true,
         isDefault,
+        grantedBy: actorUserId ?? null,
       },
     });
 
@@ -672,6 +734,8 @@ export class IamService {
           appId,
           appRoleId: roleId,
           isPrimary: index === 0,
+          assignedBy: actorUserId ?? null,
+          assignedAt: new Date(),
         })),
         skipDuplicates: true,
       });
@@ -739,9 +803,12 @@ export class IamService {
           bundle.roleIds,
           bundle.scopeGrants,
           isDefault,
+          currentUser.sub,
         );
       }
     });
+
+    await this.invalidatePermissionsCache(userId, currentUser.orgId);
 
     return this.getUserAppAccess(currentUser.orgId, userId);
   }
@@ -774,6 +841,411 @@ export class IamService {
       appName: row.app.name,
       baseUrl: row.app.baseUrl,
       isDefault: row.isDefault,
+    }));
+  }
+
+  async grantAppAccess(userId: string, appCode: string, currentUser: JwtPayload) {
+    this.assertFeatureEnabled();
+
+    const app = await this.resolveAppByCode(appCode);
+    await this.assertCanManageApp(currentUser, currentUser.orgId, app.id);
+    await this.assertUserInOrg(userId, currentUser.orgId);
+
+    const [existingAccess, existingActiveCount] = await Promise.all([
+      this.prisma.userAppAccess.findUnique({
+        where: {
+          organizationId_userId_appId: {
+            organizationId: currentUser.orgId,
+            userId,
+            appId: app.id,
+          },
+        },
+        select: { id: true, isDefault: true },
+      }),
+      this.prisma.userAppAccess.count({
+        where: {
+          organizationId: currentUser.orgId,
+          userId,
+          isEnabled: true,
+        },
+      }),
+    ]);
+    const shouldBeDefault = existingAccess?.isDefault ?? existingActiveCount === 0;
+
+    const access = await this.prisma.userAppAccess.upsert({
+      where: {
+        organizationId_userId_appId: {
+          organizationId: currentUser.orgId,
+          userId,
+          appId: app.id,
+        },
+      },
+      update: {
+        isEnabled: true,
+        revokedAt: null,
+        revokedBy: null,
+        grantedBy: currentUser.sub,
+        isDefault: shouldBeDefault,
+      },
+      create: {
+        organizationId: currentUser.orgId,
+        userId,
+        appId: app.id,
+        isEnabled: true,
+        isDefault: shouldBeDefault,
+        grantedBy: currentUser.sub,
+      },
+      include: {
+        app: {
+          select: {
+            code: true,
+            name: true,
+            baseUrl: true,
+          },
+        },
+      },
+    });
+
+    await this.invalidatePermissionsCache(userId, currentUser.orgId);
+
+    return {
+      id: access.id,
+      appCode: access.app.code,
+      appName: access.app.name,
+      baseUrl: access.app.baseUrl,
+      isDefault: access.isDefault,
+      isEnabled: access.isEnabled,
+      grantedBy: access.grantedBy,
+      revokedAt: access.revokedAt,
+      revokedBy: access.revokedBy,
+    };
+  }
+
+  async revokeAppAccess(userId: string, appCode: string, currentUser: JwtPayload) {
+    this.assertFeatureEnabled();
+
+    const app = await this.resolveAppByCode(appCode);
+    await this.assertCanManageApp(currentUser, currentUser.orgId, app.id);
+    await this.assertUserInOrg(userId, currentUser.orgId);
+
+    const [currentAccess, appRoles] = await Promise.all([
+      this.prisma.userAppAccess.findUnique({
+        where: {
+          organizationId_userId_appId: {
+            organizationId: currentUser.orgId,
+            userId,
+            appId: app.id,
+          },
+        },
+        select: { id: true, isDefault: true, isEnabled: true },
+      }),
+      this.prisma.userAppRole.findMany({
+        where: {
+          organizationId: currentUser.orgId,
+          userId,
+          appId: app.id,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userAppAccess.updateMany({
+        where: {
+          organizationId: currentUser.orgId,
+          userId,
+          appId: app.id,
+        },
+        data: {
+          isEnabled: false,
+          isDefault: false,
+          revokedAt: new Date(),
+          revokedBy: currentUser.sub,
+        },
+      });
+
+      await tx.userAppRole.deleteMany({
+        where: {
+          organizationId: currentUser.orgId,
+          userId,
+          appId: app.id,
+        },
+      });
+
+      if (currentAccess?.isDefault) {
+        const replacement = await tx.userAppAccess.findFirst({
+          where: {
+            organizationId: currentUser.orgId,
+            userId,
+            appId: { not: app.id },
+            isEnabled: true,
+          },
+          orderBy: [{ createdAt: 'asc' }],
+          select: { id: true },
+        });
+
+        if (replacement) {
+          await tx.userAppAccess.update({
+            where: { id: replacement.id },
+            data: { isDefault: true },
+          });
+        }
+      }
+    });
+
+    await this.invalidatePermissionsCache(userId, currentUser.orgId);
+
+    return {
+      appCode: app.code,
+      revoked: true,
+      removedRoleAssignments: appRoles.length,
+      accessWasEnabled: currentAccess?.isEnabled ?? false,
+    };
+  }
+
+  async assignAppRole(userId: string, appRoleId: string, currentUser: JwtPayload) {
+    this.assertFeatureEnabled();
+
+    await this.assertUserInOrg(userId, currentUser.orgId);
+
+    const role = await this.prisma.appRole.findUnique({
+      where: { id: appRoleId },
+      include: {
+        app: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            baseUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!role || !role.isActive) {
+      throw new NotFoundException('Role not found');
+    }
+
+    await this.assertCanManageApp(currentUser, currentUser.orgId, role.appId);
+
+    if (role.organizationId && role.organizationId !== currentUser.orgId) {
+      throw new ForbiddenException('Role does not belong to your organization');
+    }
+
+    const access = await this.prisma.userAppAccess.findUnique({
+      where: {
+        organizationId_userId_appId: {
+          organizationId: currentUser.orgId,
+          userId,
+          appId: role.appId,
+        },
+      },
+      select: { id: true, isEnabled: true },
+    });
+
+    if (!access?.isEnabled) {
+      throw new BadRequestException(
+        `User does not have access to ${role.app.code}. Grant app access first.`,
+      );
+    }
+
+    const assignment = await this.prisma.userAppRole.upsert({
+      where: {
+        organizationId_userId_appId_appRoleId: {
+          organizationId: currentUser.orgId,
+          userId,
+          appId: role.appId,
+          appRoleId,
+        },
+      },
+      update: {
+        assignedBy: currentUser.sub,
+        assignedAt: new Date(),
+      },
+      create: {
+        organizationId: currentUser.orgId,
+        userId,
+        appId: role.appId,
+        appRoleId,
+        isPrimary: false,
+        assignedBy: currentUser.sub,
+      },
+      include: {
+        app: {
+          select: {
+            code: true,
+            name: true,
+            baseUrl: true,
+          },
+        },
+        appRole: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isSystem: true,
+          },
+        },
+      },
+    });
+
+    await this.invalidatePermissionsCache(userId, currentUser.orgId);
+
+    return {
+      id: assignment.id,
+      appCode: assignment.app.code,
+      appName: assignment.app.name,
+      baseUrl: assignment.app.baseUrl,
+      assignedAt: assignment.assignedAt,
+      assignedBy: assignment.assignedBy,
+      role: assignment.appRole,
+    };
+  }
+
+  async removeAppRole(userId: string, assignmentId: string, currentUser: JwtPayload) {
+    this.assertFeatureEnabled();
+
+    const assignment = await this.prisma.userAppRole.findFirst({
+      where: {
+        id: assignmentId,
+        userId,
+        organizationId: currentUser.orgId,
+      },
+      include: {
+        app: {
+          select: {
+            code: true,
+          },
+        },
+        appRole: {
+          select: {
+            name: true,
+            slug: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('User app role assignment not found');
+    }
+
+    await this.assertCanManageApp(currentUser, currentUser.orgId, assignment.appId);
+
+    await this.prisma.userAppRole.delete({
+      where: { id: assignmentId },
+    });
+
+    await this.invalidatePermissionsCache(userId, currentUser.orgId);
+
+    return {
+      id: assignmentId,
+      removed: true,
+      appCode: assignment.app.code,
+      roleName: assignment.appRole.name,
+      roleSlug: assignment.appRole.slug,
+    };
+  }
+
+  async getUserAppRoles(userId: string, currentUser: JwtPayload) {
+    this.assertFeatureEnabled();
+
+    await this.assertUserInOrg(userId, currentUser.orgId);
+
+    const assignments = await this.prisma.userAppRole.findMany({
+      where: {
+        organizationId: currentUser.orgId,
+        userId,
+      },
+      include: {
+        app: {
+          select: {
+            code: true,
+            name: true,
+            baseUrl: true,
+          },
+        },
+        appRole: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isSystem: true,
+            organizationId: true,
+          },
+        },
+      },
+      orderBy: [{ assignedAt: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return assignments.map((assignment) => ({
+      id: assignment.id,
+      appCode: assignment.app.code,
+      appName: assignment.app.name,
+      baseUrl: assignment.app.baseUrl,
+      isPrimary: assignment.isPrimary,
+      assignedAt: assignment.assignedAt,
+      assignedBy: assignment.assignedBy,
+      role: assignment.appRole,
+    }));
+  }
+
+  async getMyApps(userId: string, organizationId: string) {
+    if (!this.isFeatureEnabled()) {
+      return [];
+    }
+
+    const [accessRows, assignments] = await Promise.all([
+      this.prisma.userAppAccess.findMany({
+        where: {
+          organizationId,
+          userId,
+          isEnabled: true,
+        },
+        include: {
+          app: {
+            select: {
+              code: true,
+              name: true,
+              baseUrl: true,
+            },
+          },
+        },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.userAppRole.findMany({
+        where: {
+          organizationId,
+          userId,
+        },
+        include: {
+          app: {
+            select: {
+              code: true,
+            },
+          },
+          appRole: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+        orderBy: [{ assignedAt: 'asc' }, { createdAt: 'asc' }],
+      }),
+    ]);
+
+    return accessRows.map((access) => ({
+      appCode: access.app.code,
+      appLabel: access.app.name,
+      appUrl: access.app.baseUrl,
+      appName: access.app.name,
+      baseUrl: access.app.baseUrl,
+      isDefault: access.isDefault,
+      roles: assignments
+        .filter((assignment) => assignment.app.code === access.app.code)
+        .map((assignment) => assignment.appRole),
     }));
   }
 
@@ -867,6 +1339,7 @@ export class IamService {
         [salesAdmin.roleId],
         [],
         true,
+        userId,
       );
       await this.setUserEntitlementsForBundle(
         tx,
@@ -876,6 +1349,7 @@ export class IamService {
         [pmAdmin.roleId],
         [],
         false,
+        userId,
       );
     });
   }
@@ -908,9 +1382,12 @@ export class IamService {
           roleIds,
           scopeGrants,
           false,
+          userId,
         );
       }
     });
+
+    await this.invalidatePermissionsCache(userId, organizationId);
   }
 
   async getDefaultLegacyBundles(orgId: string, role: UserRole) {

@@ -23,7 +23,7 @@ import {
 } from '@sentra-core/types';
 import { isEmail, isURL } from 'class-validator';
 import * as XLSX from 'xlsx';
-import { buildPaginationResponse, CacheService } from '../../common';
+import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
 import { TeamsService } from '../teams';
 import {
   CreateLeadDto,
@@ -71,7 +71,19 @@ export class LeadsService {
     private prisma: PrismaService,
     private cache: CacheService,
     private teams: TeamsService,
+    private permissionsService: PermissionsService,
   ) {}
+
+  private async getTeamIdsForUser(userId: string, orgId: string): Promise<string[]> {
+    const memberships = await this.prisma.teamMember.findMany({
+      where: { userId },
+      include: { team: { select: { id: true, organizationId: true } } },
+    });
+
+    return memberships
+      .filter((membership) => membership.team.organizationId === orgId)
+      .map((membership) => membership.teamId);
+  }
 
   private generateTitle(dto: { name?: string; email?: string; source?: LeadSource }): string {
     const base = dto.name?.trim() || dto.email?.trim() || 'Unknown';
@@ -448,45 +460,56 @@ export class LeadsService {
     const cached = await this.cache.get<IPaginatedResponse<ILead>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search } = query;
+    const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search, teamId } = query;
 
     const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
-    const where: {
-      organizationId: string;
-      deletedAt: null;
-      assignedToId?: string | { in: string[] };
-      status?: LeadStatus;
-      leadType?: LeadType;
-      source?: LeadSource;
-      brandId?: string;
-      leadDate?: { gte?: Date; lte?: Date };
-      OR?: Array<
-        | { title: { contains: string; mode: 'insensitive' } }
-        | { name: { contains: string; mode: 'insensitive' } }
-        | { email: { contains: string; mode: 'insensitive' } }
-        | { phone: { contains: string; mode: 'insensitive' } }
-      >;
-    } = { organizationId: orgId, deletedAt: null };
+    const permissions = await this.permissionsService.getUserPermissions(userId, orgId);
 
-    // Data visibility scoping
-    if (agentRoles.includes(role)) {
-      where.assignedToId = userId;
-    } else if (role === UserRole.SALES_MANAGER) {
-      const memberIds = await this.teams.getMemberIds(userId, orgId);
-      if (memberIds.length > 0) {
-        where.assignedToId = { in: [...memberIds, userId] };
+    let visibilityFilter: Prisma.LeadWhereInput = {};
+
+    if (permissions.includes('sales:leads:view_all')) {
+      // no filter
+    } else if (permissions.includes('sales:leads:view_team')) {
+      const userTeamIds = await this.getTeamIdsForUser(userId, orgId);
+      if (userTeamIds.length > 0) {
+        visibilityFilter = {
+          OR: [
+            { assignedToId: userId },
+            { teamId: { in: userTeamIds } },
+          ],
+        };
+      } else {
+        visibilityFilter = { assignedToId: userId };
+      }
+    } else if (permissions.includes('sales:leads:view_own')) {
+      visibilityFilter = { assignedToId: userId };
+    } else {
+      if (agentRoles.includes(role)) {
+        visibilityFilter = { assignedToId: userId };
+      } else if (role === UserRole.SALES_MANAGER) {
+        const memberIds = await this.teams.getMemberIds(userId, orgId);
+        if (memberIds.length > 0) {
+          visibilityFilter = { assignedToId: { in: [...memberIds, userId] } };
+        }
       }
     }
+
+    const where: Prisma.LeadWhereInput = {
+      organizationId: orgId,
+      deletedAt: null,
+      ...visibilityFilter,
+    };
 
     if (status) where.status = status;
     if (leadType) where.leadType = leadType;
     if (source) where.source = source;
 
-    if (assignedToId && !agentRoles.includes(role)) {
+    if (assignedToId && !agentRoles.includes(role) && !permissions.includes('sales:leads:view_own')) {
       where.assignedToId = assignedToId;
     }
 
     if (brandId) where.brandId = brandId;
+    if (teamId) where.teamId = teamId;
 
     if (dateFrom || dateTo) {
       where.leadDate = {};
@@ -577,6 +600,15 @@ export class LeadsService {
     if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
     if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
 
+    if (dto.teamId !== undefined) {
+      if (dto.teamId !== null) {
+        const team = await this.prisma.team.findFirst({
+          where: { id: dto.teamId, organizationId: orgId, deletedAt: null },
+        });
+        if (!team) throw new BadRequestException('Team not found or not in your organization');
+      }
+    }
+
     const nextName = dto.name ?? lead.name ?? undefined;
     const nextEmail = dto.email ?? lead.email ?? undefined;
     const nextSource = dto.source ?? (lead.source as LeadSource | null) ?? undefined;
@@ -603,12 +635,73 @@ export class LeadsService {
         followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : undefined,
         data: this.toInputJson(dto.data),
         assignedToId: dto.assignedToId,
+        teamId: dto.teamId,
       },
     });
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return this.mapToILead(updated);
+  }
+
+  async getTeamStats(
+    teamId: string,
+    orgId: string,
+    period: string = 'this_month',
+  ): Promise<{
+    teamId: string;
+    period: string;
+    totalLeads: number;
+    wonLeads: number;
+    lostLeads: number;
+    conversionRate: string;
+  }> {
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date = now;
+
+    switch (period) {
+      case 'last_month': {
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        break;
+      }
+      case 'this_quarter': {
+        const quarterStart = Math.floor(now.getMonth() / 3) * 3;
+        startDate = new Date(now.getFullYear(), quarterStart, 1);
+        break;
+      }
+      case 'all_time': {
+        startDate = new Date(0);
+        break;
+      }
+      default: {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      }
+    }
+
+    const baseWhere: Prisma.LeadWhereInput = {
+      teamId,
+      organizationId: orgId,
+      deletedAt: null,
+      createdAt: { gte: startDate, lte: endDate },
+    };
+
+    const [totalLeads, wonLeads, lostLeads] = await Promise.all([
+      this.prisma.lead.count({ where: baseWhere }),
+      this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.CLOSED_WON } }),
+      this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.CLOSED_LOST } }),
+    ]);
+
+    return {
+      teamId,
+      period,
+      totalLeads,
+      wonLeads,
+      lostLeads,
+      conversionRate: totalLeads > 0 ? ((wonLeads / totalLeads) * 100).toFixed(1) : '0.0',
+    };
   }
 
   async remove(id: string, orgId: string): Promise<{ message: string }> {
@@ -1026,6 +1119,7 @@ export class LeadsService {
     brandId: string;
     organizationId: string;
     assignedToId: string | null;
+    teamId: string | null;
     convertedClientId: string | null;
     followUpDate: Date | null;
     createdAt: Date;
@@ -1047,6 +1141,7 @@ export class LeadsService {
       brandId: lead.brandId,
       organizationId: lead.organizationId,
       assignedToId: lead.assignedToId ?? undefined,
+      teamId: lead.teamId ?? undefined,
       convertedClientId: lead.convertedClientId ?? undefined,
       followUpDate: lead.followUpDate ?? undefined,
       createdAt: lead.createdAt,

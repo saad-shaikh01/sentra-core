@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
@@ -13,8 +14,8 @@ export default function AppPickerPage() {
   const { data: user, isLoading: userLoading, isError } = useUser();
 
   const appsQuery = useQuery({
-    queryKey: ['auth', 'apps'],
-    queryFn: () => api.getAvailableApps(),
+    queryKey: ['auth', 'my-apps'],
+    queryFn: () => api.getMyApps(),
     enabled: !!user,
   });
 
@@ -32,8 +33,8 @@ export default function AppPickerPage() {
         router.replace('/dashboard');
         return;
       }
-      if (app.baseUrl && typeof window !== 'undefined') {
-        window.location.href = `${app.baseUrl}/dashboard`;
+      if ((app.appUrl || app.baseUrl) && typeof window !== 'undefined') {
+        window.location.href = `${app.appUrl || app.baseUrl}/dashboard`;
       }
     }
   }, [appsQuery.data, router]);
@@ -43,6 +44,21 @@ export default function AppPickerPage() {
   }
 
   const apps = appsQuery.data ?? [];
+
+  if (apps.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>No apps assigned</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Contact your administrator to get access to an application.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -54,9 +70,20 @@ export default function AppPickerPage() {
           {apps.map((app) => (
             <Card key={app.appCode}>
               <CardHeader>
-                <CardTitle>{app.appName}</CardTitle>
+                <CardTitle>{app.appLabel}</CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {app.roles.length > 0 ? (
+                    app.roles.map((role) => (
+                      <Badge key={role.id} variant="secondary">
+                        {role.name}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No roles assigned</span>
+                  )}
+                </div>
                 <Button
                   className="w-full"
                   onClick={() => {
@@ -64,8 +91,8 @@ export default function AppPickerPage() {
                       router.push('/dashboard');
                       return;
                     }
-                    if (app.baseUrl && typeof window !== 'undefined') {
-                      window.location.href = `${app.baseUrl}/dashboard`;
+                    if ((app.appUrl || app.baseUrl) && typeof window !== 'undefined') {
+                      window.location.href = `${app.appUrl || app.baseUrl}/dashboard`;
                     }
                   }}
                 >

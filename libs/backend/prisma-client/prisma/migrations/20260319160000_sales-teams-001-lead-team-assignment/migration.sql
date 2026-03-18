@@ -1,0 +1,10 @@
+ALTER TABLE "Lead"
+ADD COLUMN "teamId" TEXT;
+
+CREATE INDEX "Lead_teamId_idx" ON "Lead"("teamId");
+
+ALTER TABLE "Lead"
+ADD CONSTRAINT "Lead_teamId_fkey"
+FOREIGN KEY ("teamId") REFERENCES "Team"("id")
+ON DELETE SET NULL
+ON UPDATE CASCADE;

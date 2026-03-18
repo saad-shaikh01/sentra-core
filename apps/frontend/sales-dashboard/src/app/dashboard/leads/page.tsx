@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useLeads } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
+import { useTeams } from '@/hooks/use-teams';
 import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
@@ -38,6 +39,7 @@ export default function LeadsPage() {
     source:       parseAsStringEnum<LeadSource>(Object.values(LeadSource)),
     leadType:     parseAsStringEnum<LeadType>(Object.values(LeadType)),
     brandId:      parseAsString,
+    teamId:       parseAsString,
     assignedToId: parseAsString,
     dateFrom:     parseAsString,
     dateTo:       parseAsString,
@@ -56,14 +58,16 @@ export default function LeadsPage() {
     ...(params.source        ? { source: params.source }           : {}),
     ...(params.leadType      ? { leadType: params.leadType }       : {}),
     ...(params.brandId       ? { brandId: params.brandId }           : {}),
+    ...(params.teamId        ? { teamId: params.teamId }             : {}),
     ...(params.assignedToId  ? { assignedToId: params.assignedToId } : {}),
     ...(params.dateFrom      ? { dateFrom: params.dateFrom }         : {}),
     ...(params.dateTo        ? { dateTo: params.dateTo }             : {}),
   }), [isKanban, params.page, params.limit, debouncedSearch, params.status,
-       params.source, params.leadType, params.brandId, params.assignedToId, params.dateFrom, params.dateTo]);
+       params.source, params.leadType, params.brandId, params.teamId, params.assignedToId, params.dateFrom, params.dateTo]);
 
   const { data, isLoading, isError } = useLeads(queryParams);
   const { data: brandsData }  = useBrands({ limit: 100 });
+  const { data: teamsData } = useTeams({ limit: 100 });
   const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -214,6 +218,21 @@ export default function LeadsPage() {
             <SelectItem value="all">All brands</SelectItem>
             {brandsData?.data.map((b) => (
               <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={params.teamId ?? 'all'}
+          onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
+        >
+          <SelectTrigger className="w-44 bg-white/5 border-white/10">
+            <SelectValue placeholder="All teams" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All teams</SelectItem>
+            {(teamsData?.data ?? []).map((team) => (
+              <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

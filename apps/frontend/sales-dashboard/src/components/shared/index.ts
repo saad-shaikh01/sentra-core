@@ -10,3 +10,4 @@ export { FormModal } from './form-modal';
 export { ConfirmModal } from './confirm-modal';
 export { DetailSheet } from './detail-sheet';
 export { Toaster } from './toaster';
+export { TeamTypeBadge } from './team-type-badge';
