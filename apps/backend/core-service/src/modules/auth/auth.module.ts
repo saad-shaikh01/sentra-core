@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailClientModule } from '@sentra-core/mail-client';
 import { PermissionsGuard, PermissionsService } from '../../common';
+import { StorageModule } from '../../common/storage/storage.module';
 import { IamModule } from '../iam';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -27,6 +28,7 @@ import { AccessTokenGuard, RefreshTokenGuard, RolesGuard, AppAccessGuard } from 
     }),
     MailClientModule,
     IamModule,
+    StorageModule,
   ],
   controllers: [AuthController, AdminSessionsController],
   providers: [

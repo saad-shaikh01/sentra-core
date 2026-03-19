@@ -130,7 +130,13 @@ export class SalesController {
     if (file.size > MAX_CONTRACT_SIZE) {
       throw new BadRequestException('File too large. Maximum 20 MB');
     }
-    const url = await this.storage.upload(file.buffer, file.originalname, file.mimetype, `contracts/${orgId}`);
+    const url = await this.storage.upload(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      `contracts/${orgId}`,
+      orgId,
+    );
     return { url };
   }
 

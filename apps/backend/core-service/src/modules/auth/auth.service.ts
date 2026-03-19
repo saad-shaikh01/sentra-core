@@ -1,10 +1,12 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -27,6 +29,7 @@ import { LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto, VerifyClientO
 import { IamService } from '../iam';
 import { CacheService } from '../../common/cache/cache.service';
 import { PermissionsService } from '../../common';
+import { StorageProvisioningService } from '../../common/storage/storage-provisioning.service';
 
 function hashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -47,6 +50,8 @@ function parseDeviceInfo(userAgent: string): object {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -55,6 +60,7 @@ export class AuthService {
     private iamService: IamService,
     private cacheService: CacheService,
     private permissionsService: PermissionsService,
+    private storageProvisioning: StorageProvisioningService,
   ) {}
 
   private isPublicOwnerSignupEnabled(): boolean {
@@ -259,6 +265,20 @@ export class AuthService {
 
       return { user, organization };
     });
+
+    try {
+      await this.storageProvisioning.provisionForOrg(result.organization.id);
+    } catch (provisionErr) {
+      this.logger.error(
+        `Storage provisioning failed for org ${result.organization.id}: ${(provisionErr as Error).message}`,
+      );
+      await this.prisma.organization.delete({
+        where: { id: result.organization.id },
+      }).catch(() => {});
+      throw new InternalServerErrorException(
+        'Failed to provision storage for your organization. Please try again.',
+      );
+    }
 
     await this.iamService.bootstrapOwnerEntitlements(
       result.organization.id,

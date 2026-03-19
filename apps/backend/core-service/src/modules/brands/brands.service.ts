@@ -120,6 +120,7 @@ export class BrandsService {
       file.originalname,
       file.mimetype,
       `brands/${id}/${field}s`,
+      orgId,
     );
 
     const data =
@@ -162,8 +163,8 @@ export class BrandsService {
     if (salesCount > 0) throw new ConflictException(`Cannot delete brand. It has ${salesCount} associated sale(s).`);
 
     // Clean up stored assets
-    if (brand.logoUrl) await this.storage.delete(brand.logoUrl);
-    if (brand.faviconUrl) await this.storage.delete(brand.faviconUrl as string);
+    if (brand.logoUrl) await this.storage.delete(brand.logoUrl, orgId);
+    if (brand.faviconUrl) await this.storage.delete(brand.faviconUrl as string, orgId);
 
     await this.prisma.brand.delete({ where: { id } });
     await this.cache.delByPrefix(`brands:${orgId}:`);

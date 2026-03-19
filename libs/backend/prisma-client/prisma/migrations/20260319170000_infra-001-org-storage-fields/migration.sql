@@ -1,0 +1,3 @@
+ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "storageBucket" TEXT;
+ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "cdnPullZoneId" INTEGER;
+ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "cdnHostname" TEXT;

@@ -452,6 +452,9 @@ model Organization {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  storageBucket String?
+  cdnPullZoneId Int?
+  cdnHostname   String?
 }
 
 // ==========================================
