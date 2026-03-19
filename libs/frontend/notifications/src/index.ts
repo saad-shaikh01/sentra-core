@@ -21,7 +21,6 @@ export {
 } from './hooks/use-notifications';
 
 export { useNotificationSocket } from './hooks/use-notification-socket';
-export { usePushNotifications } from './hooks/use-push-notifications';
 
 // Context (NOTIF-008)
 export { NotificationProvider, useNotificationContext } from './context/notification-context';
@@ -30,3 +29,8 @@ export { NotificationProvider, useNotificationContext } from './context/notifica
 export { NotificationBell } from './components/NotificationBell';
 export { NotificationPanel } from './components/NotificationPanel';
 export { NotificationItem } from './components/NotificationItem';
+
+// Push notifications (NOTIF-012)
+export { NotificationPushInit } from './components/NotificationPushInit';
+export { usePushNotifications } from './hooks/use-push-notifications';
+export type { PushNotificationsConfig } from './hooks/use-push-notifications';
