@@ -6,11 +6,15 @@ import {
   ForbiddenException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import {
   NotificationType,
   Prisma,
   PrismaService,
   UserRole as PrismaUserRole,
+  NotificationHelper,
+  NOTIFICATION_QUEUE,
 } from '@sentra-core/prisma-client';
 import * as crypto from 'crypto';
 import {
@@ -71,6 +75,7 @@ const RESTRICTED_TRANSITIONS: Partial<Record<string, UserRole[]>> = {
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
+  private readonly notificationHelper: NotificationHelper;
 
   constructor(
     private prisma: PrismaService,
@@ -78,7 +83,10 @@ export class SalesService {
     private cache: CacheService,
     private teams: TeamsService,
     private salesNotificationService: SalesNotificationService,
-  ) {}
+    @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
+  ) {
+    this.notificationHelper = new NotificationHelper(notifQueue);
+  }
 
   async create(
     orgId: string,
@@ -208,6 +216,25 @@ export class SalesService {
       await this.cache.delByPrefix(`clients:${orgId}:`);
     }
     await this.cache.delByPrefix(`sales:${orgId}:`);
+
+    if (dto.description) {
+      try {
+        const actor = await this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
+        await this.notificationHelper.notifyMentions({
+          content: dto.description,
+          context: `in Sale "${sale.id}"`,
+          url: `/dashboard/sales/${sale.id}`,
+          entityType: 'sale',
+          entityId: sale.id,
+          actorId,
+          actorName: actor?.name ?? actorId,
+          organizationId: orgId,
+          module: 'SALES',
+        });
+      } catch (err) {
+        this.logger.error('notifyMentions failed on sale create (non-fatal):', err);
+      }
+    }
 
     return {
       ...this.mapToISale(sale),
@@ -841,6 +868,25 @@ export class SalesService {
           description: sale.description ?? undefined,
         }),
       }).catch(() => {}); // fire-and-forget
+    }
+
+    if (dto.description) {
+      try {
+        const actor = await this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
+        await this.notificationHelper.notifyMentions({
+          content: dto.description,
+          context: `in Sale "${updated.id}"`,
+          url: `/dashboard/sales/${updated.id}`,
+          entityType: 'sale',
+          entityId: updated.id,
+          actorId,
+          actorName: actor?.name ?? actorId,
+          organizationId: orgId,
+          module: 'SALES',
+        });
+      } catch (err) {
+        this.logger.error('notifyMentions failed on sale update (non-fatal):', err);
+      }
     }
 
     return this.mapToISale(updated);

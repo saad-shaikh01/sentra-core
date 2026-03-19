@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Patch, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators';
@@ -11,6 +11,14 @@ export class UsersController {
     private usersService: UsersService,
     private authService: AuthService,
   ) {}
+
+  @Get('search')
+  async searchUsers(
+    @CurrentUser() user: JwtPayload,
+    @Query('q') q: string,
+  ) {
+    return this.usersService.searchUsers(user.orgId, q);
+  }
 
   @Get('me')
   getMe(@CurrentUser('sub') userId: string): Promise<IUserProfile> {

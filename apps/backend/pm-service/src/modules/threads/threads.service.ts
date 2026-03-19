@@ -15,11 +15,14 @@
 
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { PrismaService, NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
 import { PmEventsService } from '../events/pm-events.service';
 import {
   buildPmPaginationResponse,
@@ -32,10 +35,16 @@ import { UpdateMessageDto } from './dto/update-message.dto';
 
 @Injectable()
 export class ThreadsService {
+  private readonly logger = new Logger(ThreadsService.name);
+  private readonly notificationHelper: NotificationHelper;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: PmEventsService,
-  ) {}
+    @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
+  ) {
+    this.notificationHelper = new NotificationHelper(notifQueue);
+  }
 
   // -------------------------------------------------------------------------
   // Create thread
@@ -145,8 +154,8 @@ export class ThreadsService {
       if (!parent) throw new BadRequestException('Parent message not found in this thread');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const message = await tx.pmMessage.create({
+    const message = await this.prisma.$transaction(async (tx) => {
+      const createdMessage = await tx.pmMessage.create({
         data: {
           threadId,
           authorId,
@@ -160,7 +169,7 @@ export class ThreadsService {
       if (dto.mentionedUserIds && dto.mentionedUserIds.length > 0) {
         await tx.pmMessageMention.createMany({
           data: dto.mentionedUserIds.map((mentionedUserId) => ({
-            messageId: message.id,
+            messageId: createdMessage.id,
             mentionedUserId,
           })),
           skipDuplicates: true,
@@ -183,7 +192,7 @@ export class ThreadsService {
         for (const mentionedUserId of dto.mentionedUserIds) {
           this.events.emitMentionCreated(threadRecord.organizationId, {
             threadId,
-            messageId: message.id,
+            messageId: createdMessage.id,
             mentionedUserId,
             mentionedById: authorId,
             scopeType: threadRecord.scopeType,
@@ -192,8 +201,36 @@ export class ThreadsService {
         }
       }
 
-      return message;
+      return createdMessage;
     });
+
+    // Fire mention notifications from rich-text body (non-fatal, runs after transaction)
+    if (dto.body) {
+      try {
+        const threadRecord = await this.prisma.pmConversationThread.findFirst({
+          where: { id: threadId },
+          select: { organizationId: true, projectId: true },
+        });
+        if (threadRecord) {
+          const actor = await this.prisma.user.findUnique({ where: { id: authorId }, select: { name: true } });
+          await this.notificationHelper.notifyMentions({
+            content: dto.body,
+            context: 'in a comment',
+            url: `/dashboard/projects/${threadRecord.projectId}`,
+            entityType: 'thread',
+            entityId: threadId,
+            actorId: authorId,
+            actorName: actor?.name ?? authorId,
+            organizationId: threadRecord.organizationId,
+            module: 'PM',
+          });
+        }
+      } catch (err) {
+        this.logger.error('notifyMentions failed on message create (non-fatal):', err);
+      }
+    }
+
+    return message;
   }
 
   // -------------------------------------------------------------------------

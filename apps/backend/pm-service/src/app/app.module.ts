@@ -15,6 +15,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtContextMiddleware } from '../common/middleware/jwt-context.middleware';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { BullModule } from '@nestjs/bullmq';
 import { PrismaClientModule } from '@sentra-core/prisma-client';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -67,6 +68,23 @@ function resolveEnvFiles(): string[] {
           },
         ],
       }),
+    }),
+
+    // BullMQ — shared Redis connection for notification queue
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL', 'redis://localhost:6379');
+        const url = new URL(redisUrl);
+        return {
+          connection: {
+            host: url.hostname,
+            port: parseInt(url.port || '6379', 10),
+            password: url.password || undefined,
+          },
+        };
+      },
     }),
 
     // Shared Postgres client — PrismaService is global; pm-service uses pm_* tables only
