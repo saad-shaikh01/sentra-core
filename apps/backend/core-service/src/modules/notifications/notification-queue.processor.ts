@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
+import { Prisma } from '@prisma/client';
 import { NOTIFICATION_QUEUE, NotificationJobPayload } from './notification-queue.constants';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { NotificationsGateway } from './notifications.gateway';
@@ -32,7 +33,7 @@ export class NotificationQueueProcessor extends WorkerHost {
       url: payload.url ?? null,
       isMention: payload.isMention ?? false,
       mentionContext: payload.mentionContext ?? null,
-      data: payload.data ?? null,
+      data: (payload.data ?? null) as Prisma.InputJsonValue | null,
     }));
 
     const created = await this.prisma.globalNotification.createMany({
