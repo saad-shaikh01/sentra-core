@@ -52,7 +52,7 @@ export function RevenueSummaryCards({ brandId, dateFrom, dateTo }: RevenueSummar
   const summary = data as any;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       <RevenueCard
         label="Total Revenue"
         amount={summary?.totalRevenue ?? 0}

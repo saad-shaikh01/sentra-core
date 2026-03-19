@@ -260,7 +260,7 @@ function GSuiteSettingsPage() {
                       {/* Avatar */}
                       <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden">
                         {u.photoUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
+                           
                           <img src={u.photoUrl} alt={u.name} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-xs font-medium text-muted-foreground">

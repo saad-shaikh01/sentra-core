@@ -15,11 +15,11 @@ export function Pagination({ page, total, limit, onChange }: PaginationProps) {
   if (totalPages <= 1) return null;
 
   return (
-    <div className="flex items-center justify-between mt-4 px-1">
-      <p className="text-xs text-muted-foreground">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 px-1">
+      <p className="text-xs text-muted-foreground order-2 sm:order-1">
         Showing {Math.min((page - 1) * limit + 1, total)}–{Math.min(page * limit, total)} of {total}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 order-1 sm:order-2">
         <Button
           variant="outline"
           size="sm"

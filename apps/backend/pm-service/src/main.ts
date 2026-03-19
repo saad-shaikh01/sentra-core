@@ -24,6 +24,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:4200',
   'http://localhost:4201',
+  'http://localhost:3005',
 ];
 
 function resolveCorsOrigins(): string[] {

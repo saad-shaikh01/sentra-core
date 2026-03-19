@@ -35,7 +35,13 @@
       "Bash(npm list:*)",
       "Bash(cd:*)",
       "Bash(npx prisma:*)",
-      "Bash(grep -rn PermissionsService 'D:/Repositories/new crm/sentra-core/apps/backend/core-service/src/modules/' --include=*.module.ts)"
+      "Bash(grep -rn PermissionsService 'D:/Repositories/new crm/sentra-core/apps/backend/core-service/src/modules/' --include=*.module.ts)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//d/Repositories/new crm/sentra-core/**)",
+      "Bash(done)",
+      "Bash(grep -n \"departmentId\\\\|IsUUID\\\\|@IsOptional\" \"D:/Repositories/new crm/sentra-core/apps/backend/hrms-service/src/modules/invitations/dto\"/*.ts)",
+      "Bash(sort find:*)"
     ]
   }
 }

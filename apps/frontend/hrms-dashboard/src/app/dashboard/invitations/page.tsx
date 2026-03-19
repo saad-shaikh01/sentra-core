@@ -59,6 +59,7 @@ export default function InvitationsPage() {
         action={
           <InviteMemberButton
             departments={departmentsQuery.data ?? []}
+            isLoadingDepartments={departmentsQuery.isLoading}
             onSuccess={() => invitationsQuery.refetch()}
           />
         }

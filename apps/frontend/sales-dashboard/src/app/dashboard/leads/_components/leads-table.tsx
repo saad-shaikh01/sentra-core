@@ -89,6 +89,30 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
       keyExtractor={(lead) => lead.id}
       emptyTitle="No leads yet"
       emptyDescription="Create your first lead or switch to Kanban view."
+      renderMobileRow={(lead: EnrichedLead) => (
+        <div
+          onClick={() => onRowClick(lead)}
+          className="bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-3 cursor-pointer active:bg-white/[0.04]"
+        >
+          <div className="flex justify-between items-start">
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm truncate">{lead.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{lead.name || lead.email}</p>
+            </div>
+            <StatusBadge status={lead.status} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[10px] uppercase font-semibold tracking-wider text-muted-foreground border-t border-white/5 pt-3">
+            <div>
+              <p className="opacity-50">Brand</p>
+              <p className="text-foreground mt-0.5">{lead.brandName || '—'}</p>
+            </div>
+            <div>
+              <p className="opacity-50">Assigned</p>
+              <p className="text-foreground mt-0.5">{lead.assigneeName || '—'}</p>
+            </div>
+          </div>
+        </div>
+      )}
     />
   );
 }

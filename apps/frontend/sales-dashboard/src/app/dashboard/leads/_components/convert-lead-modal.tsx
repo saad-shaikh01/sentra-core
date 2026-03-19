@@ -84,7 +84,7 @@ export function ConvertLeadModal({ open, onOpenChange, lead, onSuccess }: Conver
           {errors.companyName && <p className="text-xs text-destructive">{errors.companyName.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Contact Name</Label>
             <Input placeholder="John Doe" {...register('contactName')} />

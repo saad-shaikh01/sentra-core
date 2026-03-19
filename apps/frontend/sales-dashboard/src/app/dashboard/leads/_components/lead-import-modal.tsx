@@ -229,8 +229,8 @@ export function LeadImportModal({ open, onOpenChange }: LeadImportModalProps) {
                   </Button>
                 </div>
                 {showErrors && (
-                  <div className="max-h-52 overflow-y-auto rounded-lg border border-white/10">
-                    <table className="w-full text-left text-sm">
+                  <div className="max-h-52 overflow-auto rounded-lg border border-white/10">
+                    <table className="w-full text-left text-sm min-w-[300px]">
                       <thead className="bg-black/20 text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2">Row</th>

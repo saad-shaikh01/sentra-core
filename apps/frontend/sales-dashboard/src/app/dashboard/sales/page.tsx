@@ -222,7 +222,7 @@ export default function SalesPage() {
             setParams({ status: v === 'all' ? null : (v as SaleStatus), page: 1 })
           }
         >
-          <SelectTrigger className="w-36 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -240,7 +240,7 @@ export default function SalesPage() {
             setParams({ clientId: v === 'all' ? null : v, page: 1 })
           }
         >
-          <SelectTrigger className="w-40 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
             <SelectValue placeholder="All clients" />
           </SelectTrigger>
           <SelectContent>
@@ -258,7 +258,7 @@ export default function SalesPage() {
             setParams({ brandId: v === 'all' ? null : v, page: 1 })
           }
         >
-          <SelectTrigger className="w-36 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
             <SelectValue placeholder="All brands" />
           </SelectTrigger>
           <SelectContent>
@@ -274,14 +274,14 @@ export default function SalesPage() {
           type="date"
           value={params.dateFrom ?? ''}
           onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
-          className="w-36 bg-white/5 border-white/10"
+          className="w-full sm:w-36 bg-white/5 border-white/10"
           title="From date"
         />
         <Input
           type="date"
           value={params.dateTo ?? ''}
           onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
-          className="w-36 bg-white/5 border-white/10"
+          className="w-full sm:w-36 bg-white/5 border-white/10"
           title="To date"
         />
       </FilterBar>

@@ -8,7 +8,8 @@ export class UpdateTeamDto {
   name?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   typeId?: string;
 
   @IsOptional()

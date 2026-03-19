@@ -103,9 +103,9 @@ export default function LeadsPage() {
         title="Leads"
         description="Track and manage your sales leads."
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             {/* View toggle */}
-            <div className="flex rounded-xl border border-white/10 overflow-hidden">
+            <div className="flex rounded-xl border border-white/10 overflow-hidden shrink-0">
               <button
                 onClick={() => setParams({ view: 'kanban' })}
                 className={cn(
@@ -131,14 +131,14 @@ export default function LeadsPage() {
                 Table
               </button>
             </div>
-            <Button variant="outline" onClick={() => setImportModalOpen(true)}>
-              <Upload className="h-4 w-4 mr-2" /> Import Leads
+            <Button variant="outline" onClick={() => setImportModalOpen(true)} className="flex-1 sm:flex-none">
+              <Upload className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Import Leads</span><span className="sm:hidden">Import</span>
             </Button>
             <Button onClick={() => {
               setEditLead(null);
               setModalOpen(true);
-            }}>
-              <Plus className="h-4 w-4 mr-2" /> New Lead
+            }} className="flex-1 sm:flex-none">
+              <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">New Lead</span><span className="sm:hidden">New</span>
             </Button>
           </div>
         }
@@ -153,7 +153,7 @@ export default function LeadsPage() {
             setSearchInput(e.target.value);
             setParams({ search: e.target.value, page: 1 });
           }}
-          className="max-w-xs bg-white/5 border-white/10"
+          className="w-full sm:max-w-xs bg-white/5 border-white/10"
         />
 
         {/* Status (table only) */}
@@ -164,7 +164,7 @@ export default function LeadsPage() {
               setParams({ status: v === 'all' ? null : (v as LeadStatus), page: 1 })
             }
           >
-            <SelectTrigger className="w-36 bg-white/5 border-white/10">
+            <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -180,7 +180,7 @@ export default function LeadsPage() {
           value={params.source ?? 'all'}
           onValueChange={(value) => setParams({ source: value === 'all' ? null : (value as LeadSource), page: 1 })}
         >
-          <SelectTrigger className="w-40 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
             <SelectValue placeholder="All sources" />
           </SelectTrigger>
           <SelectContent>
@@ -195,7 +195,7 @@ export default function LeadsPage() {
           value={params.leadType ?? 'all'}
           onValueChange={(value) => setParams({ leadType: value === 'all' ? null : (value as LeadType), page: 1 })}
         >
-          <SelectTrigger className="w-40 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
             <SelectValue placeholder="All lead types" />
           </SelectTrigger>
           <SelectContent>
@@ -211,7 +211,7 @@ export default function LeadsPage() {
           value={params.brandId ?? 'all'}
           onValueChange={(v) => setParams({ brandId: v === 'all' ? null : v, page: 1 })}
         >
-          <SelectTrigger className="w-36 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
             <SelectValue placeholder="All brands" />
           </SelectTrigger>
           <SelectContent>
@@ -226,7 +226,7 @@ export default function LeadsPage() {
           value={params.teamId ?? 'all'}
           onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
         >
-          <SelectTrigger className="w-44 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-44 bg-white/5 border-white/10">
             <SelectValue placeholder="All teams" />
           </SelectTrigger>
           <SelectContent>
@@ -242,7 +242,7 @@ export default function LeadsPage() {
           value={params.assignedToId ?? 'all'}
           onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
         >
-          <SelectTrigger className="w-36 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
             <SelectValue placeholder="All assignees" />
           </SelectTrigger>
           <SelectContent>
@@ -258,14 +258,14 @@ export default function LeadsPage() {
           type="date"
           value={params.dateFrom ?? ''}
           onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
-          className="w-36 bg-white/5 border-white/10"
+          className="w-full sm:w-36 bg-white/5 border-white/10"
           title="From date"
         />
         <Input
           type="date"
           value={params.dateTo ?? ''}
           onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
-          className="w-36 bg-white/5 border-white/10"
+          className="w-full sm:w-36 bg-white/5 border-white/10"
           title="To date"
         />
       </FilterBar>

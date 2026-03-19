@@ -107,6 +107,7 @@ export interface RbacRole {
   slug: string;
   description: string | null;
   isSystem: boolean;
+  userCount: number;
   createdAt: string;
   updatedAt: string;
   permissions: RbacPermission[];

@@ -103,7 +103,7 @@ export default function BrandsPage() {
           placeholder="Search brands…"
           value={searchInput}
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="max-w-xs bg-white/5 border-white/10"
+          className="w-full sm:max-w-xs bg-white/5 border-white/10"
         />
       </FilterBar>
 

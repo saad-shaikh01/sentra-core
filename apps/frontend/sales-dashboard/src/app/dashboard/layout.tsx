@@ -23,12 +23,12 @@ export default function DashboardLayout({
     <ProtectedRoute>
       <NotificationProvider fetcher={api}>
         <SpotlightBackground>
-          <div className="flex h-screen overflow-hidden">
+          <div className="flex min-h-screen lg:h-screen lg:overflow-hidden">
             <Sidebar />
             <div className="flex-1 flex flex-col min-w-0">
               <TopNav />
-              <main className="flex-1 overflow-y-auto">
-                <div className="container max-w-7xl py-10 px-8">{children}</div>
+              <main className="flex-1 lg:overflow-y-auto">
+                <div className="container max-w-7xl py-6 px-4 md:py-10 md:px-8">{children}</div>
               </main>
             </div>
           </div>

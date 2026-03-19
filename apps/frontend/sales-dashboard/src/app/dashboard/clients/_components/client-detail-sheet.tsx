@@ -145,7 +145,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
         </div>
       ) : detailClient ? (
         <>
-          <div className="-mt-2 mb-2 flex border-b border-white/10">
+          <div className="-mt-2 mb-2 flex border-b border-white/10 overflow-x-auto whitespace-nowrap no-scrollbar">
             {([
               { key: 'details', label: 'Details', icon: null },
               {
@@ -163,7 +163,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-all ${
+                className={`flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-all ${
                   activeTab === tab.key
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -177,7 +177,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
 
           {activeTab === 'details' ? (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoCard label="Company" value={detailClient.companyName} />
                 <InfoCard label="Contact" value={detailClient.contactName ?? '-'} />
                 <InfoCard label="Email" value={detailClient.email} />

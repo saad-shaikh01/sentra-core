@@ -206,6 +206,18 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
         onClose={onClose}
         title={lead?.title ?? 'Lead Details'}
         description={lead ? `Status: ${lead.status}` : undefined}
+        action={lead && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 hover:bg-white/10"
+            onClick={() => onEdit(lead)}
+            aria-label="Edit lead"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       >
         {isLoading ? (
           <div className="space-y-3 animate-pulse">
@@ -220,12 +232,12 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
           </div>
         ) : lead ? (
           <>
-            <div className="-mt-2 mb-2 flex border-b border-white/10">
+            <div className="-mt-2 mb-2 flex border-b border-white/10 overflow-x-auto whitespace-nowrap no-scrollbar">
               {tabConfig.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-all ${
+                  className={`flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-all ${
                     activeTab === tab.key
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -275,7 +287,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InfoCard label="Status" value={<StatusBadge status={lead.status} />} />
                   <InfoCard label="Source" value={<span className="text-sm">{formatEnumLabel(lead.source)}</span>} />
                   <InfoCard label="Lead Type" value={<span className="text-sm">{formatEnumLabel(lead.leadType)}</span>} />
@@ -372,7 +384,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                 </div>
 
                 {canCreateSale || (canConvert && !isLeadClosed && !lead.convertedClientId) ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     {canCreateSale && lead.status !== LeadStatus.CLOSED_LOST ? (
                       <Button
                         variant="outline"
@@ -591,19 +603,6 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
           </>
         ) : null}
       </DetailSheet>
-
-      {leadId && lead ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="fixed right-16 top-5 z-[60] h-8 w-8 hover:bg-white/10"
-          onClick={() => onEdit(lead)}
-          aria-label="Edit lead"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      ) : null}
 
       {lead ? (
         <Dialog open={followUpDialogOpen} onOpenChange={(open) => { if (!open) closeFollowUpDialog(); }}>

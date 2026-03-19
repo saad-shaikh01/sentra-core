@@ -52,13 +52,13 @@ const TYPE_ICONS: Record<GlobalNotificationType, IconComponent> = {
   SALE_STATUS_CHANGED: ArrowRightLeft,
   CHARGEBACK_FILED: AlertTriangle,
   PAYMENT_RECEIVED: CheckCircle,
-  LEAD_ASSIGNED: UserCheck,
-  LEAD_STATUS_CHANGED: TrendingUp,
   TASK_ASSIGNED: Zap,
   TASK_DUE_SOON: RefreshCw,
   MENTION: MessageSquare,
-  PROJECT_UPDATE: CreditCard,
-  SYSTEM: Bell,
+  PROJECT_STATUS_CHANGED: TrendingUp,
+  SYSTEM_ALERT: Bell,
+  COMMENT_ADDED: MessageSquare,
+  APPROVAL_REQUESTED: CheckCircle,
 };
 
 const TYPE_COLORS: Record<GlobalNotificationType, string> = {
@@ -67,13 +67,13 @@ const TYPE_COLORS: Record<GlobalNotificationType, string> = {
   SALE_STATUS_CHANGED: 'text-blue-400',
   CHARGEBACK_FILED: 'text-red-500',
   PAYMENT_RECEIVED: 'text-green-400',
-  LEAD_ASSIGNED: 'text-violet-400',
-  LEAD_STATUS_CHANGED: 'text-indigo-400',
   TASK_ASSIGNED: 'text-yellow-400',
   TASK_DUE_SOON: 'text-amber-400',
   MENTION: 'text-cyan-400',
-  PROJECT_UPDATE: 'text-teal-400',
-  SYSTEM: 'text-white/50',
+  PROJECT_STATUS_CHANGED: 'text-indigo-400',
+  SYSTEM_ALERT: 'text-white/50',
+  COMMENT_ADDED: 'text-blue-300',
+  APPROVAL_REQUESTED: 'text-green-500',
 };
 
 // -------------------------------------------------------
@@ -124,7 +124,10 @@ export function NotificationItem({ notification, onNavigate }: NotificationItemP
 
       {/* Body */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-white/90 leading-snug line-clamp-2">{notification.message}</p>
+        <p className="text-sm text-white/90 leading-snug line-clamp-2">
+          {notification.title ? `${notification.title}: ` : ''}
+          {notification.body}
+        </p>
         <p className="mt-1 text-[11px] text-white/40">{timeAgo(notification.createdAt)}</p>
       </div>
 

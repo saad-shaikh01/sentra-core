@@ -37,10 +37,12 @@ export function RoleDetailSheet({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setName(role?.name ?? '');
     setDescription(role?.description ?? '');
+    setIsEditing(false);
   }, [role]);
 
   const rolePermissionsQuery = useQuery({
@@ -68,7 +70,8 @@ export function RoleDetailSheet({
     setAssignedIds(new Set((rolePermissionsQuery.data ?? role?.permissions ?? []).map((permission) => permission.id)));
   }, [role?.permissions, rolePermissionsQuery.data]);
 
-  const editable = Boolean(role && !role.isSystem);
+  const canEditMeta = isEditing && Boolean(role && !role.isSystem);
+  const canEditPermissions = isEditing && Boolean(role);
 
   const groupedPermissions = useMemo(
     () => groupPermissions(allPermissionsQuery.data ?? rolePermissionsQuery.data ?? role?.permissions ?? []),
@@ -79,7 +82,7 @@ export function RoleDetailSheet({
     mutationFn: async () => {
       if (!role) return;
 
-      if (name.trim() !== role.name || description.trim() !== (role.description ?? '')) {
+      if (!role.isSystem && (name.trim() !== role.name || description.trim() !== (role.description ?? ''))) {
         await api.patch(`/rbac/apps/${appCode}/roles/${role.id}`, {
           name: name.trim(),
           description: description.trim() || null,
@@ -93,6 +96,7 @@ export function RoleDetailSheet({
     onSuccess: () => {
       if (!role) return;
       toast.success('Role updated.');
+      setIsEditing(false);
       queryClient.invalidateQueries({ queryKey: ['roles', appCode] });
       queryClient.invalidateQueries({ queryKey: ['role-permissions', appCode, role.id] });
     },
@@ -106,6 +110,7 @@ export function RoleDetailSheet({
       if (!role) return;
       await api.delete(`/rbac/apps/${appCode}/roles/${role.id}`);
     },
+
     onSuccess: () => {
       toast.success('Role deleted.');
       queryClient.invalidateQueries({ queryKey: ['roles', appCode] });
@@ -130,6 +135,14 @@ export function RoleDetailSheet({
     >
       {role ? (
         <div className="space-y-6">
+          {role.isSystem ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+              <p className="text-xs text-amber-400">
+                System role — name cannot be changed, but permissions can be adjusted.
+              </p>
+            </div>
+          ) : null}
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="detail-role-name">Role name</Label>
@@ -137,7 +150,7 @@ export function RoleDetailSheet({
                 id="detail-role-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                disabled={!editable}
+                disabled={!canEditMeta}
               />
             </div>
 
@@ -147,7 +160,7 @@ export function RoleDetailSheet({
                 id="detail-role-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                disabled={!editable}
+                disabled={!canEditMeta}
               />
             </div>
           </div>
@@ -159,7 +172,7 @@ export function RoleDetailSheet({
                 resource={resource}
                 permissions={permissions}
                 assignedIds={assignedIds}
-                editable={editable}
+                editable={canEditPermissions}
                 onToggle={(permissionId, checked) => {
                   setAssignedIds((current) => {
                     const next = new Set(current);
@@ -178,28 +191,50 @@ export function RoleDetailSheet({
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <p className="text-sm font-medium">Who has this role?</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              User assignment details are not exposed by the current RBAC API. User count is shown as {role.userCount ?? '—'}.
+              {role.userCount
+                ? `${role.userCount} user${role.userCount === 1 ? '' : 's'} assigned to this role.`
+                : 'No users are currently assigned to this role.'}
             </p>
           </div>
 
-          {editable ? (
+          {isEditing ? (
             <div className="flex gap-2">
               <Button
                 className="flex-1"
                 onClick={() => saveMutation.mutate()}
-                disabled={!name.trim() || saveMutation.isPending}
+                disabled={saveMutation.isPending}
               >
                 {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
               </Button>
               <Button
-                variant="destructive"
-                onClick={() => deleteMutation.mutate()}
-                disabled={role.userCount !== 0 || deleteMutation.isPending}
+                variant="outline"
+                onClick={() => {
+                  setName(role?.name ?? '');
+                  setDescription(role?.description ?? '');
+                  setAssignedIds(
+                    new Set((rolePermissionsQuery.data ?? role?.permissions ?? []).map((p) => p.id)),
+                  );
+                  setIsEditing(false);
+                }}
+                disabled={saveMutation.isPending}
               >
-                Delete Role
+                Cancel
               </Button>
+              {!role.isSystem ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteMutation.mutate()}
+                  disabled={role.userCount !== 0 || deleteMutation.isPending}
+                >
+                  Delete
+                </Button>
+              ) : null}
             </div>
-          ) : null}
+          ) : (
+            <Button variant="outline" onClick={() => setIsEditing(true)}>
+              Edit Role
+            </Button>
+          )}
         </div>
       ) : null}
     </DetailSheet>

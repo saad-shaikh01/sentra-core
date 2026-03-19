@@ -6,7 +6,8 @@ export class CreateTeamDto {
   @MaxLength(100)
   name!: string;
 
-  @IsUUID()
+  @IsString()
+  @MinLength(1)
   typeId!: string;
 
   @IsOptional()

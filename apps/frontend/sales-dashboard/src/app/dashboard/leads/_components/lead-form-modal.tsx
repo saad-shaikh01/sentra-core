@@ -178,7 +178,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Contact Name</Label>
             <Input placeholder="e.g. John Doe" {...register('name')} />
@@ -189,7 +189,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Phone</Label>
             <Input placeholder="+1..." {...register('phone')} />
@@ -243,7 +243,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Brand</Label>
             <Select

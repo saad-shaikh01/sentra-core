@@ -49,11 +49,16 @@ class InviteAfterCreateError extends Error {
   }
 }
 
+const isValidUuid = (v: unknown): v is string =>
+  typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 export function CreateEmployeeModal({
   departments,
+  isLoadingDepartments = false,
   onSuccess,
 }: {
   departments: DepartmentOption[];
+  isLoadingDepartments?: boolean;
   onSuccess?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -74,7 +79,7 @@ export function CreateEmployeeModal({
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         jobTitle: form.jobTitle.trim() || undefined,
-        departmentId: form.departmentId || undefined,
+        departmentId: isValidUuid(form.departmentId) ? form.departmentId : undefined,
       });
 
       try {
@@ -196,9 +201,10 @@ export function CreateEmployeeModal({
                     departmentId: value === 'none' ? null : value,
                   }))
                 }
+                disabled={isLoadingDepartments}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a department" />
+                  <SelectValue placeholder={isLoadingDepartments ? 'Loading departments...' : 'Select a department'} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No department</SelectItem>

@@ -1,5 +1,6 @@
 import './global.css';
 import { Inter } from 'next/font/google';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { QueryProvider } from '@/providers/query-provider';
 import { OrgContextProvider } from '@/providers/org-context-provider';
 import { PermissionsProvider } from '@/providers/permissions-provider';
@@ -22,14 +23,16 @@ export default function RootLayout({
       <body className="min-h-screen bg-background font-sans antialiased selection:bg-primary selection:text-white">
         <div className="mesh-gradient" />
         <div className="noise-overlay" />
-        <QueryProvider>
-          <OrgContextProvider>
-            <PermissionsProvider>
-              {children}
-              <Toaster />
-            </PermissionsProvider>
-          </OrgContextProvider>
-        </QueryProvider>
+        <NuqsAdapter>
+          <QueryProvider>
+            <OrgContextProvider>
+              <PermissionsProvider>
+                {children}
+                <Toaster />
+              </PermissionsProvider>
+            </OrgContextProvider>
+          </QueryProvider>
+        </NuqsAdapter>
       </body>
     </html>
   );

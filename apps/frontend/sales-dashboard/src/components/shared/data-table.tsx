@@ -13,7 +13,7 @@ export interface Column<T> {
   className?: string;
 }
 
-interface DataTableProps<T> {
+export interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   isLoading?: boolean;
@@ -22,6 +22,7 @@ interface DataTableProps<T> {
   keyExtractor: (row: T) => string;
   emptyTitle?: string;
   emptyDescription?: string;
+  renderMobileRow?: (row: T) => React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -33,6 +34,7 @@ export function DataTable<T>({
   keyExtractor,
   emptyTitle = 'No records found',
   emptyDescription = 'Get started by creating your first record.',
+  renderMobileRow,
 }: DataTableProps<T>) {
   if (isLoading) {
     return <TableSkeleton rows={5} cols={columns.length} />;
@@ -60,49 +62,84 @@ export function DataTable<T>({
     );
   }
 
+  const defaultRenderMobileRow = (row: T) => (
+    <div
+      onClick={() => onRowClick?.(row)}
+      className={cn(
+        "bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-3",
+        onRowClick && "cursor-pointer active:bg-white/[0.04]"
+      )}
+    >
+      {columns.map((col) => (
+        <div key={col.key} className="flex justify-between gap-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {col.header}
+          </span>
+          <div className={cn("text-sm text-foreground text-right", col.className)}>
+            {col.render
+              ? col.render(row)
+              : String((row as Record<string, unknown>)[col.key] ?? '—')}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/[0.02]">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={cn(
-                    'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground',
-                    col.className
-                  )}
-                >
-                  {col.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((row) => (
-              <tr
-                key={keyExtractor(row)}
-                onClick={() => onRowClick?.(row)}
-                className={cn(
-                  'border-b border-white/5 last:border-0 transition-colors duration-150',
-                  onRowClick && 'cursor-pointer hover:bg-white/[0.04]'
-                )}
-              >
+    <div className="space-y-4">
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-4">
+        {data.map((row) => (
+          <React.Fragment key={keyExtractor(row)}>
+            {renderMobileRow ? renderMobileRow(row) : defaultRenderMobileRow(row)}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/[0.02]">
                 {columns.map((col) => (
-                  <td
+                  <th
                     key={col.key}
-                    className={cn('px-6 py-4 text-sm text-foreground', col.className)}
+                    className={cn(
+                      'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground',
+                      col.className
+                    )}
                   >
-                    {col.render
-                      ? col.render(row)
-                      : String((row as Record<string, unknown>)[col.key] ?? '—')}
-                  </td>
+                    {col.header}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr
+                  key={keyExtractor(row)}
+                  onClick={() => onRowClick?.(row)}
+                  className={cn(
+                    'border-b border-white/5 last:border-0 transition-colors duration-150',
+                    onRowClick && 'cursor-pointer hover:bg-white/[0.04]'
+                  )}
+                >
+                  {columns.map((col) => (
+                    <td
+                      key={col.key}
+                      className={cn('px-6 py-4 text-sm text-foreground', col.className)}
+                    >
+                      {col.render
+                        ? col.render(row)
+                        : String((row as Record<string, unknown>)[col.key] ?? '—')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

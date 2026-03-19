@@ -34,14 +34,14 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
 
   const value = useMemo<PermissionsContextValue>(() => ({
     permissions,
-    isLoading: query.isLoading,
+    isLoading: !!accessToken && query.isPending,
     hasPermission: (code: string) => {
       if (permissions.has('*:*:*')) return true;
       const [app] = code.split(':');
       if (app && permissions.has(`${app}:*:*`)) return true;
       return permissions.has(code);
     },
-  }), [permissions, query.isLoading]);
+  }), [accessToken, permissions, query.isPending]);
 
   return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
 }

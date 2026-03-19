@@ -136,7 +136,7 @@ export default function InvoicesPage() {
             setParams({ status: v === 'all' ? null : (v as InvoiceStatus), page: 1 })
           }
         >
-          <SelectTrigger className="w-36 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -154,7 +154,7 @@ export default function InvoicesPage() {
             setParams({ saleId: v === 'all' ? null : v, page: 1 })
           }
         >
-          <SelectTrigger className="w-48 bg-white/5 border-white/10">
+          <SelectTrigger className="w-full sm:w-48 bg-white/5 border-white/10">
             <SelectValue placeholder="All sales" />
           </SelectTrigger>
           <SelectContent>
@@ -172,14 +172,14 @@ export default function InvoicesPage() {
           type="date"
           value={params.dueAfter ?? ''}
           onChange={(e) => setParams({ dueAfter: e.target.value || null, page: 1 })}
-          className="w-36 bg-white/5 border-white/10"
+          className="w-full sm:w-36 bg-white/5 border-white/10"
           title="Due after"
         />
         <Input
           type="date"
           value={params.dueBefore ?? ''}
           onChange={(e) => setParams({ dueBefore: e.target.value || null, page: 1 })}
-          className="w-36 bg-white/5 border-white/10"
+          className="w-full sm:w-36 bg-white/5 border-white/10"
           title="Due before"
         />
       </FilterBar>

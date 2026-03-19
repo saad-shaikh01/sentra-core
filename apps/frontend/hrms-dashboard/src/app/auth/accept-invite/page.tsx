@@ -22,7 +22,7 @@ type InviteInfo = {
 type PageState = 'loading' | 'form' | 'invalid' | 'already-used';
 
 const publicApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
 });
 
 function getErrorCode(error: unknown) {

@@ -84,13 +84,13 @@ export class InvitationsService {
     const firstName = user.firstName?.trim() || this.splitName(user.name).firstName || 'there';
     const inviterName = this.buildName(admin?.firstName, admin?.lastName, admin?.name) || 'An admin';
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
+    // DB writes only — no network I/O inside the transaction to avoid P2028 timeout
+    await this.prisma.$transaction([
+      this.prisma.user.update({
         where: { id: userId },
         data: { status: UserStatus.INVITED },
-      });
-
-      await tx.userInvitation.upsert({
+      }),
+      this.prisma.userInvitation.upsert({
         where: { userId },
         update: {
           organizationId,
@@ -109,28 +109,29 @@ export class InvitationsService {
           invitedBy: adminId,
           expiresAt,
         },
+      }),
+    ]);
+
+    // Send email outside the transaction so network latency doesn't cause P2028
+    try {
+      await this.mailerService.sendInviteEmail({
+        to: user.email,
+        firstName,
+        inviterName,
+        organizationName: organization.name,
+        appName: 'HRMS',
+        inviteUrl,
+        expiresIn: '72 hours',
       });
-
-      try {
-        await this.mailerService.sendInviteEmail({
-          to: user.email,
-          firstName,
-          inviterName,
-          organizationName: organization.name,
-          appName: 'HRMS',
-          inviteUrl,
-          expiresIn: '72 hours',
-        });
-      } catch (error) {
-        await tx.userInvitation.deleteMany({ where: { userId } });
-        throw error;
-      }
-
-      await tx.userInvitation.update({
+      await this.prisma.userInvitation.update({
         where: { userId },
         data: { emailSentAt: new Date() },
       });
-    });
+    } catch (error) {
+      // Roll back: delete the invitation record (user status stays INVITED — harmless)
+      await this.prisma.userInvitation.deleteMany({ where: { userId } }).catch(() => null);
+      throw error;
+    }
 
     return {
       message: 'Invitation sent',
@@ -226,9 +227,10 @@ export class InvitationsService {
 
   private buildInviteUrl(token: string): string {
     const base =
+      this.configService.get<string>('HRMS_DASHBOARD_URL') ||
       this.configService.get<string>('INVITE_ACCEPT_URL_BASE') ||
       this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:4200';
+      'http://localhost:4202';
 
     return `${base.replace(/\/$/, '')}/auth/accept-invite?token=${token}`;
   }

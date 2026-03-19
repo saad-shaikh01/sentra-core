@@ -335,6 +335,34 @@ export class EmployeesService {
     };
   }
 
+  async reactivate(
+    userId: string,
+    organizationId: string,
+    adminId: string,
+  ): Promise<{ message: string }> {
+    const user = await this.findEmployeeRecord(userId, organizationId);
+    if (user.status !== UserStatus.DEACTIVATED) {
+      throw new BadRequestException('User is not deactivated');
+    }
+    if (user.id === adminId) {
+      throw new BadRequestException('Cannot reactivate yourself');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        status: UserStatus.ACTIVE,
+        isActive: true,
+        deactivatedAt: null,
+        deactivatedBy: null,
+      },
+    });
+
+    await this.cacheService.del(`suspended:${userId}`);
+
+    return { message: 'User reactivated successfully' };
+  }
+
   private async findEmployeeRecord(
     id: string,
     organizationId: string,

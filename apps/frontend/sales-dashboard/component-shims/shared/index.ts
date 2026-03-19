@@ -1,17 +1,15 @@
 export { PageHeader } from '../../src/components/shared/page-header';
-export { DataTable } from '@sentra-core/frontend-data-display';
-export type { Column, DataTableProps } from '@sentra-core/frontend-data-display';
+export { DataTable } from '../../src/components/shared/data-table';
+export type { Column, DataTableProps } from '../../src/components/shared/data-table';
 export {
   TableSkeleton,
   ListSkeleton,
-  Pagination,
-  FilterBar,
   EmptyState,
 } from '@sentra-core/frontend-data-display';
+export { Pagination } from '../../src/components/shared/pagination';
+export { FilterBar } from '../../src/components/shared/filter-bar';
 export type {
   TableSkeletonProps,
-  PaginationProps,
-  FilterBarProps,
   EmptyStateProps,
 } from '@sentra-core/frontend-data-display';
 export { StatusBadge } from './status-badge';

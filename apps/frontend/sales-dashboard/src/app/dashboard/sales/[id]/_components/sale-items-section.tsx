@@ -38,7 +38,34 @@ export function SaleItemsSection({ items, totalAmount, currency = 'USD', discoun
         <p className="text-sm text-muted-foreground">No items.</p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          {/* Mobile View */}
+          <div className="space-y-4 lg:hidden">
+            {items.map((item) => {
+              const lineTotal = (item.customPrice ?? item.unitPrice) * item.quantity;
+              return (
+                <div key={item.id} className="rounded-lg border border-white/5 bg-black/20 p-3 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{item.name}</p>
+                      {item.packageName && item.packageName !== item.name && (
+                        <p className="text-[10px] text-muted-foreground uppercase">{item.packageName}</p>
+                      )}
+                    </div>
+                    <p className="font-bold text-sm ml-2">{formatCurrency(lineTotal, currency)}</p>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground border-t border-white/5 pt-2">
+                    <span>{item.quantity} × {formatCurrency(item.customPrice ?? item.unitPrice, currency)}</span>
+                    {item.customPrice != null && item.customPrice !== item.unitPrice && (
+                      <span className="line-through opacity-50">{formatCurrency(item.unitPrice, currency)}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop View */}
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs text-muted-foreground">

@@ -84,4 +84,15 @@ export class EmployeesController {
       data: await this.employeesService.deactivate(id, ctx.organizationId, ctx.userId),
     };
   }
+
+  @Patch(':id/reactivate')
+  @Permissions('hrms:users:deactivate')
+  async reactivate(
+    @Param('id') id: string,
+    @OrgContext() ctx: { organizationId: string; userId: string },
+  ) {
+    return {
+      data: await this.employeesService.reactivate(id, ctx.organizationId, ctx.userId),
+    };
+  }
 }

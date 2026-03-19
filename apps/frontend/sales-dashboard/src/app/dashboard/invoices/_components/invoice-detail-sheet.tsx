@@ -60,7 +60,7 @@ export function InvoiceDetailSheet({ invoiceId, onClose }: InvoiceDetailSheetPro
         </div>
       ) : invoice ? (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <InfoCard label="Invoice #" value={<span className="text-sm font-mono">{invoice.invoiceNumber}</span>} />
             <InfoCard label="Status" value={<StatusBadge status={invoice.status} />} />
             <InfoCard label="Amount" value={<span className="text-sm font-bold">${invoice.amount}</span>} />
@@ -72,7 +72,7 @@ export function InvoiceDetailSheet({ invoiceId, onClose }: InvoiceDetailSheetPro
           )}
 
           {/* Actions */}
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               className="flex-1 gap-2"

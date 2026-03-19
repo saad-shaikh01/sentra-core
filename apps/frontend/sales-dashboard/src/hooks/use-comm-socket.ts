@@ -231,6 +231,6 @@ export function useCommSocket() {
         useUIStore.getState().setCommConnectionStatus('disconnected');
       }
     };
-  // eslint-disable-next-line
+   
   }, []);
 }

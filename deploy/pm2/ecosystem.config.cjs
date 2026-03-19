@@ -102,5 +102,26 @@ module.exports = {
         ...sharedNodeEnv,
       },
     },
+    {
+      name: 'hrms-service',
+      cwd: repoRoot,
+      script: nxCli,
+      args: 'run hrms-service:serve:production',
+      env: {
+        ...sharedNodeEnv,
+        ...backendEnv,
+        ENV_FILE: backendEnvFile,
+        PORT_HRMS: backendEnv.PORT_HRMS || '3004',
+      },
+    },
+    {
+      name: 'hrms-dashboard',
+      cwd: repoRoot,
+      script: nxCli,
+      args: 'run hrms-dashboard:serve:production --port=4202',
+      env: {
+        ...sharedNodeEnv,
+      },
+    },
   ],
 };

@@ -126,13 +126,43 @@ class ApiClient {
           const { refreshToken } = getTokens();
           if (!refreshToken) throw new Error('No refresh token');
 
+          // Multi-tab race: check if another tab already refreshed while we waited
+          const currentStoredRefresh = getTokens().refreshToken;
+          if (currentStoredRefresh && currentStoredRefresh !== refreshToken) {
+            const freshAccess = getTokens().accessToken;
+            if (freshAccess) {
+              processQueue(null, freshAccess);
+              (headers as Record<string, string>)['Authorization'] = `Bearer ${freshAccess}`;
+              response = await fetch(url, { ...fetchOptions, headers });
+              return JSON.parse(await response.text() || '{}') as T;
+            }
+          }
+
+          // Send refresh token in Authorization header (required by RefreshTokenGuard)
           const refreshResponse = await fetch(`${this.refreshBaseUrl}/auth/refresh`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${refreshToken}`,
+            },
           });
 
-          if (!refreshResponse.ok) throw new Error('Refresh failed');
+          if (!refreshResponse.ok) {
+            // TOKEN_ROTATED means another tab just refreshed — recover instead of logging out
+            const errBody = await refreshResponse.json().catch(() => ({}));
+            const errCode = errBody?.code ?? errBody?.error?.code;
+            if (errCode === 'TOKEN_ROTATED') {
+              const freshAccess = getTokens().accessToken;
+              const freshRefresh = getTokens().refreshToken;
+              if (freshAccess && freshRefresh && freshRefresh !== refreshToken) {
+                processQueue(null, freshAccess);
+                (headers as Record<string, string>)['Authorization'] = `Bearer ${freshAccess}`;
+                response = await fetch(url, { ...fetchOptions, headers });
+                return JSON.parse(await response.text() || '{}') as T;
+              }
+            }
+            throw new Error('Refresh failed');
+          }
 
           const data = await refreshResponse.json();
           const { accessToken, refreshToken: newRefreshToken } =

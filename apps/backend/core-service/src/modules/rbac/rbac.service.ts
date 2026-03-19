@@ -55,6 +55,7 @@ export class RbacService {
             },
           },
         },
+        _count: { select: { users: true } },
       },
     });
 
@@ -97,6 +98,7 @@ export class RbacService {
             },
           },
         },
+        _count: { select: { users: true } },
       },
     });
 
@@ -122,6 +124,7 @@ export class RbacService {
             },
           },
         },
+        _count: { select: { users: true } },
       },
     });
 
@@ -183,7 +186,7 @@ export class RbacService {
   ) {
     const resolvedApp = await this.resolveApp(appCode);
     const role = await this.findRoleForApp(roleId, resolvedApp.appId, currentUser.orgId);
-    this.assertCustomOrgRole(role, currentUser.orgId);
+    this.assertPermissionsEditable(role, currentUser.orgId);
 
     const permissionIds = [...new Set(dto.permissionIds)];
     const permissionRows = await this.prisma.permissionCatalog.findMany({
@@ -274,6 +277,7 @@ export class RbacService {
             },
           },
         },
+        _count: { select: { users: true } },
       },
     });
 
@@ -290,6 +294,14 @@ export class RbacService {
     }
 
     if (role.organizationId !== organizationId) {
+      throw new ForbiddenException('Role does not belong to this organization');
+    }
+  }
+
+  private assertPermissionsEditable(role: NonNullable<RoleWithPermissions>, organizationId: string) {
+    // System roles: permissions can be edited (global effect — no per-org scoping on AppRolePermission)
+    // Custom roles: must belong to the requesting org
+    if (!role.isSystem && role.organizationId !== organizationId) {
       throw new ForbiddenException('Role does not belong to this organization');
     }
   }
@@ -316,6 +328,7 @@ export class RbacService {
       slug: role.slug,
       description: role.description,
       isSystem: role.isSystem,
+      userCount: role._count?.users ?? 0,
       createdAt: role.createdAt,
       updatedAt: role.updatedAt,
       permissions: role.permissions

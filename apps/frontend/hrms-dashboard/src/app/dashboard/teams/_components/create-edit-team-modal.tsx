@@ -87,13 +87,19 @@ export function CreateEditTeamModal({
 
   const managerOptions = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
 
+  const isValidUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
   const saveMutation = useMutation({
     mutationFn: () => {
+      if (!form.typeId) {
+        throw new Error('Please select a team type.');
+      }
+
       const payload = {
         name: form.name.trim(),
         typeId: form.typeId,
         description: form.description.trim() || undefined,
-        managerId: form.managerId || undefined,
+        managerId: form.managerId && isValidUuid(form.managerId) ? form.managerId : undefined,
       };
 
       return editTarget
@@ -137,9 +143,10 @@ export function CreateEditTeamModal({
             <Select
               value={form.typeId || undefined}
               onValueChange={(value) => setForm((current) => ({ ...current, typeId: value }))}
+              disabled={teamTypesQuery.isLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select team type" />
+                <SelectValue placeholder={teamTypesQuery.isLoading ? 'Loading types...' : 'Select team type'} />
               </SelectTrigger>
               <SelectContent>
                 {(teamTypesQuery.data ?? []).map((type) => (
@@ -200,7 +207,7 @@ export function CreateEditTeamModal({
           </Button>
           <Button
             onClick={() => saveMutation.mutate()}
-            disabled={!form.name.trim() || !form.typeId || saveMutation.isPending}
+            disabled={!form.name.trim() || !form.typeId || teamTypesQuery.isLoading || saveMutation.isPending}
           >
             {saveMutation.isPending ? 'Saving...' : editTarget ? 'Save Changes' : 'Create Team'}
           </Button>

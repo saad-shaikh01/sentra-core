@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { ILead, LeadStatus, LEAD_STATUS_TRANSITIONS } from '@sentra-core/types';
 import { LeadsKanbanCard } from './leads-kanban-card';
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 const COLUMNS: { status: LeadStatus; label: string }[] = [
   { status: LeadStatus.NEW, label: 'New' },
@@ -48,6 +49,39 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
   const [lostReason, setLostReason] = useState<string>('');
   const minFollowUpDate = new Date().toISOString().split('T')[0];
 
+  const [activeTab, setActiveTab] = useState<LeadStatus>(LeadStatus.NEW);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const scrollToColumn = (status: LeadStatus) => {
+    setActiveTab(status);
+    const element = document.getElementById(`kanban-col-${status}`);
+    if (element && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const targetScroll = element.offsetLeft - 16; // 16 is padding
+      container.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    }
+  };
+
+  const handleScroll = () => {
+    if (!isMobile || !scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const scrollLeft = container.scrollLeft;
+    const itemWidth = container.clientWidth - 32; // Approx width of one col including gaps
+
+    const index = Math.round(scrollLeft / itemWidth);
+    if (COLUMNS[index]) {
+      setActiveTab(COLUMNS[index].status);
+    }
+  };
+
   const onDragEnd = (result: DropResult) => {
     const { destination, draggableId, source } = result;
     if (!destination || destination.droppableId === source.droppableId) return;
@@ -77,19 +111,58 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
 
   return (
     <>
+      {/* Mobile Column Selector */}
+      <div className="md:hidden flex overflow-x-auto no-scrollbar gap-1 mb-4 border-b border-white/5 pb-2 -mx-4 px-4 sticky top-20 bg-black/20 backdrop-blur-md z-10">
+        {COLUMNS.map(({ status, label }) => {
+          const count = leads.filter((l) => l.status === status).length;
+          return (
+            <button
+              key={status}
+              onClick={() => scrollToColumn(status)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all",
+                activeTab === status
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+              )}
+            >
+              {label}
+              <span className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px]",
+                activeTab === status ? "bg-white/20" : "bg-white/5"
+              )}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className={cn(
+            "flex gap-4 md:grid md:grid-cols-2 xl:grid-cols-6",
+            "overflow-x-auto md:overflow-x-visible pb-6 -mx-4 px-4 md:mx-0 md:px-0",
+            "snap-x snap-mandatory md:snap-none no-scrollbar"
+          )}
+        >
           {COLUMNS.map(({ status, label }) => {
             const columnLeads = leads.filter((l) => l.status === status);
             return (
-              <div key={status} className="flex flex-col min-h-[400px]">
+              <div
+                key={status}
+                id={`kanban-col-${status}`}
+                className="flex flex-col min-h-[400px] w-[85vw] shrink-0 md:w-auto snap-center"
+              >
                 <div className={`rounded-t-2xl border border-b-0 border-white/10 ${COLUMN_COLORS[status]} border-t-2 px-4 py-3 bg-white/[0.02]`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
                     <span className="text-xs font-bold bg-white/10 rounded-full px-2 py-0.5">{columnLeads.length}</span>
                   </div>
                 </div>
-                <Droppable droppableId={status}>
+                <Droppable droppableId={status} isDropDisabled={isMobile}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
@@ -105,6 +178,7 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
                           lead={lead}
                           index={i}
                           onClick={onLeadClick}
+                          isDragDisabled={isMobile}
                         />
                       ))}
                       {provided.placeholder}

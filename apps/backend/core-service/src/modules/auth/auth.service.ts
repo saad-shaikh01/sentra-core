@@ -456,6 +456,12 @@ export class AuthService {
 
     // 3. Reuse detection (AUTH-002): if already ROTATED, revoke entire family
     if (storedToken.revokedAt && storedToken.revokedReason === 'ROTATED') {
+      // Grace period: within 30s of rotation, a second use is likely a multi-tab race,
+      // not an attack. Return TOKEN_ROTATED so the frontend can recover from localStorage.
+      const gracePeriodMs = 30_000;
+      if (storedToken.revokedAt && Date.now() - storedToken.revokedAt.getTime() < gracePeriodMs) {
+        throw new UnauthorizedException({ code: 'TOKEN_ROTATED', message: 'Token was recently rotated. Please retry.' });
+      }
       if (storedToken.familyId) {
         await this.prisma.refreshToken.updateMany({
           where: { familyId: storedToken.familyId, revokedAt: null },

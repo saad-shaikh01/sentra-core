@@ -12,6 +12,7 @@ import * as bodyParser from 'body-parser';
 const CORS_STATIC_ORIGINS = [
   'http://localhost:4200',
   'http://localhost:4201',
+  'http://localhost:3005',
 ];
 const CORS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 

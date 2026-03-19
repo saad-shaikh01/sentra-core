@@ -24,18 +24,18 @@ export function TeamFilterBar({
   teamTypes: TeamTypeRecord[];
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:flex-row">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center mb-6">
       <Input
         placeholder="Search teams..."
         value={search}
         onChange={(event) => onSearch(event.target.value)}
-        className="max-w-xl bg-white/5 border-white/10"
+        className="w-full md:max-w-xl bg-white/5 border-white/10"
       />
       <Select
         value={typeId ?? 'all'}
         onValueChange={(value) => onTypeChange(value === 'all' ? null : value)}
       >
-        <SelectTrigger className="w-full bg-white/5 border-white/10 md:w-60">
+        <SelectTrigger className="w-full md:w-60 bg-white/5 border-white/10">
           <SelectValue placeholder="All team types" />
         </SelectTrigger>
         <SelectContent>

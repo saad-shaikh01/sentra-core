@@ -14,7 +14,7 @@ export const ToastViewport = React.forwardRef<
   <ToastPrimitive.Viewport
     ref={ref}
     className={cn(
-      'fixed bottom-4 right-4 z-[100] flex max-h-screen w-full max-w-sm flex-col gap-2 p-0',
+      'fixed bottom-0 sm:bottom-4 sm:right-4 z-[100] flex max-h-screen w-full sm:max-w-sm flex-col gap-2 p-4 sm:p-0',
       className
     )}
     {...props}
@@ -44,7 +44,7 @@ export const Toast = React.forwardRef<
       'rounded-xl border px-4 py-3 backdrop-blur-xl shadow-lg',
       'data-[state=open]:animate-in data-[state=closed]:animate-out',
       'data-[state=closed]:fade-out-80 data-[state=open]:fade-in-0',
-      'data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-right-full',
+      'data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full sm:data-[state=open]:slide-in-from-right-full',
       toastVariants[variant],
       className
     )}

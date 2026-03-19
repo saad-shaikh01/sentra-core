@@ -79,7 +79,7 @@ interface UIActions {
 
 export const useUIStore = create<UIState & UIActions>((set) => ({
   // State
-  sidebarOpen: true,
+  sidebarOpen: false,
   inviteModalOpen: false,
   confirmDialogOpen: false,
   confirmDialogData: null,

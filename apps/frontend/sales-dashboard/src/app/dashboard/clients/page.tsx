@@ -169,7 +169,7 @@ export default function ClientsPage() {
             setSearchInput(event.target.value);
             setParams({ search: event.target.value, page: 1 });
           }}
-          className="max-w-xs border-white/10 bg-white/5"
+          className="w-full sm:max-w-xs border-white/10 bg-white/5"
         />
       </FilterBar>
 

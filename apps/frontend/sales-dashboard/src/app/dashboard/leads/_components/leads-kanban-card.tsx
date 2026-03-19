@@ -9,9 +9,10 @@ interface LeadsKanbanCardProps {
   lead: ILead & { brandName?: string; assigneeName?: string };
   index: number;
   onClick: (lead: ILead) => void;
+  isDragDisabled?: boolean;
 }
 
-export function LeadsKanbanCard({ lead, index, onClick }: LeadsKanbanCardProps) {
+export function LeadsKanbanCard({ lead, index, onClick, isDragDisabled }: LeadsKanbanCardProps) {
   const age = timeAgo(lead.leadDate ?? lead.createdAt);
 
   const initials = lead.assigneeName
@@ -19,7 +20,7 @@ export function LeadsKanbanCard({ lead, index, onClick }: LeadsKanbanCardProps) 
     : null;
 
   return (
-    <Draggable draggableId={lead.id} index={index}>
+    <Draggable draggableId={lead.id} index={index} isDragDisabled={isDragDisabled}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}

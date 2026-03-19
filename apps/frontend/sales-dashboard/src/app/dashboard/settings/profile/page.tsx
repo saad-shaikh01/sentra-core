@@ -98,22 +98,24 @@ export default function ProfileSettingsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-6">
-            <Avatar className="h-24 w-24 ring-4 ring-primary/20">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
+            <Avatar className="h-24 w-24 ring-4 ring-primary/20 shrink-0">
               <AvatarImage src={formData.avatarUrl} />
               <AvatarFallback className="text-xl bg-primary/20 text-primary">
                 {getInitials(formData.name || 'User')}
               </AvatarFallback>
             </Avatar>
-            <div className="space-y-1">
-              <h3 className="text-2xl font-semibold">{user?.name}</h3>
-              <p className="text-muted-foreground flex items-center gap-2">
-                <Mail className="h-4 w-4" />
+            <div className="space-y-1 min-w-0 flex-1">
+              <h3 className="text-2xl font-semibold truncate">{user?.name}</h3>
+              <p className="text-muted-foreground flex items-center justify-center sm:justify-start gap-2 truncate">
+                <Mail className="h-4 w-4 shrink-0" />
                 {user?.email}
               </p>
-              <Badge variant={getRoleBadgeVariant(user?.role || '')} className="mt-2">
-                {formatRole(user?.role || '')}
-              </Badge>
+              <div className="flex justify-center sm:justify-start">
+                <Badge variant={getRoleBadgeVariant(user?.role || '')} className="mt-2">
+                  {formatRole(user?.role || '')}
+                </Badge>
+              </div>
             </div>
           </div>
         </CardContent>

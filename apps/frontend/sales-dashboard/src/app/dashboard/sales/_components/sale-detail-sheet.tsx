@@ -57,7 +57,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
           </div>
         ) : sale ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <InfoCard label="Status" value={<StatusBadge status={sale.status} />} />
               <InfoCard label="Currency" value={<span className="text-sm">{sale.currency}</span>} />
               <InfoCard label="Amount" value={<span className="text-sm font-bold">${sale.totalAmount}</span>} />
@@ -113,7 +113,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
             ) : null}
 
             {/* Action buttons */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               {canChargeOrSubscribe && hasPaymentProfile ? (
                 <Button
                   variant="outline"

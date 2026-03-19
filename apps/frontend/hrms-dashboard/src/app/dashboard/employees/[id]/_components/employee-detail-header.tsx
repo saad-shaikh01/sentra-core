@@ -50,6 +50,18 @@ export function EmployeeDetailHeader({
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: () => hrmsApi.patch(`/employees/${employee.id}/reactivate`),
+    onSuccess: () => {
+      toast.success(`${employee.fullName} has been reactivated.`);
+      queryClient.invalidateQueries({ queryKey: ['employee', employee.id] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to reactivate employee.');
+    },
+  });
+
   return (
     <>
       <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:flex-row lg:items-start lg:justify-between">
@@ -101,6 +113,12 @@ export function EmployeeDetailHeader({
           {employee.status !== 'DEACTIVATED' && hasPermission('hrms:users:deactivate') ? (
             <Button variant="destructive" onClick={() => setDeactivateOpen(true)}>
               Deactivate
+            </Button>
+          ) : null}
+
+          {employee.status === 'DEACTIVATED' && hasPermission('hrms:users:deactivate') ? (
+            <Button variant="outline" onClick={() => reactivateMutation.mutate()}>
+              {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate'}
             </Button>
           ) : null}
         </div>

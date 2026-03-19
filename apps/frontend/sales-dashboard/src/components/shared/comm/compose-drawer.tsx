@@ -21,6 +21,7 @@ import {
   Type,
   Underline as UnderlineIcon,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import { useSendMessage, useIdentities, useForwardMessage } from '@/hooks/use-co
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import type { CommIdentity } from '@/types/comm.types';
+import { cn } from '@/lib/utils';
 
 interface AliasOption {
   value: string;
@@ -148,39 +150,21 @@ function ComposeToolbar() {
     <>
       <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
         <Bold className="h-3.5 w-3.5" />
-        <span>Bold</span>
+        <span className="hidden sm:inline">Bold</span>
       </ToolbarButton>
       <ToolbarButton label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
         <Italic className="h-3.5 w-3.5" />
-        <span>Italic</span>
+        <span className="hidden sm:inline">Italic</span>
       </ToolbarButton>
       <ToolbarButton label="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
         <UnderlineIcon className="h-3.5 w-3.5" />
-        <span>Underline</span>
+        <span className="hidden sm:inline">Underline</span>
       </ToolbarButton>
-      <ToolbarButton label="Strikethrough" active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}>
-        <Strikethrough className="h-3.5 w-3.5" />
-        <span>Strike</span>
-      </ToolbarButton>
-      <ToolbarButton label="Bullet List" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+      <ToolbarButton label="Bullets" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
         <List className="h-3.5 w-3.5" />
-        <span>Bullets</span>
-      </ToolbarButton>
-      <ToolbarButton label="Ordered List" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-        <ListOrdered className="h-3.5 w-3.5" />
-        <span>Numbered</span>
       </ToolbarButton>
       <ToolbarButton label="Link" active={editor.isActive('link')} onClick={setLink}>
         <Link2 className="h-3.5 w-3.5" />
-        <span>Link</span>
-      </ToolbarButton>
-      <ToolbarButton
-        label="Clear Formatting"
-        active={false}
-        onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-      >
-        <Type className="h-3.5 w-3.5" />
-        <span>Clear</span>
       </ToolbarButton>
     </>
   );
@@ -595,335 +579,332 @@ export function ComposeDrawer({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 40, opacity: 0 }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="fixed bottom-6 right-6 z-50 flex w-[560px] flex-col rounded-2xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur-3xl"
-        >
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <h3 className="text-sm font-semibold">{mode === 'forward' ? 'Forward Email' : 'New Email'}</h3>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7 hover:bg-white/10">
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          <div className="space-y-2 px-4 py-3">
-            {savedDraft && (
-              <div className="flex items-center justify-between rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                <span>Restore draft?</span>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={restoreDraft} className="font-medium text-amber-50">
-                    Restore
-                  </button>
-                  <button type="button" onClick={discardDraft} className="text-amber-100/80">
-                    Discard
-                  </button>
-                </div>
-              </div>
+        <>
+          {/* Mobile Overlay Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm sm:hidden"
+          />
+          <motion.div
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className={cn(
+              "fixed z-50 flex flex-col border border-white/10 bg-black/90 shadow-2xl backdrop-blur-3xl",
+              "bottom-0 left-0 right-0 top-0 sm:bottom-6 sm:right-6 sm:left-auto sm:top-auto sm:w-[560px] sm:max-h-[85vh] sm:rounded-2xl"
             )}
-            {aliasOptions.length > 0 && (
-              <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                <span className="w-12 shrink-0 text-xs text-muted-foreground">From</span>
-                <select
-                  value={selectedFrom}
-                  onChange={(event) => setSelectedFrom(event.target.value)}
-                  className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
-                >
-                  {identities?.map((identity: CommIdentity) => {
-                    const options = aliasOptions.filter((option) => option.identityId === identity.id);
-                    if (options.length <= 1) {
-                      const option = options[0];
-                      return option ? (
-                        <option key={option.value} value={option.value} className="bg-black">
-                          {option.label}
-                        </option>
-                      ) : null;
-                    }
-                    return (
-                      <optgroup key={identity.id} label={identity.email} className="bg-black">
-                        {options.map((option) => (
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
+              <h3 className="text-sm font-semibold">{mode === 'forward' ? 'Forward Email' : 'New Email'}</h3>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 hover:bg-white/10">
+                  <ChevronDown className="h-4 w-4 sm:hidden" />
+                  <X className="h-4 w-4 hidden sm:block" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 px-4 py-3 overscroll-contain">
+              {savedDraft && (
+                <div className="flex items-center justify-between rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  <span>Restore draft?</span>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={restoreDraft} className="font-medium text-amber-50">
+                      Restore
+                    </button>
+                    <button type="button" onClick={discardDraft} className="text-amber-100/80">
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
+              {aliasOptions.length > 0 && (
+                <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                  <span className="w-12 shrink-0 text-xs text-muted-foreground">From</span>
+                  <select
+                    value={selectedFrom}
+                    onChange={(event) => setSelectedFrom(event.target.value)}
+                    className="flex-1 bg-transparent text-sm text-foreground focus:outline-none truncate"
+                  >
+                    {identities?.map((identity: CommIdentity) => {
+                      const options = aliasOptions.filter((option) => option.identityId === identity.id);
+                      if (options.length <= 1) {
+                        const option = options[0];
+                        return option ? (
                           <option key={option.value} value={option.value} className="bg-black">
                             {option.label}
                           </option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </select>
-              </div>
-            )}
+                        ) : null;
+                      }
+                      return (
+                        <optgroup key={identity.id} label={identity.email} className="bg-black">
+                          {options.map((option) => (
+                            <option key={option.value} value={option.value} className="bg-black">
+                              {option.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
 
-            <div className="border-b border-white/10 pb-2">
-              <div className="flex items-start gap-2">
-                <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">To</span>
-                <div className="flex flex-1 flex-wrap items-center gap-2">
-                  {toRecipients.map((email) => (
-                    <span
-                      key={email}
-                      className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
+              <div className="border-b border-white/10 pb-2">
+                <div className="flex items-start gap-2">
+                  <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">To</span>
+                  <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+                    {toRecipients.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
+                      >
+                        <span className="truncate max-w-[150px]">{email}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${email}`}
+                          onClick={() => setToRecipients((current) => current.filter((candidate) => candidate !== email))}
+                          className="text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      value={toInput}
+                      onChange={(event) => {
+                        setToInput(event.target.value);
+                        if (toError) {
+                          setToError('');
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && toInput.trim()) {
+                          event.preventDefault();
+                          applyRecipientInput(toRecipients, toInput, setToRecipients, setToInput, setToError);
+                        }
+                      }}
+                      placeholder="recipient@example.com"
+                      className="min-w-[120px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+                    />
+                  </div>
+                  <div className="flex gap-2 shrink-0 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowCc((current) => !current)}
+                      className="text-xs text-muted-foreground transition-colors hover:text-foreground px-1"
                     >
-                      <span>{email}</span>
+                      CC
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowBcc((current) => !current)}
+                      className="text-xs text-muted-foreground transition-colors hover:text-foreground px-1"
+                    >
+                      BCC
+                    </button>
+                  </div>
+                </div>
+                {toError && <p className="pl-14 pt-2 text-xs text-red-400">{toError}</p>}
+              </div>
+
+              {showCc && (
+                <div className="border-b border-white/10 pb-2">
+                  <div className="flex items-start gap-2">
+                    <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">CC</span>
+                    <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+                      {ccRecipients.map((email) => (
+                        <span
+                          key={email}
+                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
+                        >
+                          <span className="truncate max-w-[150px]">{email}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${email}`}
+                            onClick={() => setCcRecipients((current) => current.filter((candidate) => candidate !== email))}
+                            className="text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={ccInput}
+                        onChange={(event) => {
+                          setCcInput(event.target.value);
+                          if (ccError) {
+                            setCcError('');
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && ccInput.trim()) {
+                            event.preventDefault();
+                            applyRecipientInput(ccRecipients, ccInput, setCcRecipients, setCcInput, setCcError);
+                          }
+                        }}
+                        placeholder="cc@example.com"
+                        className="min-w-[120px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+                      />
+                    </div>
+                  </div>
+                  {ccError && <p className="pl-14 pt-2 text-xs text-red-400">{ccError}</p>}
+                </div>
+              )}
+
+              {showBcc && (
+                <div className="border-b border-white/10 pb-2">
+                  <div className="flex items-start gap-2">
+                    <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">BCC</span>
+                    <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+                      {bccRecipients.map((email) => (
+                        <span
+                          key={email}
+                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
+                        >
+                          <span className="truncate max-w-[150px]">{email}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${email}`}
+                            onClick={() => setBccRecipients((current) => current.filter((candidate) => candidate !== email))}
+                            className="text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={bccInput}
+                        onChange={(event) => {
+                          setBccInput(event.target.value);
+                          if (bccError) {
+                            setBccError('');
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && bccInput.trim()) {
+                            event.preventDefault();
+                            applyRecipientInput(bccRecipients, bccInput, setBccRecipients, setBccInput, setBccError);
+                          }
+                        }}
+                        placeholder="bcc@example.com"
+                        className="min-w-[120px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+                      />
+                    </div>
+                  </div>
+                  {bccError && <p className="pl-14 pt-2 text-xs text-red-400">{bccError}</p>}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 border-b border-white/10 pb-2 shrink-0">
+                <span className="w-12 shrink-0 text-xs text-muted-foreground">Subject</span>
+                <Input
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  placeholder="Email subject"
+                  readOnly={mode === 'forward'}
+                  className="flex-1 border-none bg-transparent px-0 text-sm focus-visible:ring-0 shadow-none"
+                />
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] min-h-[250px] flex flex-col">
+                <EditorContext.Provider value={{ editor }}>
+                  <div className="flex flex-wrap gap-1 border-b border-white/10 px-2 py-2 bg-black/20 shrink-0">
+                    <ComposeToolbar />
+                    <ToolbarButton
+                      label="Insert Image"
+                      active={false}
+                      onClick={triggerImagePicker}
+                    >
+                      {isUploadingImage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                    </ToolbarButton>
+                    <ToolbarButton label="Attach Files" active={false} onClick={triggerAttachmentPicker}>
+                      {isUploadingAttachment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+                    </ToolbarButton>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    <EditorContent editor={editor} />
+                  </div>
+                </EditorContext.Provider>
+              </div>
+              {uploadedAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {uploadedAttachments.map((attachment) => (
+                    <span
+                      key={attachment.s3Key}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px]"
+                    >
+                      <span className="truncate max-w-[150px]">{attachment.filename}</span>
+                      <span className="text-muted-foreground/60">{formatFileSize(attachment.size)}</span>
                       <button
                         type="button"
-                        aria-label={`Remove ${email}`}
-                        onClick={() => setToRecipients((current) => current.filter((candidate) => candidate !== email))}
+                        aria-label={`Remove attachment ${attachment.filename}`}
+                        onClick={() =>
+                          setUploadedAttachments((current) =>
+                            current.filter((candidate) => candidate.s3Key !== attachment.s3Key),
+                          )
+                        }
                         className="text-muted-foreground transition-colors hover:text-foreground"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </span>
                   ))}
-                  <input
-                    value={toInput}
-                    onChange={(event) => {
-                      setToInput(event.target.value);
-                      if (toError) {
-                        setToError('');
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && toInput.trim()) {
-                        event.preventDefault();
-                        applyRecipientInput(toRecipients, toInput, setToRecipients, setToInput, setToError);
-                      }
-                    }}
-                    onPaste={(event) => {
-                      const pasted = event.clipboardData.getData('text');
-                      if (pasted.includes(',')) {
-                        event.preventDefault();
-                        applyRecipientInput(toRecipients, pasted, setToRecipients, setToInput, setToError);
-                      }
-                    }}
-                    placeholder="recipient@example.com"
-                    className="min-w-[180px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCc((current) => !current)}
-                  className="pt-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  CC
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBcc((current) => !current)}
-                  className="pt-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  BCC
-                </button>
-              </div>
-              {toError && <p className="pl-14 pt-2 text-xs text-red-400">{toError}</p>}
-            </div>
-
-            {showCc && (
-              <div className="border-b border-white/10 pb-2">
-                <div className="flex items-start gap-2">
-                  <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">CC</span>
-                  <div className="flex flex-1 flex-wrap items-center gap-2">
-                    {ccRecipients.map((email) => (
-                      <span
-                        key={email}
-                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
-                      >
-                        <span>{email}</span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${email}`}
-                          onClick={() => setCcRecipients((current) => current.filter((candidate) => candidate !== email))}
-                          className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      value={ccInput}
-                      onChange={(event) => {
-                        setCcInput(event.target.value);
-                        if (ccError) {
-                          setCcError('');
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && ccInput.trim()) {
-                          event.preventDefault();
-                          applyRecipientInput(ccRecipients, ccInput, setCcRecipients, setCcInput, setCcError);
-                        }
-                      }}
-                      onPaste={(event) => {
-                        const pasted = event.clipboardData.getData('text');
-                        if (pasted.includes(',')) {
-                          event.preventDefault();
-                          applyRecipientInput(ccRecipients, pasted, setCcRecipients, setCcInput, setCcError);
-                        }
-                      }}
-                      placeholder="cc@example.com"
-                      className="min-w-[180px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    />
-                  </div>
-                </div>
-                {ccError && <p className="pl-14 pt-2 text-xs text-red-400">{ccError}</p>}
-              </div>
-            )}
-
-            {showBcc && (
-              <div className="border-b border-white/10 pb-2">
-                <div className="flex items-start gap-2">
-                  <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">BCC</span>
-                  <div className="flex flex-1 flex-wrap items-center gap-2">
-                    {bccRecipients.map((email) => (
-                      <span
-                        key={email}
-                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
-                      >
-                        <span>{email}</span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${email}`}
-                          onClick={() => setBccRecipients((current) => current.filter((candidate) => candidate !== email))}
-                          className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      value={bccInput}
-                      onChange={(event) => {
-                        setBccInput(event.target.value);
-                        if (bccError) {
-                          setBccError('');
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && bccInput.trim()) {
-                          event.preventDefault();
-                          applyRecipientInput(bccRecipients, bccInput, setBccRecipients, setBccInput, setBccError);
-                        }
-                      }}
-                      onPaste={(event) => {
-                        const pasted = event.clipboardData.getData('text');
-                        if (pasted.includes(',')) {
-                          event.preventDefault();
-                          applyRecipientInput(bccRecipients, pasted, setBccRecipients, setBccInput, setBccError);
-                        }
-                      }}
-                      placeholder="bcc@example.com"
-                      className="min-w-[180px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    />
-                  </div>
-                </div>
-                {bccError && <p className="pl-14 pt-2 text-xs text-red-400">{bccError}</p>}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-              <span className="w-12 shrink-0 text-xs text-muted-foreground">Subject</span>
-              <Input
-                value={subject}
-                onChange={(event) => setSubject(event.target.value)}
-                placeholder="Email subject"
-                readOnly={mode === 'forward'}
-                className="flex-1 border-none bg-transparent px-0 text-sm focus-visible:ring-0"
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void handleImageUpload(file);
+                  }
+                  event.target.value = '';
+                }}
+                className="hidden"
+                data-testid="compose-image-input"
+              />
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                onChange={(event) => {
+                  void handleAttachmentUpload(event.target.files);
+                  event.target.value = '';
+                }}
+                className="hidden"
+                data-testid="compose-attachment-input"
               />
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
-              <EditorContext.Provider value={{ editor }}>
-                <div className="flex flex-wrap gap-2 border-b border-white/10 px-3 py-3">
-                  <ComposeToolbar />
-                  <ToolbarButton
-                    label="Insert Image"
-                    active={false}
-                    onClick={triggerImagePicker}
-                  >
-                    {isUploadingImage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
-                    <span>Image</span>
-                  </ToolbarButton>
-                  <ToolbarButton label="Attach Files" active={false} onClick={triggerAttachmentPicker}>
-                    {isUploadingAttachment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
-                    <span>Attach</span>
-                  </ToolbarButton>
-                </div>
-                <EditorContent editor={editor} />
-              </EditorContext.Provider>
-            </div>
-            {uploadedAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {uploadedAttachments.map((attachment) => (
-                  <span
-                    key={attachment.s3Key}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs"
-                  >
-                    <span>{attachment.filename}</span>
-                    <span className="text-muted-foreground">{formatFileSize(attachment.size)}</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove attachment ${attachment.filename}`}
-                      onClick={() =>
-                        setUploadedAttachments((current) =>
-                          current.filter((candidate) => candidate.s3Key !== attachment.s3Key),
-                        )
-                      }
-                      className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+            <div className="flex items-center justify-between border-t border-white/10 px-4 py-4 shrink-0 bg-black/40 backdrop-blur-md">
+              {error && <p className="text-xs text-red-400 line-clamp-1 flex-1 mr-2">{error}</p>}
+              <div className="ml-auto flex items-center gap-3">
+                <Button
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={sendMessage.isPending || forwardMessage.isPending}
+                  className="shadow-lg shadow-primary/20 h-10 px-6 font-bold"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  {mode === 'forward'
+                    ? forwardMessage.isPending
+                      ? 'Forwarding...'
+                      : 'Forward'
+                    : sendMessage.isPending
+                      ? 'Sending...'
+                      : 'Send'}
+                </Button>
               </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void handleImageUpload(file);
-                }
-                event.target.value = '';
-              }}
-              className="hidden"
-              data-testid="compose-image-input"
-            />
-            <input
-              ref={attachmentInputRef}
-              type="file"
-              multiple
-              onChange={(event) => {
-                void handleAttachmentUpload(event.target.files);
-                event.target.value = '';
-              }}
-              className="hidden"
-              data-testid="compose-attachment-input"
-            />
-          </div>
-
-          <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
-            {error && <p className="text-xs text-red-400">{error}</p>}
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={handleSend}
-                disabled={sendMessage.isPending || forwardMessage.isPending}
-                className="shadow-lg shadow-primary/20"
-              >
-                <Send className="mr-1.5 h-3.5 w-3.5" />
-                {mode === 'forward'
-                  ? forwardMessage.isPending
-                    ? 'Forwarding...'
-                    : 'Forward'
-                  : sendMessage.isPending
-                    ? 'Sending...'
-                    : 'Send'}
-              </Button>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

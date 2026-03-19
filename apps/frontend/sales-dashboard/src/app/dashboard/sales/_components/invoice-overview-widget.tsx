@@ -19,7 +19,7 @@ export function InvoiceOverviewWidget({ brandId }: InvoiceOverviewWidgetProps) {
     return (
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-6 animate-pulse">
         <div className="h-4 w-32 bg-white/10 rounded mb-4" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="space-y-2">
               <div className="h-3 w-16 bg-white/10 rounded" />
@@ -72,7 +72,7 @@ export function InvoiceOverviewWidget({ brandId }: InvoiceOverviewWidgetProps) {
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">
         Invoice Overview
       </p>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {sections.map((s) => (
           <div
             key={s.label}
