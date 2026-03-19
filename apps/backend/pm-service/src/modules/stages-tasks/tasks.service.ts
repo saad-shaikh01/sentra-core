@@ -9,11 +9,14 @@
 
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { PrismaService, NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
 import { PmCacheService } from '../../common/cache/pm-cache.service';
 import { PmEventsService } from '../events/pm-events.service';
 import {
@@ -57,12 +60,17 @@ export type TaskSummary = {
 @Injectable()
 export class TasksService {
   private readonly CACHE_RESOURCE = 'tasks';
+  private readonly logger = new Logger(TasksService.name);
+  private readonly notificationHelper: NotificationHelper;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: PmCacheService,
     private readonly events: PmEventsService,
-  ) {}
+    @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
+  ) {
+    this.notificationHelper = new NotificationHelper(notifQueue);
+  }
 
   // -------------------------------------------------------------------------
   // Create task inside a stage
@@ -101,6 +109,26 @@ export class TasksService {
     });
 
     await this.cache.invalidateOrgResource(organizationId, this.CACHE_RESOURCE);
+
+    if (dto.description) {
+      try {
+        const actor = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        await this.notificationHelper.notifyMentions({
+          content: dto.description,
+          context: `in task "${task.name}"`,
+          url: `/dashboard/tasks/${task.id}`,
+          entityType: 'task',
+          entityId: task.id,
+          actorId: userId,
+          actorName: actor?.name ?? userId,
+          organizationId,
+          module: 'PM',
+        });
+      } catch (err) {
+        this.logger.error('notifyMentions failed on task create (non-fatal):', err);
+      }
+    }
+
     return task;
   }
 
@@ -280,6 +308,26 @@ export class TasksService {
     });
 
     await this.invalidateTask(organizationId, taskId);
+
+    if (dto.description) {
+      try {
+        const actor = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        await this.notificationHelper.notifyMentions({
+          content: dto.description,
+          context: `in task "${updated.name}"`,
+          url: `/dashboard/tasks/${updated.id}`,
+          entityType: 'task',
+          entityId: updated.id,
+          actorId: userId,
+          actorName: actor?.name ?? userId,
+          organizationId,
+          module: 'PM',
+        });
+      } catch (err) {
+        this.logger.error('notifyMentions failed on task update (non-fatal):', err);
+      }
+    }
+
     return updated;
   }
 

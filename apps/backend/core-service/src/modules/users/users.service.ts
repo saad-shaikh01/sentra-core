@@ -40,6 +40,25 @@ export class UsersService {
     };
   }
 
+  async searchUsers(
+    orgId: string,
+    q: string,
+  ): Promise<{ id: string; name: string; email: string }[]> {
+    if (!q || q.trim().length < 1) return [];
+
+    return this.prisma.user.findMany({
+      where: {
+        organizationId: orgId,
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, email: true },
+      take: 10,
+    });
+  }
+
   async updateMe(userId: string, dto: UpdateProfileDto): Promise<IUserProfile> {
     const user = await this.prisma.user.update({
       where: { id: userId },

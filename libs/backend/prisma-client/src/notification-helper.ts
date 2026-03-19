@@ -62,9 +62,16 @@ export class NotificationHelper {
     const mentions = parseMentions(input.content);
     if (mentions.length === 0) return;
 
+    // Filter out self-mentions — actor should not receive their own mention notification
+    const recipients = mentions
+      .map((m) => m.userId)
+      .filter((id) => id !== input.actorId);
+
+    if (recipients.length === 0) return;
+
     await this.notify({
       organizationId: input.organizationId,
-      recipientIds: mentions.map((m) => m.userId),
+      recipientIds: recipients,
       actorId: input.actorId,
       type: 'MENTION',
       module: input.module,
