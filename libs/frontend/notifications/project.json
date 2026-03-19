@@ -1,0 +1,25 @@
+{
+  "name": "frontend-notifications",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/frontend/notifications/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:feature"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/frontend/notifications",
+        "main": "libs/frontend/notifications/src/index.ts",
+        "tsConfig": "libs/frontend/notifications/tsconfig.lib.json"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["libs/frontend/notifications/**/*.{ts,tsx,js,jsx}"]
+      }
+    }
+  }
+}

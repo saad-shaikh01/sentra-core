@@ -24,6 +24,12 @@
       "@sentra-core/mail-client": ["libs/backend/mail-client/src/index.ts"],
       "@sentra-core/mongoose-client": [
         "libs/backend/mongoose-client/src/index.ts"
+      ],
+      "@sentra-core/notifications": [
+        "libs/frontend/notifications/src/index.ts"
+      ],
+      "@sentra-core/rich-text": [
+        "libs/frontend/rich-text/src/index.ts"
       ]
     }
   },
