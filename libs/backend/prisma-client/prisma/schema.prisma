@@ -2019,6 +2019,87 @@ enum NotificationType {
   PAYMENT_RECEIVED
 }
 
+// ─── Global Notification System ──────────────────────────────────
+
+enum GlobalNotificationType {
+  // Sales domain
+  SALE_STATUS_CHANGED
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  INVOICE_OVERDUE
+  CHARGEBACK_FILED
+  // PM domain
+  TASK_ASSIGNED
+  TASK_DUE_SOON
+  COMMENT_ADDED
+  PROJECT_STATUS_CHANGED
+  APPROVAL_REQUESTED
+  // Cross-domain
+  MENTION
+  SYSTEM_ALERT
+}
+
+enum AppModule {
+  SALES
+  PM
+  HRMS
+  COMM
+  SYSTEM
+}
+
+enum PushPlatform {
+  WEB
+  ANDROID
+  IOS
+}
+
+model GlobalNotification {
+  id             String                   @id @default(cuid())
+  organizationId String
+  recipientId    String
+  actorId        String?
+
+  type           GlobalNotificationType
+  module         AppModule
+
+  title          String
+  body           String
+
+  // Linkable fields
+  entityType     String?
+  entityId       String?
+  url            String?
+
+  // @mention
+  isMention      Boolean                  @default(false)
+  mentionContext String?
+
+  isRead         Boolean                  @default(false)
+  readAt         DateTime?
+
+  data           Json?
+
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([organizationId, recipientId, isRead, createdAt])
+  @@index([recipientId, createdAt])
+  @@index([organizationId, type])
+}
+
+model PushToken {
+  id             String        @id @default(cuid())
+  userId         String
+  organizationId String
+  token          String        @unique
+  platform       PushPlatform
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId, organizationId])
+}
+
 // ==========================================
 // AUTH - SESSION TABLE
 // ==========================================

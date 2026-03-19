@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaClientModule } from '@sentra-core/prisma-client';
@@ -27,6 +28,7 @@ import { LeadIntegrationsModule } from '../modules/lead-integrations';
 import { PublicPaymentsModule } from '../modules/public-payments/public-payments.module';
 import { WebhooksModule } from '../modules/webhooks/webhooks.module';
 import { RbacModule } from '../modules/rbac';
+import { NotificationsModule } from '../modules/notifications/notifications.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -56,6 +58,21 @@ function resolveEnvFiles(): string[] {
         ],
       }),
     }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL', 'redis://localhost:6379');
+        const url = new URL(redisUrl);
+        return {
+          connection: {
+            host: url.hostname,
+            port: parseInt(url.port || '6379', 10),
+            password: url.password || undefined,
+          },
+        };
+      },
+    }),
     SentraCacheModule,
     PrismaClientModule,
     MailClientModule,
@@ -79,6 +96,7 @@ function resolveEnvFiles(): string[] {
     PublicPaymentsModule,
     WebhooksModule,
     RbacModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
