@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AppModule } from '@prisma/client';
 import { PrismaService } from '@sentra-core/prisma-client';
 import {
   buildPmPaginationResponse,
@@ -20,45 +21,47 @@ export class NotificationsService {
 
     const where = {
       organizationId,
-      userId,
-      ...(status !== undefined && { status }),
+      recipientId: userId,
+      module: AppModule.PM,
+      ...(status !== undefined && { isRead: status === 'READ' }),
     };
 
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.pmNotification.findMany({
+      this.prisma.globalNotification.findMany({
         where,
         skip,
         take,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.pmNotification.count({ where }),
+      this.prisma.globalNotification.count({ where }),
     ]);
 
     return buildPmPaginationResponse(rows, total, page, limit);
   }
 
   async markRead(organizationId: string, userId: string, id: string) {
-    const existing = await this.prisma.pmNotification.findFirst({
-      where: { id, organizationId, userId },
+    const existing = await this.prisma.globalNotification.findFirst({
+      where: { id, organizationId, recipientId: userId, module: AppModule.PM },
       select: { id: true },
     });
     if (!existing) throw new NotFoundException('Notification not found');
 
-    return this.prisma.pmNotification.update({
+    return this.prisma.globalNotification.update({
       where: { id },
-      data: { status: 'READ', readAt: new Date() },
+      data: { isRead: true, readAt: new Date() },
     });
   }
 
   async markAllRead(organizationId: string, userId: string) {
-    const result = await this.prisma.pmNotification.updateMany({
+    const result = await this.prisma.globalNotification.updateMany({
       where: {
         organizationId,
-        userId,
-        status: 'UNREAD',
+        recipientId: userId,
+        module: AppModule.PM,
+        isRead: false,
       },
       data: {
-        status: 'READ',
+        isRead: true,
         readAt: new Date(),
       },
     });
@@ -69,4 +72,3 @@ export class NotificationsService {
     };
   }
 }
-

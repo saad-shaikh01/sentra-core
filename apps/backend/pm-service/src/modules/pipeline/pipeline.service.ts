@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AppModule, GlobalNotificationType } from '@prisma/client';
 import { PrismaService } from '@sentra-core/prisma-client';
 
 export interface SaleClosedWonDto {
@@ -15,27 +16,35 @@ export class PipelineService {
 
   async handleSaleClosedWon(dto: SaleClosedWonDto) {
     // Idempotency: check if notification already created for this saleId
-    const existing = await this.prisma.pmNotification.findFirst({
+    const existing = await this.prisma.globalNotification.findFirst({
       where: {
         organizationId: dto.orgId,
-        scopeType: 'SALE',
-        scopeId: dto.saleId,
-        eventType: 'SALE_CLOSED_WON',
+        module: AppModule.PM,
+        type: GlobalNotificationType.SYSTEM_ALERT,
+        entityType: 'sale',
+        entityId: dto.saleId,
+        data: {
+          path: ['eventName'],
+          equals: 'SALE_CLOSED_WON',
+        },
       },
       select: { id: true },
     });
     if (existing) return { idempotent: true, notificationId: existing.id };
 
     // Create a single org-level notification; the frontend fans it out to relevant PMs
-    const notification = await this.prisma.pmNotification.create({
+    const notification = await this.prisma.globalNotification.create({
       data: {
         organizationId: dto.orgId,
-        userId: 'SYSTEM',
-        eventType: 'SALE_CLOSED_WON',
-        scopeType: 'SALE',
-        scopeId: dto.saleId,
-        status: 'UNREAD',
-        payload: {
+        recipientId: 'SYSTEM',
+        type: GlobalNotificationType.SYSTEM_ALERT,
+        module: AppModule.PM,
+        title: 'Sale Closed Won',
+        body: `A sale has been closed and won.`,
+        entityType: 'sale',
+        entityId: dto.saleId,
+        data: {
+          eventName: 'SALE_CLOSED_WON',
           saleId: dto.saleId,
           clientId: dto.clientId,
           totalAmount: dto.totalAmount,
@@ -48,11 +57,16 @@ export class PipelineService {
   }
 
   async getPendingSales(organizationId: string) {
-    const notifications = await this.prisma.pmNotification.findMany({
+    const notifications = await this.prisma.globalNotification.findMany({
       where: {
         organizationId,
-        eventType: 'SALE_CLOSED_WON',
-        status: 'UNREAD',
+        module: AppModule.PM,
+        type: GlobalNotificationType.SYSTEM_ALERT,
+        isRead: false,
+        data: {
+          path: ['eventName'],
+          equals: 'SALE_CLOSED_WON',
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

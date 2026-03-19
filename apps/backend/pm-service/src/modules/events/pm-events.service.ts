@@ -27,6 +27,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
+import { AppModule, GlobalNotificationType } from '@prisma/client';
 import { PrismaService } from '@sentra-core/prisma-client';
 
 // ---------------------------------------------------------------------------
@@ -208,35 +209,52 @@ export class PmEventsService {
     const projectId = (payload['projectId'] as string | undefined) ?? null;
 
     let targetUserId: string | null = null;
-    let scopeType = 'PROJECT';
-    let scopeId = projectId ?? envelope.eventId;
+    let notifType: GlobalNotificationType | null = null;
+    let title = '';
+    let body = '';
+    let entityType: string | undefined;
+    let entityId: string | undefined;
 
     if (envelope.eventName === 'pm.task_assigned') {
       targetUserId = (payload['assignedToId'] as string | undefined) ?? null;
-      scopeType = 'TASK';
-      scopeId = (payload['taskId'] as string | undefined) ?? scopeId;
+      notifType = GlobalNotificationType.TASK_ASSIGNED;
+      title = 'Task Assigned';
+      body = 'A task has been assigned to you.';
+      entityType = 'task';
+      entityId = (payload['taskId'] as string | undefined) ?? undefined;
     } else if (envelope.eventName === 'pm.mention_created') {
       targetUserId = (payload['mentionedUserId'] as string | undefined) ?? null;
-      scopeType = (payload['scopeType'] as string | undefined) ?? 'THREAD';
-      scopeId = (payload['scopeId'] as string | undefined) ?? scopeId;
+      notifType = GlobalNotificationType.MENTION;
+      title = 'You were mentioned';
+      body = 'You were mentioned in a PM thread.';
+      entityType = (payload['scopeType'] as string | undefined)?.toLowerCase() ?? 'thread';
+      entityId = (payload['scopeId'] as string | undefined) ?? undefined;
     } else if (envelope.eventName === 'pm.approval_requested') {
       targetUserId = (payload['approvalTargetUserId'] as string | undefined) ?? null;
-      scopeType = 'APPROVAL';
-      scopeId = (payload['approvalRequestId'] as string | undefined) ?? scopeId;
+      notifType = GlobalNotificationType.APPROVAL_REQUESTED;
+      title = 'Approval Requested';
+      body = 'Your approval is required.';
+      entityType = 'approval';
+      entityId = (payload['approvalRequestId'] as string | undefined) ?? undefined;
     }
 
-    if (!targetUserId) return;
+    if (!targetUserId || !notifType) return;
 
-    await this.prisma.pmNotification.create({
+    await this.prisma.globalNotification.create({
       data: {
         organizationId: envelope.organizationId,
-        projectId,
-        userId: targetUserId,
-        eventType: envelope.eventName,
-        scopeType,
-        scopeId,
-        status: 'UNREAD',
-        payload: envelope as unknown as object,
+        recipientId: targetUserId,
+        type: notifType,
+        module: AppModule.PM,
+        title,
+        body,
+        entityType,
+        entityId,
+        data: {
+          projectId,
+          eventName: envelope.eventName,
+          payload: envelope.payload as object,
+        },
       },
     }).catch(() => {
       // Notification persistence must not block business flow.

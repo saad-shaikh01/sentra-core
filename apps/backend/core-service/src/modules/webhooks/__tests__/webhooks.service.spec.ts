@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { NotificationType, PrismaService } from '@sentra-core/prisma-client';
+import { PrismaService } from '@sentra-core/prisma-client';
 import {
   InvoiceStatus,
   SaleActivityType,
@@ -254,7 +254,7 @@ describe('WebhooksService', () => {
     );
     expect(salesNotificationServiceMock.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: NotificationType.PAYMENT_FAILED,
+        type: 'PAYMENT_FAILED',
         saleId,
         organizationId: 'org-1',
       }),
