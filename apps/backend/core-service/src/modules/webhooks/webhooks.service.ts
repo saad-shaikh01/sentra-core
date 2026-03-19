@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  NotificationType,
   PrismaService,
   UserRole as PrismaUserRole,
 } from '@sentra-core/prisma-client';
@@ -292,7 +291,7 @@ export class WebhooksService {
       ])
       .then((recipients) =>
         this.salesNotificationService.dispatch({
-          type: NotificationType.PAYMENT_FAILED,
+          type: 'PAYMENT_FAILED',
           message: `Subscription payment failed for sale ${sale.id}.`,
           saleId: sale.id,
           organizationId: sale.organizationId,

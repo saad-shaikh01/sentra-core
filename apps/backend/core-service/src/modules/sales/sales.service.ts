@@ -7,7 +7,6 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
-  NotificationType,
   Prisma,
   PrismaService,
   UserRole as PrismaUserRole,
@@ -691,7 +690,7 @@ export class SalesService {
             ])
             .then((recipients) =>
               this.salesNotificationService.dispatch({
-                type: NotificationType.INVOICE_OVERDUE,
+                type: 'INVOICE_OVERDUE',
                 message: `Invoice ${invoice.id} for sale ${sale.id} is overdue.`,
                 saleId: sale.id,
                 organizationId: sale.organizationId,
@@ -797,7 +796,7 @@ export class SalesService {
         ])
         .then((recipients) =>
           this.salesNotificationService.dispatch({
-            type: NotificationType.SALE_STATUS_CHANGED,
+            type: 'SALE_STATUS_CHANGED',
             message: `Sale ${sale.id} status changed from ${sale.status} to ${newStatus}.`,
             saleId: sale.id,
             organizationId: sale.organizationId,
@@ -949,7 +948,7 @@ export class SalesService {
         ])
         .then((recipients) =>
           this.salesNotificationService.dispatch({
-            type: NotificationType.PAYMENT_FAILED,
+            type: 'PAYMENT_FAILED',
             message: `Payment failed for sale ${sale.id}.`,
             saleId: sale.id,
             organizationId: sale.organizationId,
@@ -1192,7 +1191,7 @@ export class SalesService {
       ])
       .then((recipients) =>
         this.salesNotificationService.dispatch({
-          type: NotificationType.CHARGEBACK_FILED,
+          type: 'CHARGEBACK_FILED',
           message: `A chargeback was filed against sale ${sale.id}. Immediate review required.`,
           saleId: sale.id,
           organizationId: sale.organizationId,

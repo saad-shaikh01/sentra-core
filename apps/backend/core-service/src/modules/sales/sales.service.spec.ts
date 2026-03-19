@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { NotificationType, PrismaService } from '@sentra-core/prisma-client';
+import { PrismaService } from '@sentra-core/prisma-client';
 import { InvoiceStatus, PaymentPlanType, SaleStatus, UserRole } from '@sentra-core/types';
 import { CacheService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
@@ -576,7 +576,7 @@ describe('SalesService', () => {
     );
     expect(salesNotificationServiceMock.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: NotificationType.PAYMENT_FAILED,
+        type: 'PAYMENT_FAILED',
         saleId,
         organizationId: orgId,
       }),
@@ -603,7 +603,7 @@ describe('SalesService', () => {
     );
     expect(salesNotificationServiceMock.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: NotificationType.SALE_STATUS_CHANGED,
+        type: 'SALE_STATUS_CHANGED',
         message: `Sale ${saleId} status changed from ${SaleStatus.PENDING} to ${SaleStatus.ACTIVE}.`,
         saleId,
         organizationId: orgId,
@@ -629,7 +629,7 @@ describe('SalesService', () => {
     );
     expect(salesNotificationServiceMock.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: NotificationType.CHARGEBACK_FILED,
+        type: 'CHARGEBACK_FILED',
         saleId,
         organizationId: orgId,
         data: {
@@ -675,7 +675,7 @@ describe('SalesService', () => {
     });
     expect(salesNotificationServiceMock.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: NotificationType.INVOICE_OVERDUE,
+        type: 'INVOICE_OVERDUE',
         saleId,
         organizationId: orgId,
         data: { invoiceId: 'invoice-overdue' },

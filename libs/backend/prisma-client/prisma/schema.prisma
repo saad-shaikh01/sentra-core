@@ -396,11 +396,6 @@ enum PmFileActionType {
   SHARE
 }
 
-enum PmNotificationStatus {
-  UNREAD
-  READ
-  ARCHIVED
-}
 
 enum PmEscalationSeverity {
   LOW
@@ -1399,7 +1394,6 @@ model PmProject {
   closureRecords        PmProjectClosureRecord[]
   threads               PmConversationThread[]
   fileAssets            PmFileAsset[]
-  notifications         PmNotification[]
   activityLogs          PmActivityLog[]
   escalationEvents      PmEscalationEvent[]
   performanceEvents     PmPerformanceEvent[]
@@ -1858,25 +1852,6 @@ model PmFileAccessLog {
   @@index([userId, createdAt])
 }
 
-model PmNotification {
-  id             String               @id @default(uuid())
-  organizationId String
-  projectId      String?
-  userId         String
-  eventType      String
-  scopeType      String
-  scopeId        String
-  status         PmNotificationStatus @default(UNREAD)
-  payload        Json?
-  createdAt      DateTime             @default(now())
-  readAt         DateTime?
-
-  project PmProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  @@index([userId, status, createdAt])
-  @@index([organizationId, createdAt])
-}
-
 model PmActivityLog {
   id             String   @id @default(uuid())
   organizationId String
@@ -1993,30 +1968,6 @@ model PmClientPortalAccess {
 
   @@index([organizationId, isActive])
   @@index([projectId])
-}
-
-model Notification {
-  id             String           @id @default(cuid())
-  type           NotificationType
-  message        String
-  saleId         String?
-  organizationId String
-  recipientId    String
-  isRead         Boolean          @default(false)
-  data           Json?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  @@index([organizationId, recipientId])
-  @@index([organizationId, type])
-}
-
-enum NotificationType {
-  PAYMENT_FAILED
-  INVOICE_OVERDUE
-  SALE_STATUS_CHANGED
-  CHARGEBACK_FILED
-  PAYMENT_RECEIVED
 }
 
 // ─── Global Notification System ──────────────────────────────────

@@ -1,26 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Prisma, PrismaService } from '@sentra-core/prisma-client';
-import { NotificationType, UserRole } from '@prisma/client';
+import { getQueueToken } from '@nestjs/bullmq';
+import { PrismaService, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
+import { UserRole } from '@prisma/client';
 import { SalesNotificationService } from '../sales-notification.service';
 
 describe('SalesNotificationService', () => {
   let service: SalesNotificationService;
+  let queueMock: { add: jest.Mock };
   let prismaMock: {
-    notification: {
-      createMany: jest.Mock<Promise<Prisma.BatchPayload>, [unknown]>;
-    };
     user: {
       findMany: jest.Mock<Promise<Array<{ id: string }>>, [unknown]>;
     };
   };
 
   beforeEach(async () => {
+    queueMock = {
+      add: jest.fn().mockResolvedValue(undefined),
+    };
+
     prismaMock = {
-      notification: {
-        createMany: jest
-          .fn<Promise<Prisma.BatchPayload>, [unknown]>()
-          .mockResolvedValue({ count: 2 }),
-      },
       user: {
         findMany: jest
           .fn<Promise<Array<{ id: string }>>, [unknown]>()
@@ -32,15 +30,16 @@ describe('SalesNotificationService', () => {
       providers: [
         SalesNotificationService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: queueMock },
       ],
     }).compile();
 
     service = module.get<SalesNotificationService>(SalesNotificationService);
   });
 
-  it('dispatch() creates one notification row per recipient', async () => {
+  it('dispatch() enqueues a notification job per call', async () => {
     await service.dispatch({
-      type: NotificationType.PAYMENT_FAILED,
+      type: 'PAYMENT_FAILED',
       message: 'Payment failed for sale sale-1.',
       saleId: 'sale-1',
       organizationId: 'org-1',
@@ -48,39 +47,33 @@ describe('SalesNotificationService', () => {
       data: { saleId: 'sale-1' },
     });
 
-    expect(prismaMock.notification.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          type: NotificationType.PAYMENT_FAILED,
-          message: 'Payment failed for sale sale-1.',
-          saleId: 'sale-1',
-          organizationId: 'org-1',
-          recipientId: 'user-1',
-          data: { saleId: 'sale-1' },
-        },
-        {
-          type: NotificationType.PAYMENT_FAILED,
-          message: 'Payment failed for sale sale-1.',
-          saleId: 'sale-1',
-          organizationId: 'org-1',
-          recipientId: 'user-2',
-          data: { saleId: 'sale-1' },
-        },
-      ],
+    expect(queueMock.add).toHaveBeenCalledTimes(1);
+    const [jobName, jobData] = queueMock.add.mock.calls[0] as [string, Record<string, unknown>];
+    expect(jobName).toBe('dispatch');
+    expect(jobData).toMatchObject({
+      organizationId: 'org-1',
+      recipientIds: ['user-1', 'user-2'],
+      type: 'PAYMENT_FAILED',
+      module: 'SALES',
+      title: 'Payment Failed',
+      body: 'Payment failed for sale sale-1.',
+      entityType: 'sale',
+      entityId: 'sale-1',
+      url: '/dashboard/sales/sale-1',
     });
   });
 
-  it('dispatch() skips createMany when recipientIds is empty', async () => {
+  it('dispatch() skips enqueue when recipientIds is empty', async () => {
     await expect(
       service.dispatch({
-        type: NotificationType.PAYMENT_FAILED,
+        type: 'PAYMENT_FAILED',
         message: 'Payment failed for sale sale-1.',
         organizationId: 'org-1',
         recipientIds: [],
       }),
     ).resolves.toBeUndefined();
 
-    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+    expect(queueMock.add).not.toHaveBeenCalled();
   });
 
   it('resolveRecipientsByRole() filters by organization, roles, and isActive', async () => {
