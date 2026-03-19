@@ -1,23 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, Search, Command, Mail, User } from 'lucide-react';
+import { Search, Command, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePathname, useRouter } from 'next/navigation';
-import { useNotifications } from '@/hooks/use-notifications';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useUIStore } from '@/stores/ui-store';
 import { MySessionsModal } from '@/components/my-sessions-modal';
+import { NotificationBell } from '@sentra-core/notifications';
 
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [sessionsOpen, setSessionsOpen] = useState(false);
-  const { data: unreadRes } = useNotifications({ page: 1, limit: 1, status: 'UNREAD' });
-  const unreadCount = unreadRes?.meta?.total ?? 0;
   const commUnreadCount = useUIStore((state) => state.commUnreadCount);
   const commUnreadLabel = commUnreadCount > 99 ? '99+' : String(commUnreadCount);
   const { data: apps = [] } = useQuery({
@@ -102,17 +100,7 @@ export function TopNav() {
               </span>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 rounded-xl hover:bg-white/10 relative"
-            onClick={() => router.push('/dashboard/notifications')}
-          >
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            {unreadCount > 0 && (
-              <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-primary rounded-full border-2 border-black" />
-            )}
-          </Button>
+          <NotificationBell onNavigate={(url) => router.push(url)} />
           
           <div className="h-6 w-px bg-white/10 mx-2" />
 

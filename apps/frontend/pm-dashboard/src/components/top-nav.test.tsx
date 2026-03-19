@@ -11,14 +11,17 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-jest.mock('@/hooks/use-notifications', () => ({
+jest.mock('@sentra-core/notifications', () => ({
   useNotifications: () => ({
     data: {
-      meta: {
-        total: 0,
-      },
+      total: 0,
+      data: [],
+      unreadCount: 0,
+      page: 1,
+      limit: 1,
     },
   }),
+  NotificationBell: () => null,
 }));
 
 jest.mock('@tanstack/react-query', () => ({

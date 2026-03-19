@@ -5,7 +5,9 @@ import { parseAsInteger, useQueryStates } from 'nuqs';
 import { Bell, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Pagination } from '@/components/shared';
-import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@/hooks/use-notifications';
+import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@sentra-core/notifications';
+import type { GlobalNotification } from '@sentra-core/notifications';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export default function NotificationsPage() {
@@ -19,10 +21,10 @@ export default function NotificationsPage() {
     limit: params.limit,
   }), [params.page, params.limit]);
 
-  const { data, isLoading } = useNotifications(queryParams);
-  const markRead = useMarkNotificationRead();
-  const markAll = useMarkAllNotificationsRead();
-  const rows = data?.data ?? [];
+  const { data, isLoading } = useNotifications(api, queryParams);
+  const markRead = useMarkNotificationRead(api);
+  const markAll = useMarkAllNotificationsRead(api);
+  const rows: GlobalNotification[] = data?.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -46,14 +48,14 @@ export default function NotificationsPage() {
               ))}
             </div>
           ) : rows.length > 0 ? (
-            rows.map((n: any) => (
+            rows.map((n) => (
               <button
                 key={n.id}
                 type="button"
-                onClick={() => n.status === 'UNREAD' && markRead.mutate(n.id)}
+                onClick={() => !n.isRead && markRead.mutate(n.id)}
                 className={cn(
                   'w-full text-left p-4 hover:bg-white/[0.03] transition-colors',
-                  n.status === 'UNREAD' && 'bg-primary/5',
+                  !n.isRead && 'bg-primary/5',
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -62,16 +64,14 @@ export default function NotificationsPage() {
                       <Bell className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">{n.eventType}</p>
-                      <p className="text-xs text-muted-foreground">
-                        scope: {n.scopeType} / {n.scopeId}
-                      </p>
+                      <p className="text-sm font-medium">{n.title}</p>
+                      <p className="text-xs text-muted-foreground">{n.body}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</p>
-                    <p className={cn('text-[10px] mt-1', n.status === 'UNREAD' ? 'text-primary' : 'text-muted-foreground')}>
-                      {n.status}
+                    <p className={cn('text-[10px] mt-1', !n.isRead ? 'text-primary' : 'text-muted-foreground')}>
+                      {n.isRead ? 'READ' : 'UNREAD'}
                     </p>
                   </div>
                 </div>
@@ -88,7 +88,7 @@ export default function NotificationsPage() {
         <div className="p-4 border-t border-white/5">
           <Pagination
             page={params.page}
-            total={data?.meta.total ?? 0}
+            total={data?.total ?? 0}
             limit={params.limit}
             onChange={(p) => setParams({ page: p })}
           />
@@ -97,4 +97,3 @@ export default function NotificationsPage() {
     </div>
   );
 }
-

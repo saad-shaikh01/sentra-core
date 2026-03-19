@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, Search, Command, User } from 'lucide-react';
+import { Search, Command, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { AppSwitcher } from '@/components/app-switcher';
 import { CommandPalette } from '@/components/command-palette';
 import { MySessionsModal } from '@/components/my-sessions-modal';
+import { NotificationBell } from '@sentra-core/notifications';
 
 export function TopNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
 
@@ -67,10 +69,7 @@ export function TopNav() {
 
           <div className="flex items-center gap-2">
             <AppSwitcher />
-            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-white/10 relative">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-primary rounded-full border-2 border-black" />
-            </Button>
+            <NotificationBell onNavigate={(url) => router.push(url)} />
 
             <div className="h-6 w-px bg-white/10 mx-2" />
 
