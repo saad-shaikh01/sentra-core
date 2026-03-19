@@ -1,5 +1,4 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { NOTIFICATION_QUEUE, NotificationJobPayload } from './notification-queue.constants';
 import { PrismaService } from '@sentra-core/prisma-client';
@@ -11,7 +10,7 @@ export class NotificationQueueProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: NotificationsGateway,
-    @Optional() private readonly fcm: FcmService,
+    private readonly fcm: FcmService,
   ) {
     super();
   }

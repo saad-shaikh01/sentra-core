@@ -17,6 +17,8 @@ export interface NotificationApiClient {
   listNotifications(params?: NotificationListParams): Promise<NotificationListResponse>;
   markNotificationRead(id: string): Promise<MarkReadResponse>;
   markAllNotificationsRead(): Promise<MarkAllReadResponse>;
+  registerPushToken(payload: { token: string; platform: string; userAgent?: string }): Promise<void>;
+  unregisterPushToken(token: string): Promise<void>;
 }
 
 function buildQueryString(params?: Record<string, unknown>): string {
@@ -54,6 +56,20 @@ export function createNotificationApi(fetcher: NotificationApiFetcher): Notifica
     markAllNotificationsRead() {
       return fetcher.fetch<MarkAllReadResponse>('/notifications/read-all', {
         method: 'PATCH',
+      });
+    },
+
+    registerPushToken(payload: { token: string; platform: string; userAgent?: string }) {
+      return fetcher.fetch<void>('/notifications/push-tokens', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+
+    unregisterPushToken(token: string) {
+      return fetcher.fetch<void>(`/notifications/push-tokens/${encodeURIComponent(token)}`, {
+        method: 'DELETE',
       });
     },
   };
