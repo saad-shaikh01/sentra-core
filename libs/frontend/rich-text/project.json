@@ -1,0 +1,25 @@
+{
+  "name": "frontend-rich-text",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/frontend/rich-text/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:ui"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/frontend/rich-text",
+        "main": "libs/frontend/rich-text/src/index.ts",
+        "tsConfig": "libs/frontend/rich-text/tsconfig.lib.json"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["libs/frontend/rich-text/**/*.{ts,tsx,js,jsx}"]
+      }
+    }
+  }
+}
