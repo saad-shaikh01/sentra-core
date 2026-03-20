@@ -144,6 +144,8 @@ export class SalesService {
         data: {
           totalAmount,
           status: dto.status,
+          saleType: dto.saleType ?? null,
+          salesAgentId: dto.salesAgentId ?? null,
           currency: dto.currency || 'USD',
           description: dto.description,
           contractUrl: dto.contractUrl,
@@ -790,6 +792,8 @@ export class SalesService {
         description: dto.description,
         contractUrl: dto.contractUrl,
         status: dto.status,
+        saleType: dto.saleType,
+        salesAgentId: dto.salesAgentId,
         discountType: discountChangeRequested ? dto.discountType ?? null : undefined,
         discountValue: discountChangeRequested ? dto.discountValue ?? null : undefined,
         discountedTotal: discountChangeRequested ? discountedTotal ?? null : undefined,

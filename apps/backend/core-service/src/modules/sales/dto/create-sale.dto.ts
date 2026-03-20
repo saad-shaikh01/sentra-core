@@ -12,7 +12,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DiscountType, PaymentPlanType, SaleStatus } from '@sentra-core/types';
+import { DiscountType, PaymentPlanType, SaleStatus, SaleType } from '@sentra-core/types';
 
 export class SaleItemDto {
   @IsString()
@@ -101,4 +101,12 @@ export class CreateSaleDto {
 
   @IsUUID()
   brandId: string;
+
+  @IsOptional()
+  @IsEnum(SaleType)
+  saleType?: SaleType;
+
+  @IsOptional()
+  @IsUUID()
+  salesAgentId?: string;
 }

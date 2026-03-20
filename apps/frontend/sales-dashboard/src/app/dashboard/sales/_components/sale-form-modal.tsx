@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBrands } from '@/hooks/use-brands';
 import { useClients } from '@/hooks/use-clients';
 import { useCreateSale, useUpdateSale } from '@/hooks/use-sales';
+import { useMembers } from '@/hooks/use-organization';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import { ISale, SaleStatus, PaymentPlanType, DiscountType, UserRole } from '@sentra-core/types';
+import { ISale, SaleStatus, SaleType, PaymentPlanType, DiscountType, UserRole } from '@sentra-core/types';
 import { Plus, Minus } from 'lucide-react';
 
 interface SaleFormModalProps {
@@ -24,6 +25,10 @@ interface SaleFormModalProps {
   prefillLeadId?: string;
   prefillLeadLabel?: string;
   prefillBrandId?: string;
+  /** Auto-set when creating from a lead (FRONTSELL) or client (UPSELL) */
+  prefillSaleType?: SaleType;
+  /** Auto-set from the lead's assignedToId or the client's upsellAgentId */
+  prefillSalesAgentId?: string;
 }
 
 interface ItemRow {
@@ -37,6 +42,8 @@ interface ItemRow {
 interface FormValues {
   clientId: string;
   brandId: string;
+  saleType: SaleType | '';
+  salesAgentId: string;
   paymentPlan: PaymentPlanType;
   installmentCount: string;
   totalAmount: string;
@@ -58,9 +65,12 @@ export function SaleFormModal({
   prefillLeadId,
   prefillLeadLabel,
   prefillBrandId,
+  prefillSaleType,
+  prefillSalesAgentId,
 }: SaleFormModalProps) {
   const isEdit = !!sale;
   const isLeadMode = !isEdit && !!prefillLeadId;
+  const isClientMode = !isEdit && !isLeadMode && !!prefillClientId;
   const router = useRouter();
   const { user } = useAuth();
   const userRole = user?.role;
@@ -70,6 +80,8 @@ export function SaleFormModal({
   const updateSale = useUpdateSale();
   const { data: clientsData } = useClients({ limit: 100 });
   const { data: brandsData } = useBrands({ limit: 100 });
+  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
 
   const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } =
     useForm<FormValues>({
@@ -78,6 +90,8 @@ export function SaleFormModal({
         status: SaleStatus.DRAFT,
         discountEnabled: false,
         discountType: '',
+        saleType: '',
+        salesAgentId: '',
         items: [],
       },
     });
@@ -92,6 +106,8 @@ export function SaleFormModal({
   const watchedDiscountValue = watch('discountValue');
   const watchedTotalAmount = watch('totalAmount');
   const watchedPaymentPlan = watch('paymentPlan');
+  const watchedSaleType = watch('saleType');
+  const watchedClientId = watch('clientId');
 
   // Live total calculation
   const itemsSubtotal = watchedItems.reduce((sum, item) => {
@@ -121,6 +137,8 @@ export function SaleFormModal({
       reset({
         clientId: sale?.clientId ?? prefillClientId ?? '',
         brandId: sale?.brandId ?? prefillBrandId ?? '',
+        saleType: (sale?.saleType as SaleType) ?? prefillSaleType ?? '',
+        salesAgentId: sale?.salesAgentId ?? prefillSalesAgentId ?? '',
         paymentPlan: (sale?.paymentPlan as PaymentPlanType) ?? PaymentPlanType.ONE_TIME,
         installmentCount: sale?.installmentCount?.toString() ?? '',
         totalAmount: sale?.totalAmount?.toString() ?? '',
@@ -139,9 +157,28 @@ export function SaleFormModal({
         })),
       });
     }
-  }, [open, sale, prefillClientId, prefillBrandId, reset]);
+  }, [open, sale, prefillClientId, prefillBrandId, prefillSaleType, prefillSalesAgentId, reset]);
+
+  // Auto-fill salesAgentId when client is selected (non-lead, non-prefill mode)
+  useEffect(() => {
+    if (!isLeadMode && !prefillSalesAgentId && watchedClientId) {
+      const client = clientsData?.data.find((c) => c.id === watchedClientId);
+      if (client?.upsellAgentId) {
+        setValue('salesAgentId', client.upsellAgentId);
+        setValue('saleType', SaleType.UPSELL);
+      }
+    }
+  }, [watchedClientId, clientsData, isLeadMode, prefillSalesAgentId, setValue]);
 
   const mutation = isEdit ? updateSale : createSale;
+
+  // Agents to show based on selected sale type
+  const agentOptions =
+    watchedSaleType === SaleType.FRONTSELL
+      ? (frontsellAgents ?? [])
+      : watchedSaleType === SaleType.UPSELL
+        ? (upsellAgents ?? [])
+        : [...(frontsellAgents ?? []), ...(upsellAgents ?? [])];
 
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
@@ -158,6 +195,8 @@ export function SaleFormModal({
         brandId: values.brandId,
         paymentPlan: values.paymentPlan,
         currency: values.currency || 'USD',
+        ...(values.saleType ? { saleType: values.saleType } : {}),
+        ...(values.salesAgentId ? { salesAgentId: values.salesAgentId } : {}),
         ...(values.description ? { description: values.description } : {}),
         ...(values.paymentPlan === PaymentPlanType.INSTALLMENTS && values.installmentCount
           ? { installmentCount: parseInt(values.installmentCount, 10) }
@@ -209,6 +248,9 @@ export function SaleFormModal({
     brandsData?.data.find((b) => b.id === (sale?.brandId ?? prefillBrandId))?.name
     ?? '';
 
+  // Sale type is locked in lead mode (always FRONTSELL) or client mode (always UPSELL)
+  const saleTypeLocked = isLeadMode || isClientMode || isEdit;
+
   return (
     <FormModal
       open={open}
@@ -221,7 +263,7 @@ export function SaleFormModal({
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
             <p className="text-sm font-medium text-emerald-200">Creating sale from lead</p>
             <p className="mt-1 text-xs leading-5 text-emerald-100/80">
-              Linked to {prefillLeadLabel ?? 'the selected lead'}.
+              Linked to {prefillLeadLabel ?? 'the selected lead'}. Sale type is automatically set to <strong>Frontsell</strong>.
             </p>
           </div>
         ) : null}
@@ -270,6 +312,68 @@ export function SaleFormModal({
                   </SelectContent>
                 </Select>
                 {errors.brandId ? <p className="text-xs text-destructive">{errors.brandId.message}</p> : null}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Sale Type + Sales Agent */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Sale Type *</Label>
+            {saleTypeLocked ? (
+              <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
+                {watchedSaleType === SaleType.FRONTSELL
+                  ? 'Frontsell'
+                  : watchedSaleType === SaleType.UPSELL
+                    ? 'Upsell'
+                    : '—'}
+              </div>
+            ) : (
+              <>
+                <Select
+                  value={watchedSaleType || 'none'}
+                  onValueChange={(v) => {
+                    setValue('saleType', v === 'none' ? '' : (v as SaleType), { shouldValidate: true });
+                    setValue('salesAgentId', ''); // reset agent when type changes
+                  }}
+                >
+                  <SelectTrigger className="border-white/10 bg-white/5">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SaleType.FRONTSELL}>Frontsell</SelectItem>
+                    <SelectItem value={SaleType.UPSELL}>Upsell</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.saleType ? <p className="text-xs text-destructive">{errors.saleType.message}</p> : null}
+              </>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Sales Agent *</Label>
+            {isLeadMode && prefillSalesAgentId ? (
+              <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
+                {agentOptions.find((a) => a.id === prefillSalesAgentId)?.name ?? 'Assigned agent'}
+              </div>
+            ) : (
+              <>
+                <Select
+                  value={watch('salesAgentId') || 'none'}
+                  onValueChange={(v) => setValue('salesAgentId', v === 'none' ? '' : v, { shouldValidate: true })}
+                >
+                  <SelectTrigger className="border-white/10 bg-white/5">
+                    <SelectValue placeholder="Select agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {agentOptions.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.salesAgentId ? <p className="text-xs text-destructive">{errors.salesAgentId.message}</p> : null}
               </>
             )}
           </div>

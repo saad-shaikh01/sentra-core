@@ -79,6 +79,11 @@ export enum SaleStatus {
   REFUNDED = 'REFUNDED',
 }
 
+export enum SaleType {
+  FRONTSELL = 'FRONTSELL',
+  UPSELL = 'UPSELL',
+}
+
 export enum SaleActivityType {
   CREATED = 'CREATED',
   STATUS_CHANGE = 'STATUS_CHANGE',
@@ -556,6 +561,8 @@ export interface ISale {
   id: string;
   totalAmount: number;
   status: SaleStatus;
+  saleType?: SaleType;
+  salesAgentId?: string;
   currency: string;
   description?: string;
   contractUrl?: string;

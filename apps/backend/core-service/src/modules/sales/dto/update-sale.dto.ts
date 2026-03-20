@@ -1,5 +1,5 @@
-import { IsString, IsOptional, IsNumber, IsEnum, IsUrl, Min } from 'class-validator';
-import { DiscountType, SaleStatus } from '@sentra-core/types';
+import { IsString, IsOptional, IsNumber, IsEnum, IsUrl, IsUUID, Min } from 'class-validator';
+import { DiscountType, SaleStatus, SaleType } from '@sentra-core/types';
 
 export class UpdateSaleDto {
   @IsOptional()
@@ -31,4 +31,12 @@ export class UpdateSaleDto {
   @IsNumber()
   @Min(0)
   discountValue?: number | null;
+
+  @IsOptional()
+  @IsEnum(SaleType)
+  saleType?: SaleType;
+
+  @IsOptional()
+  @IsUUID()
+  salesAgentId?: string;
 }

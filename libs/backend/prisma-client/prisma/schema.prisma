@@ -92,6 +92,11 @@ enum SaleStatus {
   REFUNDED
 }
 
+enum SaleType {
+  FRONTSELL
+  UPSELL
+}
+
 enum SaleActivityType {
   CREATED
   STATUS_CHANGE
@@ -1103,6 +1108,8 @@ model Sale {
   id          String     @id @default(uuid())
   totalAmount Decimal    @db.Decimal(10, 2)
   status      SaleStatus @default(PENDING)
+  saleType    SaleType?
+  salesAgentId String?   // userId of the frontsell/upsell agent
   currency    String     @default("USD")
   description String?
   contractUrl String? // Optional uploaded contract file URL

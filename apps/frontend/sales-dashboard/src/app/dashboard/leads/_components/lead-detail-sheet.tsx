@@ -34,6 +34,7 @@ import {
   LeadActivityType,
   LEAD_STATUS_TRANSITIONS,
   LeadStatus,
+  SaleType,
   UserRole,
 } from '@sentra-core/types';
 import { ConvertLeadModal } from './convert-lead-modal';
@@ -696,6 +697,8 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
           prefillLeadId={lead.id}
           prefillLeadLabel={lead.name ?? lead.title ?? 'this lead'}
           prefillBrandId={lead.brandId}
+          prefillSaleType={SaleType.FRONTSELL}
+          prefillSalesAgentId={lead.assignedToId ?? undefined}
         />
       ) : null}
     </>

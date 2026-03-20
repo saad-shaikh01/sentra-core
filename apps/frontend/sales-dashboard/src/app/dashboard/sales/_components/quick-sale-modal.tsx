@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateSale, useUploadContract } from '@/hooks/use-sales';
 import { useClients } from '@/hooks/use-clients';
 import { useBrands } from '@/hooks/use-brands';
-import { PaymentPlanType } from '@sentra-core/types';
+import { useMembers } from '@/hooks/use-organization';
+import { PaymentPlanType, SaleType, UserRole } from '@sentra-core/types';
 
 interface LineItem {
   name: string;
@@ -57,6 +58,8 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
   const [step, setStep] = useState(0);
   const [clientId, setClientId] = useState('');
   const [brandId, setBrandId] = useState('');
+  const [saleType, setSaleType] = useState<SaleType | ''>('');
+  const [salesAgentId, setSalesAgentId] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [items, setItems] = useState<LineItem[]>([{ name: '', description: '', quantity: 1, unitPrice: 0 }]);
   const [paymentPlan, setPaymentPlan] = useState<PaymentPlanType>(PaymentPlanType.ONE_TIME);
@@ -67,8 +70,18 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
 
   const { data: clientsData } = useClients({ limit: 100 });
   const { data: brandsData } = useBrands({ limit: 100 });
+  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
   const createSale = useCreateSale();
   const uploadContract = useUploadContract();
+
+  // Agents filtered by selected sale type
+  const agentOptions =
+    saleType === SaleType.FRONTSELL
+      ? (frontsellAgents ?? [])
+      : saleType === SaleType.UPSELL
+        ? (upsellAgents ?? [])
+        : [];
 
   const totalAmount = items.reduce((sum, item) => {
     const price = item.customPrice ?? item.unitPrice;
@@ -79,6 +92,8 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
     setStep(0);
     setClientId('');
     setBrandId('');
+    setSaleType('');
+    setSalesAgentId('');
     setCurrency('USD');
     setItems([{ name: '', description: '', quantity: 1, unitPrice: 0 }]);
     setPaymentPlan(PaymentPlanType.ONE_TIME);
@@ -114,7 +129,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
     setContractUrl(res.url);
   };
 
-  const canGoNextStep1 = clientId && brandId && items.some(it => it.name && it.unitPrice > 0);
+  const canGoNextStep1 = clientId && brandId && saleType && salesAgentId && items.some(it => it.name && it.unitPrice > 0);
   const canGoNextStep2 = paymentPlan !== PaymentPlanType.INSTALLMENTS || installmentCount >= 2;
 
   const handleSubmit = async () => {
@@ -123,6 +138,8 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
       brandId,
       currency,
       paymentPlan,
+      ...(saleType && { saleType }),
+      ...(salesAgentId && { salesAgentId }),
       ...(paymentPlan === PaymentPlanType.INSTALLMENTS && { installmentCount }),
       ...(contractUrl && { contractUrl }),
       items: items
@@ -173,6 +190,46 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
                   <SelectContent>
                     {brandsData?.data.map((b) => (
                       <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Sale Type + Sales Agent (required) */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Sale Type *</Label>
+                <Select
+                  value={saleType || 'none'}
+                  onValueChange={(v) => {
+                    setSaleType(v === 'none' ? '' : (v as SaleType));
+                    setSalesAgentId(''); // reset agent when type changes
+                  }}
+                >
+                  <SelectTrigger className="bg-white/5 border-white/10">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SaleType.FRONTSELL}>Frontsell</SelectItem>
+                    <SelectItem value={SaleType.UPSELL}>Upsell</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sales Agent *</Label>
+                <Select
+                  value={salesAgentId || 'none'}
+                  onValueChange={(v) => setSalesAgentId(v === 'none' ? '' : v)}
+                  disabled={!saleType}
+                >
+                  <SelectTrigger className="bg-white/5 border-white/10">
+                    <SelectValue placeholder={saleType ? 'Select agent' : 'Pick type first'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Select agent</SelectItem>
+                    {agentOptions.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -401,6 +458,16 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
                 <span className="text-muted-foreground">Brand</span>
                 <span className="font-medium">
                   {brandsData?.data.find(b => b.id === brandId)?.name ?? brandId}
+                </span>
+              </div>
+              <div className="px-4 py-3 flex justify-between text-sm">
+                <span className="text-muted-foreground">Sale Type</span>
+                <span className="font-medium capitalize">{saleType ? saleType.toLowerCase() : '—'}</span>
+              </div>
+              <div className="px-4 py-3 flex justify-between text-sm">
+                <span className="text-muted-foreground">Sales Agent</span>
+                <span className="font-medium">
+                  {agentOptions.find(a => a.id === salesAgentId)?.name ?? '—'}
                 </span>
               </div>
               <div className="px-4 py-3 flex justify-between text-sm">

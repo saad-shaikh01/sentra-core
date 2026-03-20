@@ -1,10 +1,12 @@
 const { createEcosystem } = require('./create-ecosystem.cjs');
 
 module.exports = createEcosystem({
-  defaultEnvFileName: '.env.production',
+  defaultEnvFileName: '.env.live',
+  processSuffix: 'live',
+  appStage: 'live',
   frontendPorts: {
-    sales: 4200,
-    pm: 4201,
-    hrms: 4202,
+    sales: 4300,
+    pm: 4301,
+    hrms: 4302,
   },
 });
