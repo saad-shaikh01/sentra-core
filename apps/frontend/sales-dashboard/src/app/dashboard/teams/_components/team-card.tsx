@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Users, UserRound, Pencil, Trash2, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,8 @@ function StatLine({
   return (
     <p className="text-sm text-muted-foreground">
       This month: <span className="text-foreground">{stats.totalLeads} leads</span> ·{' '}
-      <span className="text-emerald-300">{stats.wonLeads} won</span>
+      <span className="text-emerald-300">{stats.wonLeads} won</span> ·{' '}
+      <span className="text-foreground">{stats.totalSales} sales</span>
     </p>
   );
 }
@@ -53,7 +55,12 @@ export function TeamCard({
           <div className="space-y-3">
             <TeamTypeBadge type={team.type} />
             <div>
-              <h3 className="text-lg font-semibold">{team.name}</h3>
+              <Link
+                href={`/dashboard/teams/${team.id}`}
+                className="text-lg font-semibold hover:text-primary transition-colors hover:underline underline-offset-4"
+              >
+                {team.name}
+              </Link>
               {team.description ? (
                 <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{team.description}</p>
               ) : null}

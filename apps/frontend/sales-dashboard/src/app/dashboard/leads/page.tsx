@@ -11,6 +11,7 @@ import { useLeads } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { useTeams } from '@/hooks/use-teams';
+import { useAuth } from '@/hooks/use-auth';
 import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
@@ -69,6 +70,7 @@ export default function LeadsPage() {
   const { data: brandsData }  = useBrands({ limit: 100 });
   const { data: teamsData } = useTeams({ limit: 100 });
   const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { user } = useAuth();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -222,36 +224,40 @@ export default function LeadsPage() {
           </SelectContent>
         </Select>
 
-        <Select
-          value={params.teamId ?? 'all'}
-          onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
-        >
-          <SelectTrigger className="w-full sm:w-44 bg-white/5 border-white/10">
-            <SelectValue placeholder="All teams" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All teams</SelectItem>
-            {(teamsData?.data ?? []).map((team) => (
-              <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN) && (
+          <Select
+            value={params.teamId ?? 'all'}
+            onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
+          >
+            <SelectTrigger className="w-full sm:w-44 bg-white/5 border-white/10">
+              <SelectValue placeholder="All teams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All teams</SelectItem>
+              {(teamsData?.data ?? []).map((team) => (
+                <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
-        {/* Assignee */}
-        <Select
-          value={params.assignedToId ?? 'all'}
-          onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
-        >
-          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-            <SelectValue placeholder="All assignees" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All assignees</SelectItem>
-            {(frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
-              <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Assignee — visible to managers and above */}
+        {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN || user?.role === UserRole.SALES_MANAGER) && (
+          <Select
+            value={params.assignedToId ?? 'all'}
+            onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
+          >
+            <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
+              <SelectValue placeholder="All assignees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All assignees</SelectItem>
+              {(frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
+                <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Date range */}
         <Input

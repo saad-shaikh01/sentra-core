@@ -22,6 +22,7 @@ import {
   AssignClientDto,
 } from './dto';
 import { buildPaginationResponse, CacheService } from '../../common';
+import { ScopeService } from '../scope/scope.service';
 
 @Injectable()
 export class ClientsService {
@@ -29,6 +30,7 @@ export class ClientsService {
     private prisma: PrismaService,
     private cache: CacheService,
     private mailService: MailClientService,
+    private readonly scopeService: ScopeService,
   ) {}
 
   async create(orgId: string, userId: string, dto: CreateClientDto): Promise<IClient> {
@@ -79,7 +81,7 @@ export class ClientsService {
     role: UserRole,
   ): Promise<IPaginatedResponse<IClient>> {
     const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
-    const cacheKey = `clients:${orgId}:list:${queryHash}`;
+    const cacheKey = `clients:${orgId}:${userId}:list:${queryHash}`;
 
     const cached = await this.cache.get<IPaginatedResponse<IClient>>(cacheKey);
     if (cached) {
@@ -89,20 +91,24 @@ export class ClientsService {
     const { page = 1, limit = 20, search, status, brandId } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.ClientWhereInput = { organizationId: orgId, deletedAt: null };
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const scopeWhere = scope.toClientFilter();
 
-    if (role === UserRole.UPSELL_AGENT) {
-      where.upsellAgentId = userId;
-    } else if (role === UserRole.PROJECT_MANAGER) {
-      where.projectManagerId = userId;
-    }
+    const where: Prisma.ClientWhereInput = {
+      ...scopeWhere,
+      deletedAt: null,
+    };
 
-    if (status) {
-      where.status = status;
-    }
-
+    if (status) where.status = status;
     if (brandId) {
-      where.brandId = brandId;
+      // Intersect user-requested brandId with scope's brand restriction
+      const scopeBrandIds = (scopeWhere as any).brandId?.in as string[] | undefined;
+      if (scopeBrandIds && !scopeBrandIds.includes(brandId)) {
+        // Requested brand is outside scope → return empty
+        where.brandId = '__none__';
+      } else {
+        where.brandId = brandId;
+      }
     }
 
     if (search) {

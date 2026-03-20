@@ -42,8 +42,13 @@ export class InvoicesController {
   }
 
   @Get()
-  findAll(@Query() query: QueryInvoicesDto, @CurrentUser('orgId') orgId: string): Promise<IPaginatedResponse<IInvoice>> {
-    return this.invoicesService.findAll(orgId, query);
+  findAll(
+    @Query() query: QueryInvoicesDto,
+    @CurrentUser('orgId') orgId: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: UserRole,
+  ): Promise<IPaginatedResponse<IInvoice>> {
+    return this.invoicesService.findAll(orgId, query, userId, role);
   }
 
   @Get(':id')

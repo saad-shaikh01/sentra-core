@@ -392,6 +392,26 @@ class ApiClient {
     return this.fetch<{ message: string }>(`/brands/${id}`, { method: 'DELETE' });
   }
 
+  // Team-Brand endpoints
+  async getTeamBrands() {
+    return this.fetch<any[]>('/team-brands');
+  }
+
+  async assignBrandToTeam(teamId: string, brandId: string) {
+    return this.fetch<any>('/team-brands', {
+      method: 'POST',
+      body: JSON.stringify({ teamId, brandId }),
+    });
+  }
+
+  async unassignBrandFromTeam(brandId: string) {
+    return this.fetch<{ ok: boolean }>(`/team-brands/${brandId}`, { method: 'DELETE' });
+  }
+
+  async reassignBrandToTeam(brandId: string, newTeamId: string) {
+    return this.fetch<any>(`/team-brands/${brandId}/reassign/${newTeamId}`, { method: 'PATCH' });
+  }
+
   // Lead endpoints
   async getLeads(params?: Record<string, unknown>) {
     const qs = buildQueryString(params);

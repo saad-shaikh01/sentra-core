@@ -20,6 +20,7 @@ import { TeamStatsCards } from '../_components/team-stats-cards';
 import { TeamMembersTable } from '../_components/team-members-table';
 import { AddMemberModal } from '../_components/add-member-modal';
 import { CreateEditTeamModal } from '../_components/create-edit-team-modal';
+import { TeamBrandsSection } from '../_components/team-brands-section';
 
 const PERIOD_OPTIONS = [
   { value: 'this_month', label: 'This month' },
@@ -101,6 +102,8 @@ export default function TeamDetailPage() {
         isLoading={statsQuery.isLoading}
         isError={statsQuery.isError}
       />
+
+      {teamId ? <TeamBrandsSection teamId={teamId} canManage={canManage} /> : null}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">

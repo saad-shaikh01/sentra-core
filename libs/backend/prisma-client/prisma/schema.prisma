@@ -563,6 +563,7 @@ model Brand {
   genericLeadWebhooks GenericLeadWebhook[]
 
   members BrandAccess[]
+  teamBrand TeamBrand?
 
   @@index([organizationId])
 }
@@ -708,16 +709,18 @@ model Team {
   typeId         String
   description    String?
   managerId      String?
-  isActive       Boolean  @default(true)
-  deletedAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive                Boolean   @default(true)
+  deletedAt               DateTime?
+  allowMemberVisibility   Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   teamType     TeamType     @relation(fields: [typeId], references: [id])
   manager      User?        @relation("HrmsTeamManager", fields: [managerId], references: [id], onDelete: SetNull)
   members      TeamMember[]
   leads        Lead[]       @relation("LeadTeam")
+  teamBrands   TeamBrand[]
 
   @@index([organizationId])
   @@index([typeId])
@@ -736,6 +739,19 @@ model TeamMember {
 
   @@unique([teamId, userId])
   @@index([userId])
+}
+
+model TeamBrand {
+  id        String   @id @default(cuid())
+  teamId    String
+  brandId   String   @unique
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, brandId])
+  @@index([teamId])
+  @@index([brandId])
 }
 
 model Department {
@@ -980,6 +996,8 @@ model Lead {
   @@index([organizationId, brandId, status]) // Performance Index for Dashboard
   @@index([organizationId, deletedAt])       // Soft-delete filter index
   @@index([teamId])
+  @@index([organizationId, teamId])
+  @@index([organizationId, assignedToId])
 }
 
 model LeadActivity {
@@ -1078,6 +1096,7 @@ model Client {
   @@index([organizationId, status])
   @@index([upsellAgentId])
   @@index([projectManagerId])
+  @@index([organizationId, brandId])
 }
 
 model Sale {

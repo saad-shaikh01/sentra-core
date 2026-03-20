@@ -63,6 +63,8 @@ export interface TeamStats {
   wonLeads: number;
   lostLeads: number;
   conversionRate: string;
+  totalSales: number;
+  totalRevenue: number;
 }
 
 export interface EmployeeOption {

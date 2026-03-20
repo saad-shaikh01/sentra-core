@@ -207,6 +207,8 @@ export class LeadsController {
     wonLeads: number;
     lostLeads: number;
     conversionRate: string;
+    totalSales: number;
+    totalRevenue: number;
   }> {
     return this.leadsService.getTeamStats(teamId, orgId, period ?? 'this_month');
   }

@@ -37,7 +37,7 @@ import {
 } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
-import { TeamsService } from '../teams';
+import { ScopeService } from '../scope/scope.service';
 import { SalesNotificationService } from './sales-notification.service';
 import {
   CreateSaleDto,
@@ -80,8 +80,8 @@ export class SalesService {
     private prisma: PrismaService,
     private authorizeNet: AuthorizeNetService,
     private cache: CacheService,
-    private teams: TeamsService,
     private salesNotificationService: SalesNotificationService,
+    private readonly scopeService: ScopeService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -542,44 +542,31 @@ export class SalesService {
     role: UserRole,
   ): Promise<IPaginatedResponse<ISale>> {
     const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
-    const cacheKey = `sales:${orgId}:list:${queryHash}`;
+    const cacheKey = `sales:${orgId}:${userId}:list:${queryHash}`;
 
     const cached = await this.cache.get<IPaginatedResponse<ISale>>(cacheKey);
     if (cached) return cached;
 
     const { page, limit, status, clientId, brandId, dateFrom, dateTo } = query;
-    const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
-    const where: Record<string, any> = { organizationId: orgId, deletedAt: null };
 
-    // Data visibility scoping
-    if (agentRoles.includes(role)) {
-      // Agents: only clients from their own assigned leads
-      const agentLeads = await this.prisma.lead.findMany({
-        where: { assignedToId: userId, deletedAt: null, convertedClientId: { not: null } },
-        select: { convertedClientId: true },
-      });
-      const clientIds = agentLeads
-        .filter((l): l is { convertedClientId: string } => l.convertedClientId !== null)
-        .map((l) => l.convertedClientId);
-      where.clientId = { in: clientIds };
-    } else if (role === UserRole.SALES_MANAGER) {
-      // Managers: see their own agents' client sales too
-      const memberIds = await this.teams.getMemberIds(userId, orgId);
-      if (memberIds.length > 0) {
-        const teamLeads = await this.prisma.lead.findMany({
-          where: { assignedToId: { in: memberIds }, deletedAt: null, convertedClientId: { not: null } },
-          select: { convertedClientId: true },
-        });
-        const clientIds = teamLeads
-          .filter((l): l is { convertedClientId: string } => l.convertedClientId !== null)
-          .map((l) => l.convertedClientId);
-        if (clientIds.length > 0) where.clientId = { in: clientIds };
-      }
-    }
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const scopeWhere = scope.toSaleFilter();
+
+    const where: Record<string, any> = {
+      ...scopeWhere,
+      deletedAt: null,
+    };
 
     if (status) where.status = status as SaleStatus;
     if (clientId) where.clientId = clientId;
-    if (brandId) where.brandId = brandId;
+    if (brandId) {
+      const scopeBrandIds = (scopeWhere as any).brandId?.in as string[] | undefined;
+      if (scopeBrandIds && !scopeBrandIds.includes(brandId)) {
+        where.id = { in: [] }; // out-of-scope brand → guaranteed empty result
+      } else {
+        where.brandId = brandId;
+      }
+    }
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);

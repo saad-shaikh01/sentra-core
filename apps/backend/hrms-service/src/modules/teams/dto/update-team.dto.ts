@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateTeamDto {
   @IsOptional()
@@ -20,4 +20,8 @@ export class UpdateTeamDto {
   @IsOptional()
   @IsUUID()
   managerId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  allowMemberVisibility?: boolean;
 }

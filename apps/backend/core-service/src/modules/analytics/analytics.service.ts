@@ -1,35 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IAnalyticsSummary } from '@sentra-core/types';
+import { IAnalyticsSummary, UserRole } from '@sentra-core/types';
+import { ScopeService } from '../scope/scope.service';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly scopeService: ScopeService) {}
 
-  async getSummary(orgId: string): Promise<IAnalyticsSummary> {
+  async getSummary(orgId: string, userId: string, role: UserRole): Promise<IAnalyticsSummary> {
     const now = new Date();
     const twelveMonthsAgo = new Date(now);
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
     twelveMonthsAgo.setDate(1);
     twelveMonthsAgo.setHours(0, 0, 0, 0);
 
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const leadWhere = scope.toLeadFilter();
+    const saleWhere = scope.toSaleFilter();
+
     const [totalLeads, convertedLeads, activeSales, revenueAgg, leads, sales, brands] = await Promise.all([
-      this.prisma.lead.count({ where: { organizationId: orgId, deletedAt: null } }),
-      this.prisma.lead.count({ where: { organizationId: orgId, convertedClientId: { not: null }, deletedAt: null } }),
-      this.prisma.sale.count({ where: { organizationId: orgId, status: 'ACTIVE' } }),
+      this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null } }),
+      this.prisma.lead.count({ where: { ...leadWhere, convertedClientId: { not: null }, deletedAt: null } }),
+      this.prisma.sale.count({ where: { ...saleWhere, status: 'ACTIVE' } }),
       this.prisma.sale.aggregate({
-        where: { organizationId: orgId, status: { in: ['ACTIVE', 'COMPLETED'] } },
+        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] } },
         _sum: { totalAmount: true },
       }),
       // Leads by agent (last 12 months)
       this.prisma.lead.groupBy({
         by: ['assignedToId'],
-        where: { organizationId: orgId, deletedAt: null, createdAt: { gte: twelveMonthsAgo } },
+        where: { ...leadWhere, deletedAt: null, createdAt: { gte: twelveMonthsAgo } },
         _count: { id: true },
       }),
       // Sales by month
       this.prisma.sale.findMany({
-        where: { organizationId: orgId, createdAt: { gte: twelveMonthsAgo } },
+        where: { ...saleWhere, createdAt: { gte: twelveMonthsAgo } },
         select: { totalAmount: true, createdAt: true, brandId: true, brand: { select: { name: true } } },
       }),
       // Brands for distribution
@@ -58,7 +63,7 @@ export class AnalyticsService {
     const convertedByAgent = await this.prisma.lead.groupBy({
       by: ['assignedToId'],
       where: {
-        organizationId: orgId,
+        ...leadWhere,
         deletedAt: null,
         convertedClientId: { not: null },
         createdAt: { gte: twelveMonthsAgo },

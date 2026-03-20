@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus } from '@sentra-core/types';
+import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
+import { ScopeService } from '../scope/scope.service';
 import { InvoicePdfService } from './pdf/invoice-pdf.service';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
 
@@ -19,6 +20,7 @@ export class InvoicesService {
     private authorizeNet: AuthorizeNetService,
     private pdfService: InvoicePdfService,
     private cache: CacheService,
+    private readonly scopeService: ScopeService,
   ) {}
 
   private async generateInvoiceNumber(): Promise<string> {
@@ -72,7 +74,7 @@ export class InvoicesService {
 
     const [unpaidAgg, overdueAgg, paidThisMonthAgg, upcomingDueAgg] = await Promise.all([
       this.prisma.invoice.aggregate({
-        where: { status: InvoiceStatus.UNPAID, dueDate: { gte: now }, sale: { ...saleWhere } },
+        where: { status: InvoiceStatus.UNPAID, dueDate: { gte: now }, sale: { is: { ...saleWhere } } },
         _sum: { amount: true },
         _count: { id: true },
       }),
@@ -82,7 +84,7 @@ export class InvoicesService {
             { status: InvoiceStatus.OVERDUE },
             { status: InvoiceStatus.UNPAID, dueDate: { lt: now } },
           ],
-          sale: { ...saleWhere },
+          sale: { is: { ...saleWhere } },
         },
         _sum: { amount: true },
         _count: { id: true },
@@ -91,7 +93,7 @@ export class InvoicesService {
         where: {
           status: InvoiceStatus.PAID,
           updatedAt: { gte: startOfMonth, lte: endOfMonth },
-          sale: { ...saleWhere },
+          sale: { is: { ...saleWhere } },
         },
         _sum: { amount: true },
         _count: { id: true },
@@ -100,7 +102,7 @@ export class InvoicesService {
         where: {
           status: InvoiceStatus.UNPAID,
           dueDate: { gte: now, lte: sevenDaysFromNow },
-          sale: { ...saleWhere },
+          sale: { is: { ...saleWhere } },
         },
         _sum: { amount: true },
         _count: { id: true },
@@ -150,17 +152,26 @@ export class InvoicesService {
     return invoice;
   }
 
-  async findAll(orgId: string, query: QueryInvoicesDto): Promise<IPaginatedResponse<IInvoice>> {
+  async findAll(orgId: string, query: QueryInvoicesDto, userId: string, role: UserRole): Promise<IPaginatedResponse<IInvoice>> {
     const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
-    const cacheKey = `invoices:${orgId}:list:${queryHash}`;
+    const cacheKey = `invoices:${orgId}:${userId}:list:${queryHash}`;
 
     const cached = await this.cache.get<IPaginatedResponse<IInvoice>>(cacheKey);
     if (cached) return cached;
 
     const { page, limit, status, saleId, dueBefore, dueAfter } = query;
 
-    // We need to join through sale to filter by org
-    const where: any = { sale: { organizationId: orgId } };
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const invoiceScope = scope.toInvoiceFilter();
+
+    const where: any = {
+      sale: {
+        is: {
+          organizationId: orgId,
+          ...(invoiceScope.sale?.is ?? {}),
+        },
+      },
+    };
     if (status) where.status = status;
     if (saleId) where.saleId = saleId;
     if (dueBefore || dueAfter) {

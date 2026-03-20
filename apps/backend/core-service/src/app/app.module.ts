@@ -29,6 +29,8 @@ import { PublicPaymentsModule } from '../modules/public-payments/public-payments
 import { WebhooksModule } from '../modules/webhooks/webhooks.module';
 import { RbacModule } from '../modules/rbac';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
+import { ScopeModule } from '../modules/scope/scope.module';
+import { TeamBrandsModule } from '../modules/team-brands/team-brands.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -74,6 +76,7 @@ function resolveEnvFiles(): string[] {
       },
     }),
     SentraCacheModule,
+    ScopeModule,
     PrismaClientModule,
     MailClientModule,
     AuthModule,
@@ -89,6 +92,7 @@ function resolveEnvFiles(): string[] {
     IamModule,
     InternalContactsModule,
     TeamsModule,
+    TeamBrandsModule,
     PackagesModule,
     SearchModule,
     AnalyticsModule,

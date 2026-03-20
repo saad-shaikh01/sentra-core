@@ -11,8 +11,9 @@ import { Input } from '@/components/ui/input';
 import { useBrands } from '@/hooks/use-brands';
 import { useClients, useDeleteClient } from '@/hooks/use-clients';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui-store';
-import { IClient } from '@sentra-core/types';
+import { IClient, UserRole } from '@sentra-core/types';
 import { ClientDetailSheet } from './_components/client-detail-sheet';
 import { ClientFormModal } from './_components/client-form-modal';
 
@@ -35,6 +36,11 @@ export default function ClientsPage() {
   const debouncedSearch = useDebounce(searchInput, 300);
   const deleteClient = useDeleteClient();
   const openConfirmDialog = useUIStore((state) => state.openConfirmDialog);
+  const { user } = useAuth();
+  const canManageClients =
+    user?.role === UserRole.OWNER ||
+    user?.role === UserRole.ADMIN ||
+    user?.role === UserRole.SALES_MANAGER;
 
   const queryParams = useMemo(
     () => ({
@@ -149,15 +155,17 @@ export default function ClientsPage() {
         title="Clients"
         description="Manage your clients and their details."
         action={
-          <Button
-            onClick={() => {
-              setEditClient(null);
-              setModalOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Client
-          </Button>
+          canManageClients ? (
+            <Button
+              onClick={() => {
+                setEditClient(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New Client
+            </Button>
+          ) : null
         }
       />
 

@@ -3,8 +3,11 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
 import {
   Prisma,
   PrismaService,
@@ -20,7 +23,13 @@ import {
 
 @Injectable()
 export class TeamsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(TeamsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly httpService: HttpService,
+  ) {}
 
   async findAll(organizationId: string, query: TeamsQueryDto) {
     const page = query.page ?? 1;
@@ -116,9 +125,15 @@ export class TeamsService {
         ...(dto.typeId !== undefined ? { typeId: dto.typeId } : {}),
         ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
         ...(dto.managerId !== undefined ? { managerId: dto.managerId || null } : {}),
+        ...(dto.allowMemberVisibility !== undefined ? { allowMemberVisibility: dto.allowMemberVisibility } : {}),
       },
       include: this.teamDetailInclude,
     });
+
+    // Invalidate scope cache for all team members when visibility changes
+    if (dto.allowMemberVisibility !== undefined) {
+      await this.notifyScopeInvalidation('team', { teamId: id, orgId: organizationId });
+    }
 
     return this.mapTeamDetail(team);
   }
@@ -442,4 +457,26 @@ export class TeamsService {
       orderBy: [{ role: 'desc' }, { joinedAt: 'asc' }],
     },
   } satisfies Prisma.TeamInclude;
+
+  private async notifyScopeInvalidation(
+    type: 'user' | 'team',
+    payload: { userId?: string; teamId?: string; orgId: string },
+  ): Promise<void> {
+    const coreUrl = this.config.get<string>('CORE_SERVICE_URL', 'http://localhost:3001');
+    const secret = this.config.get<string>('INTERNAL_SERVICE_SECRET', '');
+    try {
+      await this.httpService.axiosRef.post(
+        `${coreUrl}/api/internal/scope/invalidate/${type}`,
+        payload,
+        {
+          headers: { 'x-internal-secret': secret },
+          timeout: 3000,
+        },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Scope invalidation (${type}) failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 }

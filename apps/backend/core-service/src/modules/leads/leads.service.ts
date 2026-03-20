@@ -23,8 +23,9 @@ import {
 } from '@sentra-core/types';
 import { isEmail, isURL } from 'class-validator';
 import * as XLSX from 'xlsx';
-import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
-import { TeamsService } from '../teams';
+import { buildPaginationResponse, CacheService } from '../../common';
+import { ScopeService } from '../scope/scope.service';
+import { TeamBrandHelper } from '../scope/team-brand.helper';
 import {
   CreateLeadDto,
   UpdateLeadDto,
@@ -70,20 +71,9 @@ export class LeadsService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
-    private teams: TeamsService,
-    private permissionsService: PermissionsService,
+    private readonly scopeService: ScopeService,
+    private readonly teamBrandHelper: TeamBrandHelper,
   ) {}
-
-  private async getTeamIdsForUser(userId: string, orgId: string): Promise<string[]> {
-    const memberships = await this.prisma.teamMember.findMany({
-      where: { userId },
-      include: { team: { select: { id: true, organizationId: true } } },
-    });
-
-    return memberships
-      .filter((membership) => membership.team.organizationId === orgId)
-      .map((membership) => membership.teamId);
-  }
 
   private generateTitle(dto: { name?: string; email?: string; source?: LeadSource }): string {
     const base = dto.name?.trim() || dto.email?.trim() || 'Unknown';
@@ -259,6 +249,8 @@ export class LeadsService {
       source: dto.source,
     });
 
+    const teamId = await this.teamBrandHelper.resolveTeamForBrand(dto.brandId);
+
     const lead = await this.prisma.lead.create({
       data: {
         title,
@@ -274,6 +266,7 @@ export class LeadsService {
         brandId: dto.brandId,
         organizationId: orgId,
         assignedToId: dto.assignedToId,
+        teamId,
       },
     });
 
@@ -308,6 +301,9 @@ export class LeadsService {
     if (!brand) {
       throw new NotFoundException('Brand not found');
     }
+
+    // Pre-resolve teamId for this brand (single brand per import batch)
+    const importTeamId = await this.teamBrandHelper.resolveTeamForBrand(dto.brandId);
 
     const rows = this.parseImportFile(file.buffer);
     const normalizedRows = rows.map((row) =>
@@ -397,6 +393,7 @@ export class LeadsService {
           status: LeadStatus.NEW,
           brand: { connect: { id: brand.id } },
           organization: { connect: { id: orgId } },
+          teamId: importTeamId,
         });
       } catch (error) {
         errorDetails.push({
@@ -455,69 +452,48 @@ export class LeadsService {
     role: UserRole,
   ): Promise<IPaginatedResponse<ILead>> {
     const queryHash = this.cache.hashQuery(query as Record<string, unknown>);
-    const cacheKey = `leads:${orgId}:list:${queryHash}`;
+    // Include userId in cache key to prevent cross-user cache leakage
+    const cacheKey = `leads:${orgId}:${userId}:list:${queryHash}`;
 
     const cached = await this.cache.get<IPaginatedResponse<ILead>>(cacheKey);
     if (cached) return cached;
 
     const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search, teamId } = query;
 
-    const agentRoles: UserRole[] = [UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT];
-    const permissions = await this.permissionsService.getUserPermissions(userId, orgId);
-
-    let visibilityFilter: Prisma.LeadWhereInput = {};
-
-    if (permissions.includes('sales:leads:view_all')) {
-      // no filter
-    } else if (permissions.includes('sales:leads:view_team')) {
-      const userTeamIds = await this.getTeamIdsForUser(userId, orgId);
-      if (userTeamIds.length > 0) {
-        visibilityFilter = {
-          OR: [
-            { assignedToId: userId },
-            { teamId: { in: userTeamIds } },
-          ],
-        };
-      } else {
-        visibilityFilter = { assignedToId: userId };
-      }
-    } else if (permissions.includes('sales:leads:view_own')) {
-      visibilityFilter = { assignedToId: userId };
-    } else {
-      if (agentRoles.includes(role)) {
-        visibilityFilter = { assignedToId: userId };
-      } else if (role === UserRole.SALES_MANAGER) {
-        const memberIds = await this.teams.getMemberIds(userId, orgId);
-        if (memberIds.length > 0) {
-          visibilityFilter = { assignedToId: { in: [...memberIds, userId] } };
-        }
-      }
-    }
+    // Get scope-based visibility filter
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const scopeWhere = scope.toLeadFilter();
 
     const where: Prisma.LeadWhereInput = {
-      organizationId: orgId,
+      ...scopeWhere,
       deletedAt: null,
-      ...visibilityFilter,
     };
 
     if (status) where.status = status;
     if (leadType) where.leadType = leadType;
     if (source) where.source = source;
+    if (brandId) {
+      const scopeBrandIds = (scopeWhere as any).brandId?.in as string[] | undefined;
+      if (scopeBrandIds && !scopeBrandIds.includes(brandId)) {
+        where.assignedToId = '__none__'; // out-of-scope → guaranteed empty
+      } else {
+        where.brandId = brandId;
+      }
+    }
+    if (teamId) where.teamId = teamId;
 
-    if (assignedToId && !agentRoles.includes(role) && !permissions.includes('sales:leads:view_own')) {
+    // Only allow assignedToId filter for roles that can see beyond own leads
+    if (assignedToId && scope.isFullAccess) {
       where.assignedToId = assignedToId;
     }
-
-    if (brandId) where.brandId = brandId;
-    if (teamId) where.teamId = teamId;
 
     if (dateFrom || dateTo) {
       where.leadDate = {};
       if (dateFrom) {
-        where.leadDate.gte = new Date(`${dateFrom}T00:00:00.000Z`);
+        (where.leadDate as any).gte = new Date(`${dateFrom}T00:00:00.000Z`);
       }
       if (dateTo) {
-        where.leadDate.lte = new Date(`${dateTo}T23:59:59.999Z`);
+        (where.leadDate as any).lte = new Date(`${dateTo}T23:59:59.999Z`);
       }
     }
 
@@ -609,6 +585,8 @@ export class LeadsService {
       }
     }
 
+    const resolvedTeamId: string | null | undefined = dto.teamId;
+
     const nextName = dto.name ?? lead.name ?? undefined;
     const nextEmail = dto.email ?? lead.email ?? undefined;
     const nextSource = dto.source ?? (lead.source as LeadSource | null) ?? undefined;
@@ -635,7 +613,7 @@ export class LeadsService {
         followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : undefined,
         data: this.toInputJson(dto.data),
         assignedToId: dto.assignedToId,
-        teamId: dto.teamId,
+        teamId: resolvedTeamId,
       },
     });
 
@@ -655,6 +633,8 @@ export class LeadsService {
     wonLeads: number;
     lostLeads: number;
     conversionRate: string;
+    totalSales: number;
+    totalRevenue: number;
   }> {
     const now = new Date();
     let startDate: Date;
@@ -688,10 +668,32 @@ export class LeadsService {
       createdAt: { gte: startDate, lte: endDate },
     };
 
-    const [totalLeads, wonLeads, lostLeads] = await Promise.all([
+    // Get team's brand for sales lookup
+    const teamBrand = await this.prisma.teamBrand.findFirst({
+      where: { teamId },
+      select: { brandId: true },
+    });
+
+    const saleWhere = teamBrand
+      ? {
+          organizationId: orgId,
+          brandId: teamBrand.brandId,
+          deletedAt: null,
+          createdAt: { gte: startDate, lte: endDate },
+        }
+      : null;
+
+    const [totalLeads, wonLeads, lostLeads, salesAgg] = await Promise.all([
       this.prisma.lead.count({ where: baseWhere }),
       this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.CLOSED_WON } }),
       this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.CLOSED_LOST } }),
+      saleWhere
+        ? this.prisma.sale.aggregate({
+            where: saleWhere,
+            _count: { id: true },
+            _sum: { totalAmount: true },
+          })
+        : Promise.resolve({ _count: { id: 0 }, _sum: { totalAmount: null } }),
     ]);
 
     return {
@@ -701,6 +703,8 @@ export class LeadsService {
       wonLeads,
       lostLeads,
       conversionRate: totalLeads > 0 ? ((wonLeads / totalLeads) * 100).toFixed(1) : '0.0',
+      totalSales: salesAgg._count.id,
+      totalRevenue: Number(salesAgg._sum.totalAmount ?? 0),
     };
   }
 

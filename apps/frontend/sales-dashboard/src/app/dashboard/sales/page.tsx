@@ -60,7 +60,10 @@ export default function SalesPage() {
   const [editSale, setEditSale]           = useState<ISale | null>(null);
   const [detailSaleId, setDetailSaleId]   = useState<string | null>(null);
   const userRole = user?.role;
-  const canCreateEdit = userRole ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) : false;
+  // OWNER, ADMIN, SALES_MANAGER, PROJECT_MANAGER, and UPSELL_AGENT can create/edit sales
+  const canCreateEdit = userRole
+    ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) || userRole === UserRole.UPSELL_AGENT
+    : false;
   const canDelete = userRole ? hasMinimumRole(userRole, UserRole.ADMIN) : false;
 
   // Build lookup maps for human-readable names

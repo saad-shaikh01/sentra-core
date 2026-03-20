@@ -1,11 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, ShieldCheck, UserCheck, ExternalLink } from 'lucide-react';
+import { Users, ShieldCheck, UserCheck, ExternalLink, TrendingUp, BarChart2, ArrowRight } from 'lucide-react';
+import { useTeamStats, type TeamStats } from '@/hooks/use-teams';
 
 interface HrmsTeamMember {
   userId: string;
@@ -21,6 +23,52 @@ interface HrmsTeam {
   manager: { id: string; name: string; email: string } | null;
   members: HrmsTeamMember[];
   memberCount: number;
+}
+
+function TeamKpis({ teamId }: { teamId: string }) {
+  const { data: stats, isLoading } = useTeamStats(teamId, 'this_month');
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-white/10">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="space-y-1">
+            <div className="h-3 w-16 animate-pulse rounded bg-white/10" />
+            <div className="h-5 w-10 animate-pulse rounded bg-white/10" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  const kpis: { label: string; value: string | number; highlight?: boolean }[] = [
+    { label: 'Leads', value: stats.totalLeads },
+    { label: 'Won', value: stats.wonLeads, highlight: true },
+    { label: 'Sales', value: stats.totalSales },
+    {
+      label: 'Revenue',
+      value: stats.totalRevenue >= 1000
+        ? `$${(stats.totalRevenue / 1000).toFixed(1)}k`
+        : `$${stats.totalRevenue.toLocaleString()}`,
+      highlight: true,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-white/10">
+      {kpis.map((k) => (
+        <div key={k.label}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{k.label}</p>
+          <p className={`text-lg font-semibold mt-0.5 ${k.highlight ? 'text-emerald-300' : 'text-foreground'}`}>
+            {k.value}
+          </p>
+        </div>
+      ))}
+      <p className="col-span-full text-[10px] text-muted-foreground">This month</p>
+    </div>
+  );
 }
 
 export default function SalesTeamsPage() {
@@ -93,7 +141,12 @@ export default function SalesTeamsPage() {
                       </div>
                       <div>
                         <CardTitle className="text-base flex items-center gap-2">
-                          {team.name}
+                          <Link
+                            href={`/dashboard/teams/${team.id}`}
+                            className="hover:text-primary transition-colors hover:underline underline-offset-4"
+                          >
+                            {team.name}
+                          </Link>
                           <Badge variant="secondary" className="text-[10px] font-normal">
                             {team.type.name}
                           </Badge>
@@ -103,9 +156,18 @@ export default function SalesTeamsPage() {
                         )}
                       </div>
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {team.memberCount} member{team.memberCount === 1 ? '' : 's'}
-                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-muted-foreground">
+                        {team.memberCount} member{team.memberCount === 1 ? '' : 's'}
+                      </span>
+                      <Link
+                        href={`/dashboard/teams/${team.id}`}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        View details
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -143,6 +205,8 @@ export default function SalesTeamsPage() {
                       </div>
                     </div>
                   </div>
+
+                  <TeamKpis teamId={team.id} />
                 </CardContent>
               </Card>
             </motion.div>
