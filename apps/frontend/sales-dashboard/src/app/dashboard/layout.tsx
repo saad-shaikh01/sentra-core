@@ -6,7 +6,7 @@ import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { ConfirmModal, Toaster } from '@/components/shared';
 import { CommEventsWatcher } from '@/components/shared/comm/comm-events-watcher';
-import { NotificationProvider, useNotificationSocket } from '@sentra-core/notifications';
+import { NotificationProvider, useNotificationSocket, NotificationPushInit } from '@sentra-core/notifications';
 import { api } from '@/lib/api';
 
 function NotificationSocketWatcher() {
@@ -22,6 +22,7 @@ export default function DashboardLayout({
   return (
     <ProtectedRoute>
       <NotificationProvider fetcher={api}>
+        <NotificationPushInit fetcher={api} autoRequest={true} />
         <SpotlightBackground>
           <div className="flex min-h-screen lg:h-screen lg:overflow-hidden">
             <Sidebar />

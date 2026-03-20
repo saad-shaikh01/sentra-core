@@ -42,7 +42,8 @@
       "Bash(done)",
       "Bash(grep -n \"departmentId\\\\|IsUUID\\\\|@IsOptional\" \"D:/Repositories/new crm/sentra-core/apps/backend/hrms-service/src/modules/invitations/dto\"/*.ts)",
       "Bash(sort find:*)",
-      "Bash(grep -r \"ILead\\\\|ISale\\\\|IInvoice\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\libs\\\\types\\\\src' --include=*.ts -l)"
+      "Bash(grep -r \"ILead\\\\|ISale\\\\|IInvoice\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\libs\\\\types\\\\src' --include=*.ts -l)",
+      "Bash(/dev/null find:*)"
     ]
   }
 }

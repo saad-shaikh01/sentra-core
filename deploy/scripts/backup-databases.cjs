@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 
 function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -61,6 +61,43 @@ function hasCommand(command) {
   });
 
   return result.status === 0;
+}
+
+async function deleteOldBackups({ bucket, prefix, retentionDays, env }) {
+  const s3 = new S3Client({
+    endpoint: env.WASABI_ENDPOINT,
+    region: env.WASABI_REGION || 'us-east-1',
+    credentials: {
+      accessKeyId: env.WASABI_ACCESS_KEY_ID,
+      secretAccessKey: env.WASABI_SECRET_ACCESS_KEY,
+    },
+    forcePathStyle: true,
+  });
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - retentionDays);
+
+  const listed = await s3.send(
+    new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix + '/' }),
+  );
+
+  const toDelete = (listed.Contents || [])
+    .filter((obj) => obj.LastModified < cutoff)
+    .map((obj) => ({ Key: obj.Key }));
+
+  if (toDelete.length === 0) {
+    console.log(`No old backups to delete (retention: ${retentionDays} days).`);
+    return;
+  }
+
+  await s3.send(
+    new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: toDelete },
+    }),
+  );
+
+  console.log(`Deleted ${toDelete.length} old backup(s) from Wasabi.`);
 }
 
 async function uploadFile({ filePath, bucket, key, env }) {
@@ -158,6 +195,10 @@ async function main() {
   await uploadFile({ filePath: archivePath, bucket, key, env });
 
   console.log(`Backup uploaded successfully: ${bucket}/${key}`);
+
+  // Delete backups older than retention period
+  const retentionDays = parseInt(env.DB_BACKUP_RETENTION_DAYS || '7', 10);
+  await deleteOldBackups({ bucket, prefix, retentionDays, env });
 }
 
 main().catch((error) => {

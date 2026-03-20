@@ -51,6 +51,9 @@ docker compose --env-file "${INFRA_ENV_FILE}" -f "${COMPOSE_FILE}" up -d
 
 npm ci
 
+# Inject Firebase config into service worker (SW can't read NEXT_PUBLIC_* env vars)
+node deploy/scripts/generate-firebase-sw.cjs "${ENV_NAME}"
+
 node deploy/scripts/run-with-env.cjs \
   "${BACKEND_ENV_FILE}" \
   npx prisma generate --schema=libs/backend/prisma-client/prisma/schema.prisma
