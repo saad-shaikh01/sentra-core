@@ -66,9 +66,9 @@ export default function InvoicesPage() {
         render: (inv) => <span className="font-bold">${inv.amount}</span>,
       },
       {
-        key:    'dueDate',
-        header: 'Due Date',
-        render: (inv) => new Date(inv.dueDate).toLocaleDateString(),
+        key:    'createdAt',
+        header: 'Date',
+        render: (inv) => new Date(inv.createdAt).toLocaleDateString(),
       },
       {
         key:    'status',

@@ -14,7 +14,7 @@ export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Get()
-  @Permissions('hrms:teams:view')
+  @Permissions('hrms:teams:view', 'sales:teams:view')
   async findAll(
     @Query() query: TeamsQueryDto,
     @OrgContext() context: { organizationId: string },
@@ -23,7 +23,7 @@ export class TeamsController {
   }
 
   @Get(':id')
-  @Permissions('hrms:teams:view')
+  @Permissions('hrms:teams:view', 'sales:teams:view')
   async findOne(
     @Param('id') id: string,
     @OrgContext() context: { organizationId: string },

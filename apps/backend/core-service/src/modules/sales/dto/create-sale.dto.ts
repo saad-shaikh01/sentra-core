@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DiscountType, PaymentPlanType, SaleStatus, SaleType } from '@sentra-core/types';
+import { SalePackageDto } from './sale-package.dto';
 
 export class SaleItemDto {
   @IsString()
@@ -109,4 +110,9 @@ export class CreateSaleDto {
   @IsOptional()
   @IsUUID()
   salesAgentId?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SalePackageDto)
+  salePackage?: SalePackageDto;
 }

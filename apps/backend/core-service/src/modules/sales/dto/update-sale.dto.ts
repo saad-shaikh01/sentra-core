@@ -1,5 +1,7 @@
-import { IsString, IsOptional, IsNumber, IsEnum, IsUrl, IsUUID, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsEnum, IsUrl, IsUUID, ValidateNested, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { DiscountType, SaleStatus, SaleType } from '@sentra-core/types';
+import { SalePackageDto } from './sale-package.dto';
 
 export class UpdateSaleDto {
   @IsOptional()
@@ -39,4 +41,9 @@ export class UpdateSaleDto {
   @IsOptional()
   @IsUUID()
   salesAgentId?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SalePackageDto)
+  salePackage?: SalePackageDto;
 }

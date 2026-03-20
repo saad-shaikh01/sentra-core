@@ -1,4 +1,18 @@
-import { Controller, Get, Patch, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { AuthService } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators';
@@ -31,6 +45,31 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ): Promise<IUserProfile> {
     return this.usersService.updateMe(userId, dto);
+  }
+
+  @Post('me/avatar')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+          return cb(new BadRequestException('Only image files are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadAvatar(
+    @CurrentUser('sub') userId: string,
+    @UploadedFile() file: any,
+  ): Promise<IUserProfile> {
+    if (!file) throw new BadRequestException('No file provided');
+    return this.usersService.uploadAvatar(
+      userId,
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
   }
 
   @Patch(':userId/suspend')

@@ -18,6 +18,9 @@ export class PackagesService {
         isActive: dto.isActive ?? true,
         brandId: dto.brandId,
         organizationId: orgId,
+        category: dto.category ?? null,
+        price: dto.price ?? null,
+        currency: dto.currency ?? 'USD',
         items: dto.items
           ? { create: dto.items.map(this.mapItemDto) }
           : undefined,
@@ -55,6 +58,10 @@ export class PackagesService {
     if (!pkg) throw new NotFoundException('Package not found');
     if (dto.brandId) await this.validateBrand(dto.brandId, orgId);
 
+    if (dto.items !== undefined) {
+      await this.prisma.packageItem.deleteMany({ where: { packageId: id } });
+    }
+
     const updated = await this.prisma.productPackage.update({
       where: { id },
       data: {
@@ -62,6 +69,12 @@ export class PackagesService {
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.brandId !== undefined && { brandId: dto.brandId }),
+        ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.price !== undefined && { price: dto.price }),
+        ...(dto.currency !== undefined && { currency: dto.currency }),
+        ...(dto.items !== undefined && {
+          items: { create: dto.items.map(this.mapItemDto) },
+        }),
       },
       include: { items: true },
     });
@@ -101,7 +114,7 @@ export class PackagesService {
   }
 
   private mapItemDto(dto: PackageItemDto) {
-    return { name: dto.name, description: dto.description, unitPrice: dto.unitPrice };
+    return { name: dto.name, description: dto.description, unitPrice: dto.unitPrice ?? null };
   }
 
   private mapToIProductPackage(pkg: any): IProductPackage {
@@ -112,11 +125,14 @@ export class PackagesService {
       isActive: pkg.isActive,
       brandId: pkg.brandId ?? undefined,
       organizationId: pkg.organizationId,
+      category: pkg.category ?? undefined,
+      price: pkg.price != null ? Number(pkg.price) : undefined,
+      currency: pkg.currency,
       items: (pkg.items ?? []).map((i: any): IPackageItem => ({
         id: i.id,
         name: i.name,
         description: i.description ?? undefined,
-        unitPrice: Number(i.unitPrice),
+        unitPrice: i.unitPrice != null ? Number(i.unitPrice) : undefined,
         isActive: i.isActive,
         packageId: i.packageId,
       })),

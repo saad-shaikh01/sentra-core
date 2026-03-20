@@ -21,3 +21,15 @@ export function useUpdateProfile() {
     },
   });
 }
+
+// Hook to upload avatar image
+export function useUploadAvatar() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (file: File) => api.uploadAvatar(file),
+    onSuccess: (updatedUser) => {
+      queryClient.setQueryData(authKeys.user(), updatedUser);
+    },
+  });
+}

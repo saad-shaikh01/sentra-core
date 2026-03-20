@@ -51,12 +51,12 @@ docker compose --env-file "${INFRA_ENV_FILE}" -f "${COMPOSE_FILE}" up -d
 
 npm ci
 
-set -a
-source "${BACKEND_ENV_FILE}"
-set +a
-
-npx prisma generate --schema=libs/backend/prisma-client/prisma/schema.prisma
-npx prisma migrate deploy --schema=libs/backend/prisma-client/prisma/schema.prisma
+node deploy/scripts/run-with-env.cjs \
+  "${BACKEND_ENV_FILE}" \
+  npx prisma generate --schema=libs/backend/prisma-client/prisma/schema.prisma
+node deploy/scripts/run-with-env.cjs \
+  "${BACKEND_ENV_FILE}" \
+  npx prisma migrate deploy --schema=libs/backend/prisma-client/prisma/schema.prisma
 pm2 startOrReload "${PM2_CONFIG}" --update-env
 pm2 save
 

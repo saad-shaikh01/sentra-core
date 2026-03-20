@@ -507,37 +507,79 @@ model SalesTeamMember {
 // PRODUCT PACKAGES / SERVICE CATALOG
 // ==========================================
 
+enum PackageCategory {
+  PUBLISHING
+  WRITING
+  DESIGN
+  EDITING
+}
+
 model ProductPackage {
-  id             String  @id @default(uuid())
+  id             String           @id @default(uuid())
   name           String
   description    String?
-  isActive       Boolean @default(true)
+  isActive       Boolean          @default(true)
+  category       PackageCategory?
+  price          Decimal?         @db.Decimal(10, 2)
+  currency       String           @default("USD")
 
   brandId        String?
-  brand          Brand?  @relation(fields: [brandId], references: [id])
+  brand          Brand?           @relation(fields: [brandId], references: [id])
 
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization     @relation(fields: [organizationId], references: [id])
 
-  items PackageItem[]
+  items        PackageItem[]
+  salePackages SalePackage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, brandId])
+  @@index([organizationId, category])
 }
 
 model PackageItem {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String?
-  unitPrice   Decimal @db.Decimal(10, 2)
-  isActive    Boolean @default(true)
+  unitPrice   Decimal? @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
 
   packageId String
   package   ProductPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
   @@index([packageId])
+}
+
+// Snapshot of a package attached to a sale (editable services)
+model SalePackage {
+  id       String  @id @default(uuid())
+  name     String
+  price    Decimal @db.Decimal(10, 2)
+  currency String  @default("USD")
+  category String?
+
+  saleId String @unique
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  packageId String?
+  package   ProductPackage? @relation(fields: [packageId], references: [id])
+
+  services SalePackageService[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SalePackageService {
+  id            String      @id @default(uuid())
+  name          String
+  order         Int         @default(0)
+  salePackageId String
+  salePackage   SalePackage @relation(fields: [salePackageId], references: [id], onDelete: Cascade)
+
+  @@index([salePackageId])
 }
 
 model Brand {
@@ -1139,6 +1181,7 @@ model Sale {
   invoices     Invoice[]
   transactions PaymentTransaction[]
   activities   SaleActivity[]
+  salePackage  SalePackage?
 
   deletedAt DateTime? // Soft-delete
 

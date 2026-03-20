@@ -24,7 +24,7 @@ export function DetailSheet({ open, onClose, title, description, children, actio
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
             onClick={onClose}
           />
           {/* Sheet */}
@@ -33,7 +33,7 @@ export function DetailSheet({ open, onClose, title, description, children, actio
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 z-50 h-full w-full sm:max-w-lg bg-black/80 backdrop-blur-3xl border-l border-white/10 flex flex-col shadow-2xl"
+            className="fixed right-0 top-0 z-[70] h-full w-full sm:max-w-lg bg-black/80 backdrop-blur-3xl border-l border-white/10 flex flex-col shadow-2xl"
           >
             <div className="flex items-start justify-between px-4 py-4 sm:px-6 sm:py-5 border-b border-white/10 shrink-0">
               <div className="min-w-0 flex-1">

@@ -13,6 +13,8 @@ import { SaleInvoicesSection } from './_components/sale-invoices-section';
 import { SaleTransactionsSection } from './_components/sale-transactions-section';
 import { SaleSubscriptionSection } from './_components/sale-subscription-section';
 import { SaleActivityTimeline } from './_components/sale-activity-timeline';
+import { SalePackageSection } from './_components/sale-package-section';
+import { SaleContractSection } from './_components/sale-contract-section';
 import { SaleFormModal } from '../_components/sale-form-modal';
 import { RefundModal } from './_components/refund-modal';
 import { ChargebackModal } from './_components/chargeback-modal';
@@ -76,7 +78,9 @@ export default function SaleDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1 space-y-4">
           <SaleClientSection sale={sale} collisionWarning={collisionWarning} />
+          {sale.salePackage && <SalePackageSection salePackage={sale.salePackage} currency={sale.currency} />}
           <SaleStatusControls sale={sale} userRole={userRole} />
+          <SaleContractSection saleId={sale.id} contractUrl={sale.contractUrl} />
           {sale.paymentPlan === PaymentPlanType.SUBSCRIPTION ? (
             <SaleSubscriptionSection sale={sale} userRole={userRole} />
           ) : null}

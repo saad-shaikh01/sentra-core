@@ -56,19 +56,14 @@ git fetch origin
 git worktree add /home/sentra-live main
 ```
 
-### 3. Create env files
+### 3. Env files are already included in the repo
 
-```bash
-cd /home/sentra-core
-cp .env.testing.example .env.testing
-cp deploy/env/infra.testing.env.example deploy/env/infra.testing.env
+These files are tracked and ready for direct deploy:
 
-cd /home/sentra-live
-cp .env.live.example .env.live
-cp deploy/env/infra.live.env.example deploy/env/infra.live.env
-```
-
-Fill the copied env files with real credentials.
+- `/home/sentra-core/.env.testing`
+- `/home/sentra-core/deploy/env/infra.testing.env`
+- `/home/sentra-live/.env.live`
+- `/home/sentra-live/deploy/env/infra.live.env`
 
 ### 4. Install Nginx site configs
 
@@ -114,6 +109,36 @@ bash deploy/scripts/deploy-live.sh
 pm2 ls
 pm2 logs core-service-testing
 pm2 logs core-service-live
+```
+
+## Database Backups To Wasabi
+
+Install the required dump tools on the VPS first:
+
+```bash
+sudo apt update
+sudo apt install -y postgresql-client redis-tools
+```
+
+Install MongoDB database tools from MongoDB's official package source if `mongodump` is not already available.
+
+Manual backup commands:
+
+```bash
+cd /home/sentra-core
+node deploy/scripts/backup-databases.cjs testing
+```
+
+```bash
+cd /home/sentra-live
+node deploy/scripts/backup-databases.cjs live
+```
+
+Example cron entries:
+
+```bash
+0 2 * * * cd /home/sentra-core && /usr/bin/node deploy/scripts/backup-databases.cjs testing >> /var/log/sentra-testing-backup.log 2>&1
+30 2 * * * cd /home/sentra-live && /usr/bin/node deploy/scripts/backup-databases.cjs live >> /var/log/sentra-live-backup.log 2>&1
 ```
 
 ## Notes

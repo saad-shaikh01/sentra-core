@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { User, Mail, Phone, ExternalLink, AlertTriangle, X } from 'lucide-react';
 import { ISaleWithRelations } from '@sentra-core/types';
+import { ClientDetailSheet } from '@/app/dashboard/clients/_components/client-detail-sheet';
 
 interface SaleClientSectionProps {
   sale: ISaleWithRelations;
@@ -11,6 +12,7 @@ interface SaleClientSectionProps {
 
 export function SaleClientSection({ sale, collisionWarning }: SaleClientSectionProps) {
   const [warningDismissed, setWarningDismissed] = useState(false);
+  const [clientSheetOpen, setClientSheetOpen] = useState(false);
   const client = sale.client;
 
   return (
@@ -56,15 +58,21 @@ export function SaleClientSection({ sale, collisionWarning }: SaleClientSectionP
               <span>{client.phone}</span>
             </div>
           ) : null}
-          <a
-            href={`/dashboard/clients/${client.id}`}
+          <button
+            onClick={() => setClientSheetOpen(true)}
             className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
           >
             View client profile <ExternalLink className="h-3 w-3" />
-          </a>
+          </button>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">No client linked</p>
+      )}
+      {client && (
+        <ClientDetailSheet
+          clientId={clientSheetOpen ? client.id : null}
+          onClose={() => setClientSheetOpen(false)}
+        />
       )}
     </div>
   );

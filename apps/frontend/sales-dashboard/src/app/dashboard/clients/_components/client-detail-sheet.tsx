@@ -29,11 +29,14 @@ import {
 import {
   AlertCircle,
   ClipboardList,
+  DollarSign,
   Mail,
   MessageSquare,
   Shield,
   UserCheck,
 } from 'lucide-react';
+import { SaleFormModal } from '@/app/dashboard/sales/_components/sale-form-modal';
+import { SaleType } from '@sentra-core/types';
 
 interface ClientDetailSheetProps {
   clientId: string | null;
@@ -56,6 +59,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
 
   const [activeTab, setActiveTab] = useState<ClientTab>('details');
   const [note, setNote] = useState('');
+  const [saleModalOpen, setSaleModalOpen] = useState(false);
 
   useEffect(() => {
     setActiveTab('details');
@@ -124,11 +128,24 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
   };
 
   return (
+    <>
     <DetailSheet
       open={!!clientId}
       onClose={onClose}
       title={detailClient?.companyName ?? 'Client Details'}
       description={detailClient?.email}
+      action={
+        detailClient ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+            onClick={() => setSaleModalOpen(true)}
+          >
+            <DollarSign className="h-3.5 w-3.5" /> New Sale
+          </Button>
+        ) : undefined
+      }
     >
       {isLoading ? (
         <div className="animate-pulse space-y-3">
@@ -403,6 +420,19 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
         </>
       ) : null}
     </DetailSheet>
+
+      {detailClient && (
+        <SaleFormModal
+          open={saleModalOpen}
+          onOpenChange={setSaleModalOpen}
+          prefillClientId={detailClient.id}
+          prefillClientName={detailClient.companyName}
+          prefillBrandId={detailClient.brandId}
+          prefillSaleType={SaleType.UPSELL}
+          prefillSalesAgentId={detailClient.upsellAgentId ?? undefined}
+        />
+      )}
+    </>
   );
 }
 

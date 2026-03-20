@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, Briefcase, FileText } from 'lucide-react';
+import { User, Mail, Phone, Briefcase, FileText, Camera, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import { useUpdateProfile } from '@/hooks/use-profile';
+import { useUpdateProfile, useUploadAvatar } from '@/hooks/use-profile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 export default function ProfileSettingsPage() {
   const { user } = useAuth();
   const updateProfileMutation = useUpdateProfile();
+  const uploadAvatarMutation = useUploadAvatar();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -23,6 +25,8 @@ export default function ProfileSettingsPage() {
     phone: '',
     bio: '',
   });
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -46,6 +50,28 @@ export default function ProfileSettingsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     updateProfileMutation.mutate(formData);
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Show local preview immediately
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    // Upload to Wasabi
+    uploadAvatarMutation.mutate(file, {
+      onSuccess: (updatedUser) => {
+        setFormData((prev) => ({ ...prev, avatarUrl: updatedUser.avatarUrl ?? '' }));
+        URL.revokeObjectURL(objectUrl);
+        setPreviewUrl(null);
+      },
+      onError: () => {
+        URL.revokeObjectURL(objectUrl);
+        setPreviewUrl(null);
+      },
+    });
+    // Reset input so same file can be re-selected
+    e.target.value = '';
   };
 
   const getInitials = (name: string) => {
@@ -99,12 +125,36 @@ export default function ProfileSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
-            <Avatar className="h-24 w-24 ring-4 ring-primary/20 shrink-0">
-              <AvatarImage src={formData.avatarUrl} />
-              <AvatarFallback className="text-xl bg-primary/20 text-primary">
-                {getInitials(formData.name || 'User')}
-              </AvatarFallback>
-            </Avatar>
+            {/* Clickable avatar upload */}
+            <div className="relative shrink-0 group">
+              <Avatar className="h-24 w-24 ring-4 ring-primary/20">
+                <AvatarImage src={previewUrl ?? formData.avatarUrl} />
+                <AvatarFallback className="text-xl bg-primary/20 text-primary">
+                  {getInitials(formData.name || 'User')}
+                </AvatarFallback>
+              </Avatar>
+              {/* Overlay */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadAvatarMutation.isPending}
+                className="absolute inset-0 rounded-full flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+              >
+                {uploadAvatarMutation.isPending ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+                ) : (
+                  <Camera className="h-6 w-6 text-white" />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
+            </div>
+
             <div className="space-y-1 min-w-0 flex-1">
               <h3 className="text-2xl font-semibold truncate">{user?.name}</h3>
               <p className="text-muted-foreground flex items-center justify-center sm:justify-start gap-2 truncate">
@@ -116,6 +166,13 @@ export default function ProfileSettingsPage() {
                   {formatRole(user?.role || '')}
                 </Badge>
               </div>
+              {uploadAvatarMutation.isSuccess && (
+                <p className="text-xs text-emerald-400 mt-1">Profile picture updated!</p>
+              )}
+              {uploadAvatarMutation.isError && (
+                <p className="text-xs text-red-400 mt-1">Failed to upload picture. Try again.</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">Click the avatar to change your photo</p>
             </div>
           </div>
         </CardContent>
@@ -186,18 +243,6 @@ export default function ProfileSettingsPage() {
                 value={formData.name}
                 onChange={handleChange}
                 required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="avatarUrl">Avatar URL</Label>
-              <Input
-                id="avatarUrl"
-                name="avatarUrl"
-                type="url"
-                placeholder="https://example.com/avatar.jpg"
-                value={formData.avatarUrl}
-                onChange={handleChange}
               />
             </div>
 

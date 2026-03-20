@@ -212,3 +212,27 @@ export function useUploadContract() {
     onError: (e: Error) => toast.error('Contract upload failed', e.message),
   });
 }
+
+/** Upload contract file then immediately patch the sale's contractUrl */
+export function useAttachContract(saleId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File): Promise<string> => {
+      const form = new FormData();
+      form.append('file', file);
+      const { url } = await api.fetch<{ url: string }>('/sales/upload/contract', {
+        method: 'POST',
+        body: form,
+      });
+      await api.updateSale(saleId, { contractUrl: url });
+      return url;
+    },
+    onSuccess: (url) => {
+      queryClient.setQueryData(salesKeys.detail(saleId), (old: any) =>
+        old ? { ...old, contractUrl: url } : old,
+      );
+      toast.success('Contract attached');
+    },
+    onError: (e: Error) => toast.error('Contract upload failed', e.message),
+  });
+}

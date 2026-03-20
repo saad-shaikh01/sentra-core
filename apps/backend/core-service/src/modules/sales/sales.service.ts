@@ -21,6 +21,7 @@ import {
   ISaleActivity,
   ISaleCreateResponse,
   ISaleItem,
+  ISalePackage,
   IClientCollisionWarning,
   IPaginatedResponse,
   SaleStatus,
@@ -212,6 +213,22 @@ export class SalesService {
       return createdSale;
     });
 
+    if (dto.salePackage) {
+      await this.prisma.salePackage.create({
+        data: {
+          saleId: sale.id,
+          packageId: dto.salePackage.packageId ?? null,
+          name: dto.salePackage.name,
+          price: dto.salePackage.price,
+          currency: dto.salePackage.currency ?? 'USD',
+          category: dto.salePackage.category ?? null,
+          services: {
+            create: (dto.salePackage.services ?? []).map((s, i) => ({ name: s.name, order: s.order ?? i })),
+          },
+        },
+      });
+    }
+
     if (dto.leadId) {
       await this.cache.delByPrefix(`leads:${orgId}:`);
       await this.cache.delByPrefix(`clients:${orgId}:`);
@@ -334,7 +351,7 @@ export class SalesService {
   ): Promise<string> {
     const currentYear = new Date().getFullYear();
 
-    await tx.$executeRaw`
+    const result = await tx.$queryRaw<Array<{ lastSeq: number }>>`
       INSERT INTO "InvoiceSequence" ("id", "brandId", "year", "lastSeq")
       VALUES (gen_random_uuid()::text, ${brandId}, ${currentYear}, 1)
       ON CONFLICT ("brandId") DO UPDATE
@@ -344,10 +361,10 @@ export class SalesService {
           ELSE 1
         END,
         "year" = ${currentYear}
+      RETURNING "lastSeq"
     `;
 
-    const seq = await tx.invoiceSequence.findUnique({ where: { brandId } });
-    const paddedSeq = String(seq!.lastSeq).padStart(4, '0');
+    const paddedSeq = String(result[0].lastSeq).padStart(4, '0');
     return `INV-${currentYear}-${paddedSeq}`;
   }
 
@@ -549,7 +566,7 @@ export class SalesService {
     const cached = await this.cache.get<IPaginatedResponse<ISale>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, status, clientId, brandId, dateFrom, dateTo } = query;
+    const { page, limit, status, clientId, brandId, dateFrom, dateTo, salesAgentId, saleType } = query;
 
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const scopeWhere = scope.toSaleFilter();
@@ -574,6 +591,8 @@ export class SalesService {
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);
       if (dateTo) where.createdAt.lte = new Date(dateTo);
     }
+    if (salesAgentId) where.salesAgentId = salesAgentId;
+    if (saleType) where.saleType = saleType;
 
     const [sales, total] = await Promise.all([
       this.prisma.sale.findMany({
@@ -581,7 +600,7 @@ export class SalesService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: { client: true, items: true },
+        include: { client: true, items: true, salePackage: { include: { services: { orderBy: { order: 'asc' } } } } },
       }),
       this.prisma.sale.count({ where }),
     ]);
@@ -675,6 +694,7 @@ export class SalesService {
         transactions: true,
         items: true,
         activities: { orderBy: { createdAt: 'asc' } },
+        salePackage: { include: { services: { orderBy: { order: 'asc' } } } },
       },
     });
     if (!sale) throw new NotFoundException('Sale not found');
@@ -721,7 +741,12 @@ export class SalesService {
       this.logger.error('Overdue invoice detection failed', err);
     }
 
-    const mappedSale = this.mapToISale(sale);
+    const mappedSale = {
+      ...this.mapToISale(sale),
+      client: sale.client ?? undefined,
+      invoices: sale.invoices ?? [],
+      transactions: sale.transactions ?? [],
+    };
     await this.cache.set(cacheKey, mappedSale);
     return mappedSale;
   }
@@ -836,6 +861,36 @@ export class SalesService {
         discountValue: updated.discountValue != null ? Number(updated.discountValue) : null,
         discountedTotal: updated.discountedTotal != null ? Number(updated.discountedTotal) : null,
       });
+    }
+
+    if (dto.salePackage !== undefined) {
+      const existing = await this.prisma.salePackage.findUnique({ where: { saleId: id } });
+      if (existing) {
+        await this.prisma.salePackageService.deleteMany({ where: { salePackageId: existing.id } });
+        await this.prisma.salePackage.update({
+          where: { id: existing.id },
+          data: {
+            packageId: dto.salePackage.packageId ?? null,
+            name: dto.salePackage.name,
+            price: dto.salePackage.price,
+            currency: dto.salePackage.currency ?? 'USD',
+            category: dto.salePackage.category ?? null,
+            services: { create: (dto.salePackage.services ?? []).map((s, i) => ({ name: s.name, order: s.order ?? i })) },
+          },
+        });
+      } else {
+        await this.prisma.salePackage.create({
+          data: {
+            saleId: id,
+            packageId: dto.salePackage.packageId ?? null,
+            name: dto.salePackage.name,
+            price: dto.salePackage.price,
+            currency: dto.salePackage.currency ?? 'USD',
+            category: dto.salePackage.category ?? null,
+            services: { create: (dto.salePackage.services ?? []).map((s, i) => ({ name: s.name, order: s.order ?? i })) },
+          },
+        });
+      }
     }
 
     await this.cache.delByPrefix(`sales:${orgId}:`);
@@ -1299,6 +1354,23 @@ export class SalesService {
         userId: activity.userId,
         createdAt: activity.createdAt,
       })) ?? [],
+      salePackage: sale.salePackage ? ((): ISalePackage => ({
+        id: sale.salePackage.id,
+        name: sale.salePackage.name,
+        price: Number(sale.salePackage.price),
+        currency: sale.salePackage.currency,
+        category: sale.salePackage.category ?? undefined,
+        packageId: sale.salePackage.packageId ?? undefined,
+        saleId: sale.salePackage.saleId,
+        services: (sale.salePackage.services ?? []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          order: s.order,
+          salePackageId: s.salePackageId,
+        })),
+        createdAt: sale.salePackage.createdAt,
+        updatedAt: sale.salePackage.updatedAt,
+      }))() : undefined,
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
     };

@@ -44,11 +44,12 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const effectivePermissions = await this.permissionsService.getUserPermissions(user.sub, orgId);
-    const hasAllPermissions = requiredPermissions.every((permission) =>
+    // OR semantics: user needs at least one of the listed permissions
+    const hasAnyPermission = requiredPermissions.some((permission) =>
       this.permissionsService.matchesAnyPermission(effectivePermissions, permission),
     );
 
-    if (!hasAllPermissions) {
+    if (!hasAnyPermission) {
       throw new ForbiddenException('Insufficient permissions');
     }
 

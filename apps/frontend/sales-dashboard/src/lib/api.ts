@@ -296,6 +296,15 @@ class ApiClient {
     });
   }
 
+  async uploadAvatar(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.fetch<any>('/users/me/avatar', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
   // Organization endpoints
   async getMembers(params?: { role?: string }) {
     const qs = buildQueryString(params);

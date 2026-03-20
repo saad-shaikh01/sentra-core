@@ -17,7 +17,7 @@ export class TeamBrandsController {
   constructor(private readonly service: TeamBrandsService) {}
 
   @Get()
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
   findAll(@CurrentUser('orgId') orgId: string) {
     return this.service.findAll(orgId);
   }

@@ -12,9 +12,10 @@ import { useClients } from '@/hooks/use-clients';
 import { useCreateSale, useUpdateSale } from '@/hooks/use-sales';
 import { useMembers } from '@/hooks/use-organization';
 import { useAuth } from '@/hooks/use-auth';
+import { usePackages } from '@/hooks/use-packages';
 import { useRouter } from 'next/navigation';
 import { ISale, SaleStatus, SaleType, PaymentPlanType, DiscountType, UserRole } from '@sentra-core/types';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, X } from 'lucide-react';
 
 interface SaleFormModalProps {
   open: boolean;
@@ -54,6 +55,12 @@ interface FormValues {
   discountValue: string;
   status: SaleStatus;
   items: ItemRow[];
+  selectedPackageId: string;
+  salePackageName: string;
+  salePackagePrice: string;
+  salePackageCurrency: string;
+  salePackageCategory: string;
+  salePackageServices: Array<{ name: string; order: number }>;
 }
 
 export function SaleFormModal({
@@ -82,6 +89,7 @@ export function SaleFormModal({
   const { data: brandsData } = useBrands({ limit: 100 });
   const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
   const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
+  const { data: packages } = usePackages();
 
   const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } =
     useForm<FormValues>({
@@ -93,10 +101,17 @@ export function SaleFormModal({
         saleType: '',
         salesAgentId: '',
         items: [],
+        selectedPackageId: '',
+        salePackageName: '',
+        salePackagePrice: '',
+        salePackageCurrency: 'USD',
+        salePackageCategory: '',
+        salePackageServices: [],
       },
     });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const { fields: serviceFields, append: appendService, remove: removeService } = useFieldArray({ control, name: 'salePackageServices' });
 
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -108,15 +123,26 @@ export function SaleFormModal({
   const watchedPaymentPlan = watch('paymentPlan');
   const watchedSaleType = watch('saleType');
   const watchedClientId = watch('clientId');
+  const watchedSelectedPackageId = watch('selectedPackageId');
 
   // Live total calculation
+  const watchedSalePackagePrice = watch('salePackagePrice');
+  const packagePrice = parseFloat(watchedSalePackagePrice || '0');
+  const hasPackage = !!watch('salePackageName');
+
   const itemsSubtotal = watchedItems.reduce((sum, item) => {
     const price = parseFloat(item.customPrice || item.unitPrice || '0');
     const qty = parseInt(item.quantity || '1', 10);
     return sum + price * qty;
   }, 0);
 
-  const subtotal = watchedItems.length > 0 ? itemsSubtotal : parseFloat(watchedTotalAmount || '0');
+  // When package selected: base = package price + line items (extras)
+  // When no package: base = line items total OR manual totalAmount
+  const subtotal = hasPackage
+    ? packagePrice + itemsSubtotal
+    : watchedItems.length > 0
+      ? itemsSubtotal
+      : parseFloat(watchedTotalAmount || '0');
 
   let liveTotal = subtotal;
   if (watchedDiscountEnabled && watchedDiscountValue) {
@@ -155,6 +181,12 @@ export function SaleFormModal({
           unitPrice: item.unitPrice.toString(),
           customPrice: item.customPrice?.toString() ?? '',
         })),
+        selectedPackageId: sale?.salePackage?.packageId ?? '',
+        salePackageName: sale?.salePackage?.name ?? '',
+        salePackagePrice: sale?.salePackage?.price?.toString() ?? '',
+        salePackageCurrency: sale?.salePackage?.currency ?? 'USD',
+        salePackageCategory: sale?.salePackage?.category ?? '',
+        salePackageServices: sale?.salePackage?.services?.map(s => ({ name: s.name, order: s.order })) ?? [],
       });
     }
   }, [open, sale, prefillClientId, prefillBrandId, prefillSaleType, prefillSalesAgentId, reset]);
@@ -180,6 +212,27 @@ export function SaleFormModal({
         ? (upsellAgents ?? [])
         : [...(frontsellAgents ?? []), ...(upsellAgents ?? [])];
 
+  const handlePackageSelect = (packageId: string) => {
+    setValue('selectedPackageId', packageId);
+    if (packageId && packageId !== 'none') {
+      const pkg = packages?.find(p => p.id === packageId);
+      if (pkg) {
+        setValue('salePackageName', pkg.name);
+        setValue('salePackagePrice', pkg.price?.toString() ?? '');
+        setValue('salePackageCurrency', pkg.currency);
+        setValue('salePackageCategory', pkg.category ?? '');
+        setValue('salePackageServices', (pkg.items ?? []).filter(i => i.isActive).map((item, i) => ({ name: item.name, order: i })));
+        // Auto-fill totalAmount from package price
+        if (pkg.price) setValue('totalAmount', pkg.price.toString());
+      }
+    } else {
+      setValue('salePackageName', '');
+      setValue('salePackagePrice', '');
+      setValue('salePackageServices', []);
+      setValue('totalAmount', '');
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     setApiError(null);
     try {
@@ -191,6 +244,15 @@ export function SaleFormModal({
         customPrice: item.customPrice ? parseFloat(item.customPrice) : undefined,
       }));
 
+      const salePackageDto = values.salePackageName ? {
+        packageId: values.selectedPackageId || undefined,
+        name: values.salePackageName,
+        price: parseFloat(values.salePackagePrice) || 0,
+        currency: values.salePackageCurrency || values.currency || 'USD',
+        category: values.salePackageCategory || undefined,
+        services: values.salePackageServices.map((s, i) => ({ name: s.name, order: s.order ?? i })),
+      } : undefined;
+
       const dto: Record<string, unknown> = {
         brandId: values.brandId,
         paymentPlan: values.paymentPlan,
@@ -201,10 +263,14 @@ export function SaleFormModal({
         ...(values.paymentPlan === PaymentPlanType.INSTALLMENTS && values.installmentCount
           ? { installmentCount: parseInt(values.installmentCount, 10) }
           : {}),
-        ...(items.length > 0 ? { items } : { totalAmount: parseFloat(values.totalAmount) }),
+        // When package is selected: total = package price + any extra line items
+        ...(hasPackage
+          ? { totalAmount: (parseFloat(values.salePackagePrice) || 0) + itemsSubtotal, ...(items.length > 0 ? { items } : {}) }
+          : items.length > 0 ? { items } : { totalAmount: parseFloat(values.totalAmount) }),
         ...(values.discountEnabled && values.discountType
           ? { discountType: values.discountType, discountValue: parseFloat(values.discountValue) }
           : {}),
+        ...(salePackageDto ? { salePackage: salePackageDto } : {}),
       };
 
       if (isEdit && sale) {
@@ -379,6 +445,81 @@ export function SaleFormModal({
           </div>
         </div>
 
+        {/* Package (optional) */}
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Package (optional)</p>
+          <Select
+            value={watchedSelectedPackageId || 'none'}
+            onValueChange={handlePackageSelect}
+          >
+            <SelectTrigger className="border-white/10 bg-white/5">
+              <SelectValue placeholder="No package" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No package</SelectItem>
+              {(packages ?? []).filter(p => p.isActive).map((pkg) => (
+                <SelectItem key={pkg.id} value={pkg.id}>
+                  {pkg.name}{pkg.category ? ` · ${pkg.category}` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {watchedSelectedPackageId && watchedSelectedPackageId !== 'none' ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Package Name</Label>
+                  <Input placeholder="Package name" {...register('salePackageName')} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label>Price</Label>
+                    <Input type="number" step="0.01" placeholder="0.00" {...register('salePackagePrice')} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Currency</Label>
+                    <Input placeholder="USD" {...register('salePackageCurrency')} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Services</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs gap-1"
+                    onClick={() => appendService({ name: '', order: serviceFields.length })}
+                  >
+                    <Plus className="h-3 w-3" /> Add service
+                  </Button>
+                </div>
+                {serviceFields.map((field, index) => (
+                  <div key={field.id} className="flex items-center gap-2">
+                    <Input
+                      placeholder="Service name"
+                      {...register(`salePackageServices.${index}.name`)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-red-400 hover:text-red-300 flex-shrink-0"
+                      onClick={() => removeService(index)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+
         {/* Payment plan + status */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -435,7 +576,7 @@ export function SaleFormModal({
         {!isEdit ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Line Items (optional)</Label>
+              <Label>{hasPackage ? 'Additional Charges (optional)' : 'Line Items (optional)'}</Label>
               <Button
                 type="button"
                 variant="ghost"
@@ -552,10 +693,22 @@ export function SaleFormModal({
         {subtotal > 0 ? (
           <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Summary</p>
+            {hasPackage && packagePrice > 0 ? (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Package</span>
+                <span>{formatCurrency(packagePrice)}</span>
+              </div>
+            ) : null}
             {fields.length > 0 ? (
               <div className="flex justify-between text-muted-foreground">
-                <span>Items ({fields.length})</span>
+                <span>Additional charges ({fields.length})</span>
                 <span>{formatCurrency(itemsSubtotal)}</span>
+              </div>
+            ) : null}
+            {!hasPackage && fields.length === 0 ? (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Amount</span>
+                <span>{formatCurrency(subtotal)}</span>
               </div>
             ) : null}
             {watchedDiscountEnabled && watchedDiscountValue && liveTotal !== subtotal ? (

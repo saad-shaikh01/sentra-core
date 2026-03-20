@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { parseAsInteger, parseAsString, useQueryStates } from 'nuqs';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { DollarSign, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Column, DataTable, FilterBar, PageHeader, Pagination } from '@/components/shared';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,9 +13,10 @@ import { useClients, useDeleteClient } from '@/hooks/use-clients';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui-store';
-import { IClient, UserRole } from '@sentra-core/types';
+import { IClient, SaleType, UserRole } from '@sentra-core/types';
 import { ClientDetailSheet } from './_components/client-detail-sheet';
 import { ClientFormModal } from './_components/client-form-modal';
+import { SaleFormModal } from '../sales/_components/sale-form-modal';
 
 interface ClientRow extends IClient {
   brandName: string;
@@ -32,6 +33,7 @@ export default function ClientsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editClient, setEditClient] = useState<IClient | null>(null);
   const [detailClientId, setDetailClientId] = useState<string | null>(null);
+  const [saleModalClient, setSaleModalClient] = useState<IClient | null>(null);
 
   const debouncedSearch = useDebounce(searchInput, 300);
   const deleteClient = useDeleteClient();
@@ -116,9 +118,21 @@ export default function ClientsPage() {
       {
         key: 'actions',
         header: '',
-        className: 'w-24',
+        className: 'w-32',
         render: (client) => (
           <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-emerald-500/10 hover:text-emerald-400"
+              title="Create sale"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSaleModalClient(client);
+              }}
+            >
+              <DollarSign className="h-3.5 w-3.5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -201,6 +215,15 @@ export default function ClientsPage() {
 
       <ClientFormModal open={modalOpen} onOpenChange={setModalOpen} client={editClient} />
       <ClientDetailSheet clientId={detailClientId} onClose={() => setDetailClientId(null)} />
+      <SaleFormModal
+        open={!!saleModalClient}
+        onOpenChange={(open) => { if (!open) setSaleModalClient(null); }}
+        prefillClientId={saleModalClient?.id}
+        prefillClientName={saleModalClient?.companyName}
+        prefillBrandId={saleModalClient?.brandId}
+        prefillSaleType={SaleType.UPSELL}
+        prefillSalesAgentId={saleModalClient?.upsellAgentId ?? undefined}
+      />
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   Inbox,
   Mail,
   UsersRound,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -42,6 +43,7 @@ const navigation = [
   { name: 'Leads',     href: '/dashboard/leads',    icon: Users },
   { name: 'Clients',   href: '/dashboard/clients',  icon: Building2 },
   { name: 'Sales',     href: '/dashboard/sales',    icon: DollarSign },
+  { name: 'Packages',  href: '/dashboard/packages', icon: Package },
   { name: 'Invoices',  href: '/dashboard/invoices', icon: FileText },
 ];
 
@@ -49,7 +51,7 @@ const settingsNavigation = [
   { name: 'Profile', href: '/dashboard/settings/profile', icon: UserCircle },
   {
     name: 'Sales Teams',
-    href: '/dashboard/settings/sales-teams',
+    href: '/dashboard/teams',
     icon: UsersRound,
     roles: [UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER] as UserRole[],
   },

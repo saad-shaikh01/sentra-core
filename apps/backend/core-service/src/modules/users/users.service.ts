@@ -3,12 +3,14 @@ import { PrismaService } from '@sentra-core/prisma-client';
 import { IUserProfile, UserRole } from '@sentra-core/types';
 import { UpdateProfileDto } from './dto';
 import { IamService } from '../iam';
+import { StorageService } from '../../common';
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
     private iamService: IamService,
+    private storageService: StorageService,
   ) {}
 
   async getMe(userId: string): Promise<IUserProfile> {
@@ -71,6 +73,56 @@ export class UsersService {
       },
       include: { organization: true },
     });
+    const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserRole,
+      avatarUrl: user.avatarUrl,
+      jobTitle: user.jobTitle,
+      phone: user.phone,
+      bio: user.bio,
+      isActive: user.isActive,
+      organizationId: user.organizationId,
+      organization: user.organization,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      appAccess,
+    };
+  }
+
+  async uploadAvatar(
+    userId: string,
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+  ): Promise<IUserProfile> {
+    // Grab existing avatar URL before overwriting
+    const existing = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+
+    const avatarUrl = await this.storageService.upload(
+      buffer,
+      originalName,
+      mimeType,
+      'avatars',
+    );
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      include: { organization: true },
+    });
+
+    // Delete old avatar from Wasabi (best-effort, don't fail the request)
+    if (existing?.avatarUrl) {
+      await this.storageService.delete(existing.avatarUrl).catch(() => null);
+    }
+
     const appAccess = await this.iamService.getUserAppAccess(user.organizationId, user.id);
 
     return {

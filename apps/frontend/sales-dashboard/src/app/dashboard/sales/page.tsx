@@ -12,8 +12,9 @@ import { useSales, useDeleteSale } from '@/hooks/use-sales';
 import { useClients } from '@/hooks/use-clients';
 import { useBrands } from '@/hooks/use-brands';
 import { useAuth } from '@/hooks/use-auth';
+import { useMembers } from '@/hooks/use-organization';
 import { useUIStore } from '@/stores/ui-store';
-import { hasMinimumRole, ISale, SaleStatus, UserRole } from '@sentra-core/types';
+import { hasMinimumRole, ISale, SaleStatus, SaleType, UserRole } from '@sentra-core/types';
 import { SaleFormModal } from './_components/sale-form-modal';
 import { SaleDetailSheet } from './_components/sale-detail-sheet';
 import { QuickSaleModal } from './_components/quick-sale-modal';
@@ -28,29 +29,39 @@ interface SaleRow extends ISale {
 
 export default function SalesPage() {
   const [params, setParams] = useQueryStates({
-    page:     parseAsInteger.withDefault(1),
-    limit:    parseAsInteger.withDefault(20),
-    status:   parseAsStringEnum<SaleStatus>(Object.values(SaleStatus)),
-    clientId: parseAsString,
-    brandId:  parseAsString,
-    dateFrom: parseAsString,
-    dateTo:   parseAsString,
+    page:         parseAsInteger.withDefault(1),
+    limit:        parseAsInteger.withDefault(20),
+    status:       parseAsStringEnum<SaleStatus>(Object.values(SaleStatus)),
+    clientId:     parseAsString,
+    brandId:      parseAsString,
+    dateFrom:     parseAsString,
+    dateTo:       parseAsString,
+    salesAgentId: parseAsString,
+    saleType:     parseAsString,
   });
 
   const queryParams = useMemo(() => ({
     page:  params.page,
     limit: params.limit,
-    ...(params.status   ? { status:   params.status }   : {}),
-    ...(params.clientId ? { clientId: params.clientId } : {}),
-    ...(params.brandId  ? { brandId:  params.brandId }  : {}),
-    ...(params.dateFrom ? { dateFrom: params.dateFrom } : {}),
-    ...(params.dateTo   ? { dateTo:   params.dateTo }   : {}),
+    ...(params.status       ? { status:       params.status }       : {}),
+    ...(params.clientId     ? { clientId:     params.clientId }     : {}),
+    ...(params.brandId      ? { brandId:      params.brandId }      : {}),
+    ...(params.dateFrom     ? { dateFrom:     params.dateFrom }     : {}),
+    ...(params.dateTo       ? { dateTo:       params.dateTo }       : {}),
+    ...(params.salesAgentId ? { salesAgentId: params.salesAgentId } : {}),
+    ...(params.saleType     ? { saleType:     params.saleType }     : {}),
   }), [params]);
 
   const router = useRouter();
   const { data, isLoading, isError } = useSales(queryParams);
   const { data: clientsData }    = useClients({ limit: 100 });
   const { data: brandsData }     = useBrands({ limit: 100 });
+  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: upsellAgents }    = useMembers(UserRole.UPSELL_AGENT);
+  const allAgents = useMemo(
+    () => [...(frontsellAgents ?? []), ...(upsellAgents ?? [])],
+    [frontsellAgents, upsellAgents],
+  );
   const { user, isLoading: isAuthLoading } = useAuth();
   const deleteSale               = useDeleteSale();
   const openConfirmDialog        = useUIStore((s) => s.openConfirmDialog);
@@ -269,6 +280,37 @@ export default function SalesPage() {
             {brandsData?.data.map((b) => (
               <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        {/* Sales Agent */}
+        <Select
+          value={params.salesAgentId ?? 'all'}
+          onValueChange={(v) => setParams({ salesAgentId: v === 'all' ? null : v, page: 1 })}
+        >
+          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
+            <SelectValue placeholder="All agents" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All agents</SelectItem>
+            {allAgents.map((a) => (
+              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Sale Type */}
+        <Select
+          value={params.saleType ?? 'all'}
+          onValueChange={(v) => setParams({ saleType: v === 'all' ? null : v, page: 1 })}
+        >
+          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value={SaleType.FRONTSELL}>Frontsell</SelectItem>
+            <SelectItem value={SaleType.UPSELL}>Upsell</SelectItem>
           </SelectContent>
         </Select>
 

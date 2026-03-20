@@ -579,6 +579,7 @@ export interface ISale {
   subscriptionId?: string;
   items?: ISaleItem[];
   activities?: ISaleActivity[];
+  salePackage?: ISalePackage;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -592,6 +593,7 @@ export interface ISaleWithRelations extends ISale {
   invoices: IInvoice[];
   transactions: IPaymentTransaction[];
   items: ISaleItem[];
+  salePackage?: ISalePackage;
   paidAmount?: number;
   remainingAmount?: number;
   paidInvoiceCount?: number;
@@ -667,11 +669,18 @@ export interface ISalesTeam {
 // PRODUCT PACKAGES
 // ==========================================
 
+export enum PackageCategory {
+  PUBLISHING = 'PUBLISHING',
+  WRITING    = 'WRITING',
+  DESIGN     = 'DESIGN',
+  EDITING    = 'EDITING',
+}
+
 export interface IPackageItem {
   id: string;
   name: string;
   description?: string;
-  unitPrice: number;
+  unitPrice?: number;
   isActive: boolean;
   packageId: string;
 }
@@ -681,9 +690,32 @@ export interface IProductPackage {
   name: string;
   description?: string;
   isActive: boolean;
+  category?: PackageCategory;
+  price?: number;
+  currency: string;
   brandId?: string;
   organizationId: string;
   items: IPackageItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ISalePackageService {
+  id: string;
+  name: string;
+  order: number;
+  salePackageId: string;
+}
+
+export interface ISalePackage {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  category?: string;
+  packageId?: string;
+  saleId: string;
+  services: ISalePackageService[];
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsUUID, IsBoolean, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString, IsOptional, IsUUID, IsBoolean, IsArray,
+  IsNumber, IsEnum, ValidateNested, MinLength, MaxLength, Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { PackageCategory } from '@sentra-core/types';
+import { PackageItemDto } from './create-package.dto';
 
 export class UpdatePackageDto {
   @IsOptional()
@@ -18,4 +24,23 @@ export class UpdatePackageDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsEnum(PackageCategory)
+  category?: PackageCategory;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  price?: number;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PackageItemDto)
+  items?: PackageItemDto[];
 }

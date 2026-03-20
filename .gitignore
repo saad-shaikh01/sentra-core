@@ -46,9 +46,3 @@ Thumbs.db
 .codex
 .codex-worktrees
 out
-
-# Deployment env files
-.env.testing
-.env.live
-deploy/env/infra.testing.env
-deploy/env/infra.live.env

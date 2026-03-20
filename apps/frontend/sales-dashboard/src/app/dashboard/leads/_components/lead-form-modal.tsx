@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateLead, useUpdateLead } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
+import { useTeams } from '@/hooks/use-teams';
 import { ILeadDetail, LeadSource, LeadType, UserRole } from '@sentra-core/types';
 
 const LEAD_TYPE_OPTIONS: Array<{ value: LeadType; label: string }> = [
@@ -53,6 +54,7 @@ interface FormValues {
   leadDate: string;
   brandId: string;
   assignedToId: string;
+  teamId: string;
 }
 
 interface LeadFormPayload extends Record<string, unknown> {
@@ -65,6 +67,7 @@ interface LeadFormPayload extends Record<string, unknown> {
   source?: LeadSource;
   leadDate?: string;
   assignedToId?: string;
+  teamId?: string;
 }
 
 interface CreateLeadFormPayload extends LeadFormPayload {
@@ -82,6 +85,7 @@ const defaultValues: FormValues = {
   leadDate: '',
   brandId: '',
   assignedToId: '',
+  teamId: '',
 };
 
 export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) {
@@ -90,6 +94,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const updateLead = useUpdateLead();
   const { data: brandsData } = useBrands({ limit: 100 });
   const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: teamsData } = useTeams({ limit: 100 });
 
   const {
     register,
@@ -106,6 +111,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const leadType = watch('leadType');
   const source = watch('source');
   const assignedToId = watch('assignedToId');
+  const teamId = watch('teamId');
   const today = new Date().toISOString().split('T')[0];
 
   register('brandId', { required: 'Brand is required' });
@@ -123,6 +129,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
         leadDate: toDateInputValue(lead.leadDate),
         brandId: lead.brandId ?? '',
         assignedToId: lead.assignedToId ?? '',
+        teamId: lead.teamId ?? '',
       });
       return;
     }
@@ -149,6 +156,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
       ...(values.source && { source: values.source }),
       ...(values.leadDate && { leadDate: values.leadDate }),
       ...(values.assignedToId && { assignedToId: values.assignedToId }),
+      ...(values.teamId && { teamId: values.teamId }),
     };
 
     if (isEdit && lead) {
@@ -160,6 +168,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
       };
 
       await createLead.mutateAsync(createDto);
+      reset(defaultValues);
     }
     onOpenChange(false);
   };
@@ -264,17 +273,36 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
 
           <div className="space-y-1.5">
             <Label>Front Sell Agent</Label>
-            <Select value={assignedToId} onValueChange={(v) => setValue('assignedToId', v)}>
+            <Select value={assignedToId || 'none'} onValueChange={(v) => setValue('assignedToId', v === 'none' ? '' : v)}>
               <SelectTrigger className="bg-white/5 border-white/10">
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">Unassigned</SelectItem>
                 {frontSellAgents?.map((m) => (
                   <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Team</Label>
+          <Select
+            value={teamId || 'none'}
+            onValueChange={(v) => setValue('teamId', v === 'none' ? '' : v)}
+          >
+            <SelectTrigger className="bg-white/5 border-white/10">
+              <SelectValue placeholder="No team assigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No team</SelectItem>
+              {teamsData?.data.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
