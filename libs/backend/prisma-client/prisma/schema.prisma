@@ -154,6 +154,12 @@ enum TransactionType {
   CHARGEBACK
 }
 
+enum GatewayType {
+  AUTHORIZE_NET
+  STRIPE
+  MANUAL
+}
+
 enum PlanType {
   FREE
   PRO
@@ -1162,10 +1168,16 @@ model Sale {
   discountValue    Decimal?        @db.Decimal(10, 2)
   discountedTotal  Decimal?        @db.Decimal(10, 2)
 
-  // Authorize.net fields
+  // Authorize.net legacy fields (kept for backward compatibility)
   customerProfileId String?
   paymentProfileId  String?
   subscriptionId    String?
+
+  // Gateway-agnostic payment fields
+  gateway                GatewayType @default(AUTHORIZE_NET)
+  gatewayCustomerId      String?     // e.g. Stripe cus_xxx
+  gatewayPaymentMethodId String?     // e.g. Stripe pm_xxx
+  gatewaySubscriptionId  String?     // e.g. Stripe sub_xxx
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
@@ -1235,12 +1247,14 @@ model Invoice {
 
 model PaymentTransaction {
   id              String            @id @default(uuid())
-  transactionId   String? // Authorize.net reference
+  transactionId   String?           // Gateway reference ID
   type            TransactionType
   amount          Decimal           @db.Decimal(10, 2)
   status          TransactionStatus @default(PENDING)
+  gateway         GatewayType       @default(AUTHORIZE_NET)
   responseCode    String?
   responseMessage String?
+  externalRef     String?           // e.g. manual payment reference number from Billergenie
 
   saleId String
   sale   Sale   @relation(fields: [saleId], references: [id])
@@ -1252,6 +1266,7 @@ model PaymentTransaction {
 
   @@index([saleId])
   @@index([transactionId])
+  @@index([gateway])
 }
 
 model ClientActivity {

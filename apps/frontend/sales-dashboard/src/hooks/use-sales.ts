@@ -187,6 +187,20 @@ export function useChargebackSale() {
   });
 }
 
+export function useRecordPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...dto }: { id: string; amount: number; invoiceId?: string; invoiceNumber?: string; externalRef?: string; note: string }) =>
+      api.recordPayment(id, dto),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      toast.success('Payment recorded successfully');
+    },
+    onError: (e: Error) => toast.error('Failed to record payment', e.message),
+  });
+}
+
 export function useAddSaleNote() {
   const queryClient = useQueryClient();
   return useMutation({

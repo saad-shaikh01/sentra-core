@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useInvoice, usePayInvoice } from '@/hooks/use-invoices';
 import { useUIStore } from '@/stores/ui-store';
 import { api } from '@/lib/api';
-import { IInvoice, InvoiceStatus, IPaymentTransaction, TransactionStatus } from '@sentra-core/types';
+import { IInvoice, InvoiceStatus, IPaymentTransaction, TransactionStatus, GatewayType } from '@sentra-core/types';
 import { Download, AlertCircle } from 'lucide-react';
 
 interface InvoiceDetailSheetProps {
@@ -101,7 +101,11 @@ export function InvoiceDetailSheet({ invoiceId, onClose }: InvoiceDetailSheetPro
                   <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
                     <div>
                       <p className="text-sm font-medium">${t.amount}</p>
-                      <p className="text-xs text-muted-foreground">{t.type} · {new Date(t.createdAt).toLocaleDateString()}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-muted-foreground">{t.type} · {new Date(t.createdAt).toLocaleDateString()}</p>
+                        <GatewayBadge gateway={t.gateway ?? 'AUTHORIZE_NET'} />
+                      </div>
+                      {t.externalRef && <p className="text-xs text-muted-foreground/60">Ref: {t.externalRef}</p>}
                       {t.responseMessage && (
                         <p className="text-xs text-muted-foreground/60">{t.responseMessage}</p>
                       )}
@@ -126,5 +130,19 @@ function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
       {value}
     </div>
+  );
+}
+
+function GatewayBadge({ gateway }: { gateway: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    AUTHORIZE_NET: { label: 'AuthNet', className: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+    STRIPE: { label: 'Stripe', className: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
+    MANUAL: { label: 'Manual', className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  };
+  const c = config[gateway] ?? config.AUTHORIZE_NET;
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${c.className}`}>
+      {c.label}
+    </span>
   );
 }

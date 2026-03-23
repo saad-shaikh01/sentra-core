@@ -1,11 +1,14 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, PrismaService } from '@sentra-core/prisma-client';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { Prisma, PrismaService, NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
 import { InputJsonValue, JsonValue, PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import {
   LeadStatus,
@@ -68,12 +71,18 @@ type LeadImportFile = {
 
 @Injectable()
 export class LeadsService {
+  private readonly logger = new Logger(LeadsService.name);
+  private readonly notificationHelper: NotificationHelper;
+
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
     private readonly scopeService: ScopeService,
     private readonly teamBrandHelper: TeamBrandHelper,
-  ) {}
+    @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
+  ) {
+    this.notificationHelper = new NotificationHelper(notifQueue);
+  }
 
   private generateTitle(dto: { name?: string; email?: string; source?: LeadSource }): string {
     const base = dto.name?.trim() || dto.email?.trim() || 'Unknown';
@@ -865,6 +874,32 @@ export class LeadsService {
     });
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
+
+    if (dto.mentionedUserIds && dto.mentionedUserIds.length > 0) {
+      try {
+        const actor = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        const actorName = actor?.name ?? userId;
+        const recipients = dto.mentionedUserIds.filter((uid) => uid !== userId);
+        if (recipients.length > 0) {
+          await this.notificationHelper.notify({
+            organizationId: orgId,
+            recipientIds: recipients,
+            actorId: userId,
+            type: 'MENTION',
+            module: 'LEADS',
+            title: `${actorName} mentioned you`,
+            body: `${actorName} mentioned you on this lead`,
+            entityType: 'lead',
+            entityId: id,
+            url: `/dashboard/leads`,
+            isMention: true,
+            mentionContext: 'on this lead',
+          });
+        }
+      } catch (err) {
+        this.logger.warn('mention notification failed (non-fatal):', err);
+      }
+    }
 
     return this.mapToILeadActivity(activity);
   }

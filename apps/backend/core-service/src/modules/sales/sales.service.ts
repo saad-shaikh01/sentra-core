@@ -35,9 +35,10 @@ import {
   LeadStatus,
   ClientActivityType,
   InvoiceStatus,
+  GatewayType,
 } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
-import { AuthorizeNetService } from '../authorize-net';
+import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
 import { SalesNotificationService } from './sales-notification.service';
 import {
@@ -49,6 +50,7 @@ import {
   CreateRefundDto,
   RefundType,
   CreateChargebackDto,
+  RecordManualPaymentDto,
 } from './dto';
 
 const ALLOWED_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
@@ -79,7 +81,7 @@ export class SalesService {
 
   constructor(
     private prisma: PrismaService,
-    private authorizeNet: AuthorizeNetService,
+    private gatewayFactory: PaymentGatewayFactory,
     private cache: CacheService,
     private salesNotificationService: SalesNotificationService,
     private readonly scopeService: ScopeService,
@@ -963,54 +965,69 @@ export class SalesService {
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
 
-    // SALE-BE-002: Auto-create CustomerProfile if not yet linked
-    let customerProfileId = sale.customerProfileId;
-    let paymentProfileId = sale.paymentProfileId;
+    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+    const gateway = this.gatewayFactory.resolve(gatewayType);
 
-    if (!customerProfileId && dto.opaqueData) {
-      // Create CustomerProfile from opaque card data
-      const profileResult = await this.authorizeNet.createCustomerProfile({
+    // Resolve profile IDs — support both legacy Authorize.Net fields and new gateway-agnostic fields
+    let gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId ?? null;
+    let gatewayPaymentMethodId = sale.paymentProfileId ?? sale.gatewayPaymentMethodId ?? null;
+
+    // Auto-create customer/payment profiles from provided token if not yet linked
+    if (!gatewayCustomerId && (dto.opaqueData || dto.stripePaymentMethodId)) {
+      const profileResult = await gateway.createCustomer({
         email: sale.client.email,
         description: `${sale.client.contactName ?? sale.client.email} - Sale ${sale.id}`,
       });
-      if (!profileResult.success || !profileResult.customerProfileId) {
+      if (!profileResult.success || !profileResult.gatewayCustomerId) {
         throw new BadRequestException(`Failed to create customer profile: ${profileResult.message}`);
       }
-      customerProfileId = profileResult.customerProfileId;
+      gatewayCustomerId = profileResult.gatewayCustomerId;
 
-      const paymentResult = await this.authorizeNet.createPaymentProfile({
-        customerProfileId,
-        opaqueData: dto.opaqueData,
-      });
-      if (!paymentResult.success || !paymentResult.paymentProfileId) {
-        throw new BadRequestException(`Failed to create payment profile: ${paymentResult.message}`);
+      const saveData: Record<string, string> = { gatewayCustomerId };
+      // Also persist to legacy field for Authorize.Net backward compatibility
+      if (gatewayType === GatewayType.AUTHORIZE_NET) saveData.customerProfileId = gatewayCustomerId;
+      await this.prisma.sale.update({ where: { id }, data: saveData });
+    }
+
+    if (!gatewayPaymentMethodId && (dto.opaqueData || dto.stripePaymentMethodId)) {
+      if (!gatewayCustomerId) {
+        throw new BadRequestException('Cannot create payment method: customer profile not found');
       }
-      paymentProfileId = paymentResult.paymentProfileId;
-
-      // Persist the profile IDs
-      await this.prisma.sale.update({
-        where: { id },
-        data: { customerProfileId, paymentProfileId },
+      const pmResult = await gateway.createPaymentMethod({
+        gatewayCustomerId,
+        opaqueData: dto.opaqueData,
+        stripePaymentMethodId: dto.stripePaymentMethodId,
       });
+      if (!pmResult.success || !pmResult.gatewayPaymentMethodId) {
+        throw new BadRequestException(`Failed to create payment profile: ${pmResult.message}`);
+      }
+      gatewayPaymentMethodId = pmResult.gatewayPaymentMethodId;
+
+      const saveData: Record<string, string> = { gatewayPaymentMethodId };
+      if (gatewayType === GatewayType.AUTHORIZE_NET) saveData.paymentProfileId = gatewayPaymentMethodId;
+      await this.prisma.sale.update({ where: { id }, data: saveData });
     }
 
-    if (!customerProfileId || !paymentProfileId) {
-      throw new BadRequestException('Sale does not have payment profiles configured. Provide opaqueData to link a card.');
+    if (!gatewayCustomerId || !gatewayPaymentMethodId) {
+      throw new BadRequestException(
+        'Sale does not have payment profiles configured. Provide opaqueData or stripePaymentMethodId to link a payment method.',
+      );
     }
 
-    const result = await this.authorizeNet.chargeCustomerProfile({
-      customerProfileId,
-      paymentProfileId,
+    const result = await gateway.chargeOnce({
+      gatewayCustomerId,
+      gatewayPaymentMethodId,
       amount: dto.amount,
       invoiceNumber: dto.invoiceNumber,
     });
 
     const transaction = await this.prisma.paymentTransaction.create({
       data: {
-        transactionId: result.transactionId,
+        transactionId: result.gatewayTransactionId,
         type: TransactionType.ONE_TIME,
         amount: dto.amount,
         status: result.success ? TransactionStatus.SUCCESS : TransactionStatus.FAILED,
+        gateway: gatewayType,
         responseCode: result.responseCode,
         responseMessage: result.message,
         saleId: id,
@@ -1023,6 +1040,7 @@ export class SalesService {
         amount: Number(dto.amount),
         reason: result.message ?? 'Unknown error',
         responseCode: result.responseCode ?? null,
+        gateway: gatewayType,
       });
 
       this.salesNotificationService
@@ -1047,12 +1065,12 @@ export class SalesService {
     }
 
     await this.logActivity(this.prisma, id, actorId, SaleActivityType.PAYMENT_RECEIVED, {
-      transactionId: result.transactionId,
+      transactionId: result.gatewayTransactionId,
       amount: Number(dto.amount),
       invoiceId: dto.invoiceId ?? null,
+      gateway: gatewayType,
     });
 
-    // Mark linked invoice as paid
     if (dto.invoiceId) {
       await this.prisma.invoice.update({
         where: { id: dto.invoiceId },
@@ -1060,56 +1078,128 @@ export class SalesService {
       });
     }
 
-    // Invalidate sale detail cache since transactions are included
     await this.cache.del(`sales:${orgId}:${id}`);
 
-    return { transaction, authorizeNetResponse: result };
+    return { transaction, gatewayResponse: result };
+  }
+
+  async recordPayment(
+    id: string,
+    orgId: string,
+    actorId: string,
+    dto: RecordManualPaymentDto,
+  ): Promise<{ transaction: any; message: string }> {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+    if (!sale) throw new NotFoundException('Sale not found');
+    if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
+
+    const transaction = await this.prisma.paymentTransaction.create({
+      data: {
+        transactionId: null,
+        type: TransactionType.ONE_TIME,
+        amount: dto.amount,
+        status: TransactionStatus.SUCCESS,
+        gateway: 'MANUAL',
+        externalRef: dto.externalRef ?? null,
+        responseMessage: dto.note,
+        saleId: id,
+        invoiceId: dto.invoiceId ?? null,
+      },
+    });
+
+    if (dto.invoiceId) {
+      await this.prisma.invoice.update({
+        where: { id: dto.invoiceId },
+        data: { status: 'PAID' },
+      });
+    }
+
+    if (sale.status === SaleStatus.PENDING) {
+      await this.prisma.sale.update({
+        where: { id },
+        data: { status: SaleStatus.ACTIVE },
+      });
+      await this.logActivity(this.prisma, id, actorId, SaleActivityType.STATUS_CHANGE, {
+        from: SaleStatus.PENDING,
+        to: SaleStatus.ACTIVE,
+        trigger: 'manual_payment_recorded',
+      });
+    }
+
+    await this.logActivity(this.prisma, id, actorId, SaleActivityType.PAYMENT_RECEIVED, {
+      amount: Number(dto.amount),
+      invoiceId: dto.invoiceId ?? null,
+      source: 'manual',
+      externalRef: dto.externalRef ?? null,
+      note: dto.note,
+    });
+
+    await this.cache.delByPrefix(`sales:${orgId}:`);
+
+    return { transaction, message: 'Payment recorded successfully' };
   }
 
   async subscribe(id: string, orgId: string, actorId: string, dto: CreateSubscriptionDto): Promise<any> {
     const sale = await this.prisma.sale.findUnique({ where: { id } });
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
-    if (!sale.customerProfileId || !sale.paymentProfileId) {
+
+    const gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId;
+    const gatewayPaymentMethodId = sale.paymentProfileId ?? sale.gatewayPaymentMethodId;
+
+    if (!gatewayCustomerId || !gatewayPaymentMethodId) {
       throw new BadRequestException('Sale does not have payment profiles configured');
     }
-    if (sale.subscriptionId) {
+
+    const existingSubId = sale.subscriptionId ?? sale.gatewaySubscriptionId;
+    if (existingSubId) {
       throw new BadRequestException('Sale already has an active subscription');
     }
 
-    const result = await this.authorizeNet.createSubscription({
+    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+    const gateway = this.gatewayFactory.resolve(gatewayType);
+
+    const result = await gateway.createSubscription({
       name: dto.name,
       intervalLength: dto.intervalLength,
       intervalUnit: dto.intervalUnit,
       startDate: dto.startDate,
       totalOccurrences: dto.totalOccurrences,
       amount: dto.amount,
-      customerProfileId: sale.customerProfileId,
-      paymentProfileId: sale.paymentProfileId,
+      currency: sale.currency,
+      gatewayCustomerId,
+      gatewayPaymentMethodId,
     });
 
     if (!result.success) {
       throw new BadRequestException(`Subscription creation failed: ${result.message}`);
     }
 
-    await this.prisma.sale.update({
-      where: { id },
-      data: {
-        subscriptionId: result.subscriptionId,
-        status: SaleStatus.ACTIVE,
-      },
-    });
+    const updateData: Record<string, any> = {
+      gatewaySubscriptionId: result.gatewaySubscriptionId,
+      status: SaleStatus.ACTIVE,
+    };
+    // Also persist to legacy field for Authorize.Net
+    if (gatewayType === GatewayType.AUTHORIZE_NET) {
+      updateData.subscriptionId = result.gatewaySubscriptionId;
+    }
+
+    await this.prisma.sale.update({ where: { id }, data: updateData });
 
     await this.logActivity(this.prisma, id, actorId, SaleActivityType.STATUS_CHANGE, {
       from: sale.status,
       to: SaleStatus.ACTIVE,
       trigger: 'subscription_activated',
-      subscriptionId: result.subscriptionId,
+      subscriptionId: result.gatewaySubscriptionId,
+      gateway: gatewayType,
     });
 
     await this.cache.delByPrefix(`sales:${orgId}:`);
 
-    return { subscriptionId: result.subscriptionId };
+    return { subscriptionId: result.gatewaySubscriptionId };
   }
 
   async addNote(
@@ -1169,11 +1259,13 @@ export class SalesService {
 
     const refundAmount = dto.amount ?? Number(sale.totalAmount);
     let gatewayResult:
-      | { success: boolean; transactionId?: string; responseCode?: string; message?: string }
+      | { success: boolean; gatewayTransactionId?: string; responseCode?: string; message?: string }
       | undefined;
 
     if (dto.type === RefundType.FULL || dto.type === RefundType.PARTIAL) {
-      gatewayResult = await this.authorizeNet.refundTransaction({
+      const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+      const gateway = this.gatewayFactory.resolve(gatewayType);
+      gatewayResult = await gateway.refund({
         transactionId: dto.transactionId!,
         amount: refundAmount,
         cardLastFour: dto.cardLastFour,
@@ -1182,7 +1274,7 @@ export class SalesService {
 
     const transaction = await this.prisma.paymentTransaction.create({
       data: {
-        transactionId: gatewayResult?.transactionId ?? null,
+        transactionId: gatewayResult?.gatewayTransactionId ?? null,
         type: TransactionType.REFUND,
         amount: refundAmount,
         status:
@@ -1191,6 +1283,7 @@ export class SalesService {
             : gatewayResult?.success
               ? TransactionStatus.SUCCESS
               : TransactionStatus.FAILED,
+        gateway: (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType,
         responseCode: gatewayResult?.responseCode,
         responseMessage: dto.type === RefundType.MANUAL ? dto.note : gatewayResult?.message,
         saleId: id,
@@ -1295,14 +1388,22 @@ export class SalesService {
     const sale = await this.prisma.sale.findUnique({ where: { id } });
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
-    if (!sale.subscriptionId) throw new BadRequestException('Sale does not have an active subscription');
 
-    const result = await this.authorizeNet.cancelSubscription(sale.subscriptionId);
+    const subscriptionId = sale.subscriptionId ?? sale.gatewaySubscriptionId;
+    if (!subscriptionId) throw new BadRequestException('Sale does not have an active subscription');
+
+    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+    const gateway = this.gatewayFactory.resolve(gatewayType);
+
+    const result = await gateway.cancelSubscription(subscriptionId);
     if (!result.success) throw new BadRequestException(`Cancellation failed: ${result.message}`);
 
     await this.prisma.sale.update({
       where: { id },
-      data: { subscriptionId: null },
+      data: {
+        subscriptionId: null,
+        gatewaySubscriptionId: null,
+      },
     });
 
     await this.cache.delByPrefix(`sales:${orgId}:`);
@@ -1326,6 +1427,7 @@ export class SalesService {
       clientId: sale.clientId,
       brandId: sale.brandId,
       organizationId: sale.organizationId,
+      gateway: sale.gateway ?? undefined,
       customerProfileId: sale.customerProfileId ?? undefined,
       paymentProfileId: sale.paymentProfileId ?? undefined,
       subscriptionId: sale.subscriptionId ?? undefined,

@@ -1,11 +1,14 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import * as bcrypt from 'bcryptjs';
-import { Prisma, PrismaService } from '@sentra-core/prisma-client';
+import { Prisma, PrismaService, NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
 import { MailClientService } from '@sentra-core/mail-client';
 import {
   IClient,
@@ -26,12 +29,18 @@ import { ScopeService } from '../scope/scope.service';
 
 @Injectable()
 export class ClientsService {
+  private readonly logger = new Logger(ClientsService.name);
+  private readonly notificationHelper: NotificationHelper;
+
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
     private mailService: MailClientService,
     private readonly scopeService: ScopeService,
-  ) {}
+    @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
+  ) {
+    this.notificationHelper = new NotificationHelper(notifQueue);
+  }
 
   async create(orgId: string, userId: string, dto: CreateClientDto): Promise<IClient> {
     const existingClient = await this.prisma.client.findFirst({
@@ -361,6 +370,7 @@ export class ClientsService {
     orgId: string,
     userId: string,
     content: string,
+    mentionedUserIds?: string[],
   ): Promise<IClientActivity> {
     const client = await this.prisma.client.findFirst({
       where: { id, organizationId: orgId, deletedAt: null },
@@ -381,6 +391,32 @@ export class ClientsService {
     });
 
     await this.cache.delByPrefix(`clients:${orgId}:`);
+
+    if (mentionedUserIds && mentionedUserIds.length > 0) {
+      try {
+        const actor = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        const actorName = actor?.name ?? userId;
+        const recipients = mentionedUserIds.filter((uid) => uid !== userId);
+        if (recipients.length > 0) {
+          await this.notificationHelper.notify({
+            organizationId: orgId,
+            recipientIds: recipients,
+            actorId: userId,
+            type: 'MENTION',
+            module: 'CLIENTS',
+            title: `${actorName} mentioned you`,
+            body: `${actorName} mentioned you on this client`,
+            entityType: 'client',
+            entityId: id,
+            url: `/dashboard/clients`,
+            isMention: true,
+            mentionContext: 'on this client',
+          });
+        }
+      } catch (err) {
+        this.logger.warn('mention notification failed (non-fatal):', err);
+      }
+    }
 
     return this.mapToIClientActivity(activity);
   }

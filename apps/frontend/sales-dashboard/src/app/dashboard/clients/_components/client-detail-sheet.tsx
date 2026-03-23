@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { SaleFormModal } from '@/app/dashboard/sales/_components/sale-form-modal';
 import { SaleType } from '@sentra-core/types';
+import { LeadNoteEditor } from '@/app/dashboard/leads/_components/lead-note-editor';
 
 interface ClientDetailSheetProps {
   clientId: string | null;
@@ -49,6 +50,7 @@ type ClientTab = 'details' | 'discussion' | 'activity' | 'emails';
 export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps) {
   const { data: client, isLoading, isError } = useClient(clientId ?? '');
   const { user } = useAuth();
+  const { data: allMembers } = useMembers();
   const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
   const { data: projectManagers } = useMembers(UserRole.PROJECT_MANAGER);
   const assignClient = useAssignClient();
@@ -58,12 +60,10 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
   const openConfirmDialog = useUIStore((state) => state.openConfirmDialog);
 
   const [activeTab, setActiveTab] = useState<ClientTab>('details');
-  const [note, setNote] = useState('');
   const [saleModalOpen, setSaleModalOpen] = useState(false);
 
   useEffect(() => {
     setActiveTab('details');
-    setNote('');
   }, [clientId]);
 
   const detailClient = client as ClientDetail | undefined;
@@ -94,13 +94,9 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
   const canManageClient = user?.role ? hasMinimumRole(user.role, UserRole.SALES_MANAGER) : false;
   const portalState = detailClient ? getPortalState(detailClient) : null;
 
-  const handleAddNote = async () => {
-    if (!clientId || !note.trim()) {
-      return;
-    }
-
-    await addClientNote.mutateAsync({ id: clientId, content: note.trim() });
-    setNote('');
+  const handleAddNote = async (content: string, mentionedUserIds: string[]) => {
+    if (!clientId) return;
+    await addClientNote.mutateAsync({ id: clientId, content, mentionedUserIds });
   };
 
   const confirmPortalGrant = () => {
@@ -367,20 +363,12 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
                   <MessageSquare className="h-4 w-4 text-muted-foreground" />
                   <p className="text-sm font-semibold">Discussion Notes</p>
                 </div>
-                <div className="space-y-2">
-                  <textarea
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="Add a note for this client"
-                    rows={4}
-                    className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary"
-                  />
-                  <div className="flex justify-end">
-                    <Button onClick={handleAddNote} disabled={!note.trim() || addClientNote.isPending}>
-                      Add Note
-                    </Button>
-                  </div>
-                </div>
+                <LeadNoteEditor
+                  members={(allMembers ?? []).map((m) => ({ id: m.id, name: m.name, avatarUrl: m.avatarUrl ?? undefined }))}
+                  onSubmit={handleAddNote}
+                  isPending={addClientNote.isPending}
+                  placeholder="Write a note… type @ to mention someone"
+                />
               </section>
 
               {discussionNotes.length ? (
@@ -465,7 +453,14 @@ function ActivityCard({ activity }: { activity: IClientActivity }) {
 
       <p className="text-sm font-medium leading-6 text-foreground">{meta.title}</p>
       {meta.description ? (
-        <p className="mt-2 text-sm leading-6 text-foreground/80">{meta.description}</p>
+        meta.description.startsWith('<') ? (
+          <div
+            className="mt-2 text-sm leading-6 text-foreground/80 [&_em]:italic [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-1 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc [&_.mention]:cursor-default [&_.mention]:font-semibold [&_.mention]:text-primary"
+            dangerouslySetInnerHTML={{ __html: meta.description }}
+          />
+        ) : (
+          <p className="mt-2 text-sm leading-6 text-foreground/80">{meta.description}</p>
+        )
       ) : null}
 
       {meta.details.length ? (

@@ -7,3 +7,4 @@ export { AddNoteDto } from './add-note.dto';
 export { CreateRefundDto, RefundType } from './create-refund.dto';
 export { CreateChargebackDto } from './create-chargeback.dto';
 export { SalePackageDto, SalePackageServiceDto } from './sale-package.dto';
+export { RecordManualPaymentDto } from './record-manual-payment.dto';

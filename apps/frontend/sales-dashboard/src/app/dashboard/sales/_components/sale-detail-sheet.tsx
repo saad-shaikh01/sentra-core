@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { useSale, useCancelSubscription } from '@/hooks/use-sales';
 import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui-store';
-import { hasMinimumRole, ISaleWithRelations, TransactionStatus, UserRole } from '@sentra-core/types';
+import { hasMinimumRole, ISaleWithRelations, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
 import { ChargeSaleModal } from './charge-sale-modal';
 import { SubscribeModal } from './subscribe-modal';
-import { CreditCard, RefreshCw, AlertCircle } from 'lucide-react';
+import { RecordPaymentModal } from './record-payment-modal';
+import { CreditCard, RefreshCw, AlertCircle, FileText } from 'lucide-react';
 
 interface SaleDetailSheetProps {
   saleId: string | null;
@@ -24,10 +25,14 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
 
   const [chargeOpen, setChargeOpen] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const userRole = user?.role;
   const canChargeOrSubscribe =
     !isAuthLoading && !!userRole && hasMinimumRole(userRole, UserRole.ADMIN);
-  const hasPaymentProfile = !!(sale?.customerProfileId && sale?.paymentProfileId);
+  const hasPaymentProfile = !!(
+    (sale?.customerProfileId && sale?.paymentProfileId) ||
+    (sale?.gatewayCustomerId && sale?.gatewayPaymentMethodId)
+  );
 
   const handleCancelSub = () => {
     if (!saleId) return;
@@ -68,26 +73,39 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
               <InfoCard label="Description" value={<span className="text-sm">{sale.description}</span>} />
             )}
 
-            {/* Payment profile */}
-            {(sale.customerProfileId || sale.paymentProfileId) && (
+            {/* Payment profile / gateway info */}
+            {(sale.customerProfileId || sale.paymentProfileId || sale.gatewayCustomerId || sale.gateway === 'MANUAL') && (
               <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Payment Profile</p>
-                {sale.customerProfileId && (
-                  <p className="text-xs text-muted-foreground">Customer: <span className="text-foreground">{sale.customerProfileId}</span></p>
-                )}
-                {sale.paymentProfileId && (
-                  <p className="text-xs text-muted-foreground">Payment: <span className="text-foreground">{sale.paymentProfileId}</span></p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Payment Setup</p>
+                  <GatewayBadge gateway={sale.gateway ?? 'AUTHORIZE_NET'} />
+                </div>
+                {sale.gateway === 'MANUAL' ? (
+                  <p className="text-xs text-muted-foreground">External payments recorded manually</p>
+                ) : (
+                  <>
+                    {(sale.customerProfileId || sale.gatewayCustomerId) && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Customer: <span className="text-foreground font-mono text-[10px]">{sale.customerProfileId ?? sale.gatewayCustomerId}</span>
+                      </p>
+                    )}
+                    {(sale.paymentProfileId || sale.gatewayPaymentMethodId) && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Method: <span className="text-foreground font-mono text-[10px]">{sale.paymentProfileId ?? sale.gatewayPaymentMethodId}</span>
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
 
             {/* Subscription */}
-            {sale.subscriptionId ? (
+            {(sale.subscriptionId || sale.gatewaySubscriptionId) ? (
               <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 mb-1">Active Subscription</p>
-                    <p className="text-xs text-muted-foreground">{sale.subscriptionId}</p>
+                    <p className="text-xs text-muted-foreground">{sale.subscriptionId ?? sale.gatewaySubscriptionId}</p>
                   </div>
                   {canChargeOrSubscribe ? (
                     <Button
@@ -104,34 +122,32 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
               </div>
             ) : null}
 
-            {!isAuthLoading && canChargeOrSubscribe && !hasPaymentProfile ? (
+            {!isAuthLoading && canChargeOrSubscribe && !hasPaymentProfile && sale.gateway !== 'MANUAL' ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
                 <p className="text-xs text-amber-300">
-                  This sale cannot be charged yet because both customer and payment profiles are required.
+                  This sale cannot be charged yet because payment profiles are not configured.
                 </p>
               </div>
             ) : null}
 
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-2">
-              {canChargeOrSubscribe && hasPaymentProfile ? (
-                <Button
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={() => setChargeOpen(true)}
-                >
+              {canChargeOrSubscribe && hasPaymentProfile && sale.gateway !== 'MANUAL' ? (
+                <Button variant="outline" className="flex-1 gap-2" onClick={() => setChargeOpen(true)}>
                   <CreditCard className="h-4 w-4" />
                   Charge Now
                 </Button>
               ) : null}
-              {canChargeOrSubscribe && hasPaymentProfile && !sale.subscriptionId ? (
-                <Button
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={() => setSubscribeOpen(true)}
-                >
+              {canChargeOrSubscribe && hasPaymentProfile && !sale.subscriptionId && !sale.gatewaySubscriptionId && sale.gateway !== 'MANUAL' ? (
+                <Button variant="outline" className="flex-1 gap-2" onClick={() => setSubscribeOpen(true)}>
                   <RefreshCw className="h-4 w-4" />
                   Subscribe
+                </Button>
+              ) : null}
+              {canChargeOrSubscribe ? (
+                <Button variant="outline" className="flex-1 gap-2" onClick={() => setRecordPaymentOpen(true)}>
+                  <FileText className="h-4 w-4" />
+                  Record Payment
                 </Button>
               ) : null}
             </div>
@@ -143,11 +159,20 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
                 <div className="space-y-2">
                   {sale.transactions.map((t) => (
                     <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                      <div>
-                        <p className="text-sm font-medium">${t.amount}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">${t.amount}</p>
+                          <GatewayBadge gateway={t.gateway ?? 'AUTHORIZE_NET'} />
+                        </div>
                         <p className="text-xs text-muted-foreground">{t.type} · {new Date(t.createdAt).toLocaleDateString()}</p>
+                        {t.externalRef && (
+                          <p className="text-xs text-muted-foreground/60 truncate">Ref: {t.externalRef}</p>
+                        )}
+                        {t.responseMessage && (
+                          <p className="text-xs text-muted-foreground/60 truncate">{t.responseMessage}</p>
+                        )}
                       </div>
-                      <span className={`text-xs font-bold ${t.status === TransactionStatus.SUCCESS ? 'text-emerald-400' : t.status === TransactionStatus.FAILED ? 'text-red-400' : 'text-amber-400'}`}>
+                      <span className={`text-xs font-bold ml-2 shrink-0 ${t.status === TransactionStatus.SUCCESS ? 'text-emerald-400' : t.status === TransactionStatus.FAILED ? 'text-red-400' : 'text-amber-400'}`}>
                         {t.status}
                       </span>
                     </div>
@@ -184,6 +209,12 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
         <>
           <ChargeSaleModal open={chargeOpen} onOpenChange={setChargeOpen} saleId={saleId} />
           <SubscribeModal open={subscribeOpen} onOpenChange={setSubscribeOpen} saleId={saleId} />
+          <RecordPaymentModal
+            open={recordPaymentOpen}
+            onOpenChange={setRecordPaymentOpen}
+            saleId={saleId}
+            invoices={sale?.invoices?.map((inv) => ({ id: inv.id, invoiceNumber: inv.invoiceNumber, amount: Number(inv.amount), status: inv.status })) ?? []}
+          />
         </>
       )}
     </>
@@ -196,5 +227,19 @@ function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
       {value}
     </div>
+  );
+}
+
+function GatewayBadge({ gateway }: { gateway: string }) {
+  const config: Record<string, { label: string; className: string }> = {
+    AUTHORIZE_NET: { label: 'AuthNet', className: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+    STRIPE: { label: 'Stripe', className: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
+    MANUAL: { label: 'Manual', className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  };
+  const c = config[gateway] ?? config.AUTHORIZE_NET;
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${c.className}`}>
+      {c.label}
+    </span>
   );
 }

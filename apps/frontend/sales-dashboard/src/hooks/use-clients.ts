@@ -85,7 +85,8 @@ export function useAssignClient() {
 export function useAddClientNote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, content }: { id: string; content: string }) => api.addClientNote(id, content),
+    mutationFn: ({ id, content, mentionedUserIds }: { id: string; content: string; mentionedUserIds?: string[] }) =>
+      api.addClientNote(id, content, mentionedUserIds),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: clientsKeys.detail(id) });
       toast.success('Note added');

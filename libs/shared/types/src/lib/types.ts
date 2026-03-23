@@ -141,6 +141,12 @@ export enum TransactionType {
   CHARGEBACK = 'CHARGEBACK',
 }
 
+export enum GatewayType {
+  AUTHORIZE_NET = 'AUTHORIZE_NET',
+  STRIPE = 'STRIPE',
+  MANUAL = 'MANUAL',
+}
+
 export const OrganizationOnboardingMode = {
   PUBLIC_OWNER_SIGNUP: 'PUBLIC_OWNER_SIGNUP',
   INVITE_ONLY: 'INVITE_ONLY',
@@ -576,6 +582,10 @@ export interface ISale {
   customerProfileId?: string;
   paymentProfileId?: string;
   subscriptionId?: string;
+  gateway?: GatewayType;
+  gatewayCustomerId?: string;
+  gatewayPaymentMethodId?: string;
+  gatewaySubscriptionId?: string;
   items?: ISaleItem[];
   activities?: ISaleActivity[];
   salePackage?: ISalePackage;

@@ -50,6 +50,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use('/api/webhooks/authorize-net', bodyParser.raw({ type: '*/*' }));
+  app.use('/api/webhooks/stripe', bodyParser.raw({ type: '*/*' }));
 
   app.useGlobalPipes(
     new ValidationPipe({

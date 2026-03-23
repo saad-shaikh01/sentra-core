@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -58,6 +57,7 @@ import {
 import { timeAgo } from '@/lib/format-date';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 import { TeamAssignmentSelect } from './team-assignment-select';
+import { LeadNoteEditor } from './lead-note-editor';
 
 interface LeadDetailSheetProps {
   leadId: string | null;
@@ -108,9 +108,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const editNote = useEditLeadNote();
   const deleteNote = useDeleteLeadNote();
 
-  const [note, setNote] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [editingNoteContent, setEditingNoteContent] = useState('');
   const [convertOpen, setConvertOpen] = useState(false);
   const [createSaleOpen, setCreateSaleOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('details');
@@ -159,36 +157,22 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
     setLostReason('');
   };
 
-  const handleAddNote = async () => {
-    if (!note.trim() || !leadId) {
-      return;
-    }
-
-    await addNote.mutateAsync({ id: leadId, content: note.trim() });
-    setNote('');
+  const handleAddNote = async (content: string, mentionedUserIds: string[]) => {
+    if (!leadId) return;
+    await addNote.mutateAsync({ id: leadId, content, mentionedUserIds });
   };
 
   const startEditingNote = (activity: ILeadActivity) => {
-    const content = typeof activity.data.content === 'string' ? activity.data.content : '';
     setEditingNoteId(activity.id);
-    setEditingNoteContent(content);
   };
 
   const cancelEditingNote = () => {
     setEditingNoteId(null);
-    setEditingNoteContent('');
   };
 
-  const handleSaveEditedNote = async () => {
-    if (!leadId || !editingNoteId || !editingNoteContent.trim()) {
-      return;
-    }
-
-    await editNote.mutateAsync({
-      leadId,
-      noteId: editingNoteId,
-      content: editingNoteContent.trim(),
-    });
+  const handleSaveEditedNote = async (content: string) => {
+    if (!leadId || !editingNoteId) return;
+    await editNote.mutateAsync({ leadId, noteId: editingNoteId, content });
     cancelEditingNote();
   };
 
@@ -432,28 +416,11 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                     </span>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="lead-note">Add Note</Label>
-                    <div className="space-y-2">
-                      <textarea
-                        id="lead-note"
-                        placeholder="Write a note for this lead"
-                        value={note}
-                        onChange={(event) => setNote(event.target.value)}
-                        rows={4}
-                        className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary"
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          size="sm"
-                          onClick={handleAddNote}
-                          disabled={!note.trim() || addNote.isPending}
-                        >
-                          Add
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                  <LeadNoteEditor
+                    members={(members ?? []).map((m) => ({ id: m.id, name: m.name, avatarUrl: m.avatarUrl ?? undefined }))}
+                    onSubmit={handleAddNote}
+                    isPending={addNote.isPending}
+                  />
                 </section>
 
                 {discussionItems.length ? (
@@ -481,31 +448,25 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                             </span>
                           </div>
                           {isEditing ? (
-                            <div className="space-y-3">
-                              <textarea
-                                value={editingNoteContent}
-                                onChange={(event) => setEditingNoteContent(event.target.value)}
-                                rows={4}
-                                className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary"
-                              />
-                              <div className="flex justify-end gap-2">
-                                <Button type="button" variant="outline" size="sm" onClick={cancelEditingNote}>
-                                  <X className="mr-2 h-3.5 w-3.5" />
-                                  Cancel
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={handleSaveEditedNote}
-                                  disabled={!editingNoteContent.trim() || editNote.isPending}
-                                >
-                                  Save
-                                </Button>
-                              </div>
-                            </div>
+                            <LeadNoteEditor
+                              key={item.id}
+                              members={(members ?? []).map((m) => ({ id: m.id, name: m.name, avatarUrl: m.avatarUrl ?? undefined }))}
+                              initialContent={noteContent}
+                              onSubmit={async (content) => handleSaveEditedNote(content)}
+                              onCancel={cancelEditingNote}
+                              isPending={editNote.isPending}
+                              submitLabel="Save"
+                            />
                           ) : (
                             <>
-                              <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">{noteContent || 'No note content.'}</p>
+                              {noteContent.startsWith('<') ? (
+                                <div
+                                  className="text-sm leading-6 text-foreground/90 [&_em]:italic [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-1 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc [&_.mention]:cursor-default [&_.mention]:font-semibold [&_.mention]:text-primary"
+                                  dangerouslySetInnerHTML={{ __html: noteContent }}
+                                />
+                              ) : (
+                                <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">{noteContent || 'No note content.'}</p>
+                              )}
                               {canEditOrDelete ? (
                                 <div className="mt-3 flex justify-end gap-2">
                                   <Button type="button" variant="outline" size="sm" onClick={() => startEditingNote(item)}>

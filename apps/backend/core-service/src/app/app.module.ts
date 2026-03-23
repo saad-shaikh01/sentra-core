@@ -27,6 +27,8 @@ import { AnalyticsModule } from '../modules/analytics';
 import { LeadIntegrationsModule } from '../modules/lead-integrations';
 import { PublicPaymentsModule } from '../modules/public-payments/public-payments.module';
 import { WebhooksModule } from '../modules/webhooks/webhooks.module';
+import { StripeModule } from '../modules/stripe/stripe.module';
+import { PaymentGatewayModule } from '../modules/payment-gateway';
 import { RbacModule } from '../modules/rbac';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
 import { ScopeModule } from '../modules/scope/scope.module';
@@ -87,6 +89,7 @@ function resolveEnvFiles(): string[] {
     LeadsModule,
     ClientsModule,
     AuthorizeNetModule,
+    PaymentGatewayModule,
     SalesModule,
     InvoicesModule,
     IamModule,
@@ -99,6 +102,7 @@ function resolveEnvFiles(): string[] {
     LeadIntegrationsModule,
     PublicPaymentsModule,
     WebhooksModule,
+    StripeModule,
     RbacModule,
     NotificationsModule,
   ],

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators';
 import { PublicInvoiceDto } from './dto/public-invoice.dto';
@@ -23,5 +23,18 @@ export class PublicPaymentsController {
     @Body() dto: PublicPaymentDto,
   ) {
     return this.publicPaymentsService.payInvoice(token, dto);
+  }
+
+  /**
+   * Stripe-only: Creates a PaymentIntent and returns a clientSecret.
+   * The frontend uses this with Stripe.js to confirm payment.
+   * Stripe webhook will then mark the invoice as paid.
+   */
+  @Post('invoice/:token/create-payment-intent')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  createPaymentIntent(@Param('token') token: string) {
+    return this.publicPaymentsService.createStripePaymentIntent(token);
   }
 }

@@ -20,10 +20,17 @@ export class PayerDto {
 }
 
 export class PublicPaymentDto {
+  // Authorize.Net: tokenized card data from Accept.js
+  @IsOptional()
   @IsObject()
   @ValidateNested()
   @Type(() => OpaqueDataDto)
-  opaqueData: OpaqueDataDto;
+  opaqueData?: OpaqueDataDto;
+
+  // Stripe: Payment Method ID from Stripe.js (pm_xxx)
+  @IsOptional()
+  @IsString()
+  stripePaymentMethodId?: string;
 
   @IsOptional()
   @ValidateNested()

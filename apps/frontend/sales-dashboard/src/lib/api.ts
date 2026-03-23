@@ -464,8 +464,11 @@ class ApiClient {
     return this.fetch<any>(`/leads/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assignedToId }) });
   }
 
-  async addLeadNote(id: string, content: string) {
-    return this.fetch<any>(`/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) });
+  async addLeadNote(id: string, content: string, mentionedUserIds?: string[]) {
+    return this.fetch<any>(`/leads/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ content, ...(mentionedUserIds?.length ? { mentionedUserIds } : {}) }),
+    });
   }
 
   async editLeadNote(leadId: string, noteId: string, content: string) {
@@ -570,10 +573,10 @@ class ApiClient {
     });
   }
 
-  async addClientNote(id: string, content: string) {
+  async addClientNote(id: string, content: string, mentionedUserIds?: string[]) {
     return this.fetch<any>(`/clients/${id}/notes`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, ...(mentionedUserIds?.length ? { mentionedUserIds } : {}) }),
     });
   }
 
@@ -634,6 +637,10 @@ class ApiClient {
 
   async chargebackSale(id: string, dto: Record<string, unknown>) {
     return this.fetch<any>(`/sales/${id}/chargeback`, { method: 'POST', body: JSON.stringify(dto) });
+  }
+
+  async recordPayment(id: string, dto: { amount: number; invoiceId?: string; invoiceNumber?: string; externalRef?: string; note: string }) {
+    return this.fetch<any>(`/sales/${id}/record-payment`, { method: 'POST', body: JSON.stringify(dto) });
   }
 
   async addSaleNote(id: string, note: string) {

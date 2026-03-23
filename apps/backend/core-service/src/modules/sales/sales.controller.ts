@@ -25,6 +25,7 @@ import {
   AddNoteDto,
   CreateRefundDto,
   CreateChargebackDto,
+  RecordManualPaymentDto,
 } from './dto';
 import { UserRole, AppCode, JwtPayload, ISale, ISaleCreateResponse, IPaginatedResponse } from '@sentra-core/types';
 import { StorageService } from '../../common';
@@ -145,6 +146,17 @@ export class SalesController {
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   charge(@Param('id') id: string, @Body() dto: ChargeSaleDto, @CurrentUser() user: JwtPayload) {
     return this.salesService.charge(id, user.orgId, user.sub, dto);
+  }
+
+  @Post(':id/record-payment')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  recordPayment(
+    @Param('id') id: string,
+    @Body() dto: RecordManualPaymentDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.salesService.recordPayment(id, user.orgId, user.sub, dto);
   }
 
   @Post(':id/subscribe')

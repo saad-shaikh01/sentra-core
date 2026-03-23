@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole } from '@sentra-core/types';
+import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
-import { AuthorizeNetService } from '../authorize-net';
+import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
 import { InvoicePdfService } from './pdf/invoice-pdf.service';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
@@ -17,7 +17,7 @@ import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
 export class InvoicesService {
   constructor(
     private prisma: PrismaService,
-    private authorizeNet: AuthorizeNetService,
+    private gatewayFactory: PaymentGatewayFactory,
     private pdfService: InvoicePdfService,
     private cache: CacheService,
     private readonly scopeService: ScopeService,
@@ -127,11 +127,13 @@ export class InvoicesService {
         dueDate: true,
         status: true,
         notes: true,
+        paymentToken: true,
         sale: {
           select: {
             id: true,
             currency: true,
             description: true,
+            gateway: true,
             brand: {
               select: {
                 name: true,
@@ -306,23 +308,31 @@ export class InvoicesService {
     if (invoice.status === InvoiceStatus.PAID) throw new BadRequestException('Invoice is already paid');
 
     const sale = invoice.sale;
-    if (!sale.customerProfileId || !sale.paymentProfileId) {
+    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+    const gateway = this.gatewayFactory.resolve(gatewayType);
+
+    // Resolve IDs — support both legacy Authorize.Net fields and new gateway-agnostic fields
+    const gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId;
+    const gatewayPaymentMethodId = sale.paymentProfileId ?? sale.gatewayPaymentMethodId;
+
+    if (!gatewayCustomerId || !gatewayPaymentMethodId) {
       throw new BadRequestException('Sale does not have payment profiles configured');
     }
 
-    const result = await this.authorizeNet.chargeCustomerProfile({
-      customerProfileId: sale.customerProfileId,
-      paymentProfileId: sale.paymentProfileId,
+    const result = await gateway.chargeOnce({
+      gatewayCustomerId,
+      gatewayPaymentMethodId,
       amount: Number(invoice.amount),
       invoiceNumber: invoice.invoiceNumber,
     });
 
     const transaction = await this.prisma.paymentTransaction.create({
       data: {
-        transactionId: result.transactionId,
+        transactionId: result.gatewayTransactionId,
         type: TransactionType.ONE_TIME,
         amount: Number(invoice.amount),
         status: result.success ? TransactionStatus.SUCCESS : TransactionStatus.FAILED,
+        gateway: gatewayType,
         responseCode: result.responseCode,
         responseMessage: result.message,
         saleId: sale.id,

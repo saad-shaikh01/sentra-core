@@ -100,7 +100,7 @@ export class ClientsController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: AddClientNoteDto,
   ): Promise<IClientActivity> {
-    return this.clientsService.addNote(id, user.orgId, user.sub, dto.content);
+    return this.clientsService.addNote(id, user.orgId, user.sub, dto.content, dto.mentionedUserIds);
   }
 
   @Post(':id/grant-portal-access')

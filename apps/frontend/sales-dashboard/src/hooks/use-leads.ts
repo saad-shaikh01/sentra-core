@@ -122,8 +122,8 @@ export function useAssignLead() {
 export function useAddLeadNote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, content }: { id: string; content: string }) =>
-      api.addLeadNote(id, content),
+    mutationFn: ({ id, content, mentionedUserIds }: { id: string; content: string; mentionedUserIds?: string[] }) =>
+      api.addLeadNote(id, content, mentionedUserIds),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });

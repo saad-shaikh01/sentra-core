@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AuthorizeNetModule } from '../authorize-net/authorize-net.module';
+import { PaymentGatewayModule } from '../payment-gateway';
 import { PublicPaymentsController } from './public-payments.controller';
 import { PublicPaymentsService } from './public-payments.service';
 
 @Module({
-  imports: [AuthorizeNetModule],
+  imports: [PaymentGatewayModule],
   controllers: [PublicPaymentsController],
   providers: [PublicPaymentsService],
 })

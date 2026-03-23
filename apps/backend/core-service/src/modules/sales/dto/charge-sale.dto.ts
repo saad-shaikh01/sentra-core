@@ -27,4 +27,9 @@ export class ChargeSaleDto {
   @ValidateNested()
   @Type(() => OpaqueDataDto)
   opaqueData?: OpaqueDataDto;
+
+  // Stripe: Payment Method ID from Stripe.js (pm_xxx)
+  @IsOptional()
+  @IsString()
+  stripePaymentMethodId?: string;
 }
