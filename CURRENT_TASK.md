@@ -1,68 +1,99 @@
-We now need to add a reusable sticky pagination bar across all pages where pagination is required.
+Please fix the layout and styling inconsistencies on this page, especially around the table section and the sticky pagination bar.
 
-Objective
+Exact issues observed
+Layout alignment is inconsistent
+The top controls, search/filter area, table container, and pagination bar are not aligned to the same horizontal grid.
+The pagination bar appears visually disconnected and centered differently from the rest of the content.
+Buttons, table, and content area feel left-aligned, but the pagination bar looks like it is positioned separately.
+Table typography and row content sizing need improvement
+The font size inside the table does not feel properly balanced.
+Some text is wrapping into second and third lines too early.
+This makes rows look uneven and hurts readability.
+Table content should be cleaner, more compact, and better structured.
+Pagination bar border styling is too strong
+The current border feels too bright / too white / too heavy.
+It should be lighter, subtler, and more refined.
+Keep the modern glassmorphism feel, but reduce the harsh white outline.
+Visual consistency is off
+The page content mostly follows one alignment system, but the pagination component does not fully match it.
+This creates a broken visual rhythm across the page.
+What needs to be fixed
+1. Align everything to the same content width
 
-Create a bottom sticky pagination bar that stays visible for better usability and works consistently across all relevant pages. It should be built in a reusable and scalable way, without changing the existing pagination logic.
+Make sure these all follow the exact same container width and horizontal alignment:
 
-Requirements
+page header/content section
+search and filter controls
+table wrapper
+sticky pagination bar
 
-The pagination bar should:
+The pagination bar should feel like part of the same table/content system, not like an isolated floating element.
 
-remain sticky at the bottom
-be reusable across all pages where pagination is used
-be fully responsive on desktop, tablet, and mobile
-include all important pagination controls and information in one place
-Pagination bar should include
-Previous button
-Next button
-current page indicator
-total pages
-total items
-displayed items range
-per-page limit selector
-any other useful pagination details already supported by existing logic
-UI/UX expectations
-use a clean and modern glassmorphism effect
-ensure the bar looks polished and does not feel heavy
-maintain proper readability and accessibility
-keep interactions smooth and user-friendly
-optimize spacing and layout for smaller screens so the bar remains usable on mobile
-Scope
+2. Improve table text styling
 
-Apply this pagination bar to every page where pagination is needed, using the same reusable component/pattern.
+Please refine the table typography:
 
-Implementation requirements
-build it as a shared reusable pagination component
-ensure it can adapt to different pages and datasets
-keep the existing pagination behavior and logic unchanged
-only improve the presentation, layout, responsiveness, and usability
-make sure it integrates cleanly with current tables/lists
-Suggested implementation plan
-Phase 1 — Pagination Audit
-review all pages where pagination currently exists or will be needed
-identify the common pagination logic and display requirements
-Phase 2 — Reusable Component Design
-create a shared sticky bottom pagination bar component
-make it configurable so it can work across different modules/pages
-Phase 3 — UI/UX Enhancement
-apply a modern glassmorphism style
-organize controls clearly for both desktop and mobile
-ensure responsive behavior and proper wrapping/collapsing where needed
-Phase 4 — Data Display Integration
-show:
-current page
-total pages
-total items
-current visible item range
-page size / limit selector
-prev/next navigation
-keep all values synced with existing pagination state
-Phase 5 — Final Validation
-confirm that the pagination logic is unchanged
-verify responsiveness on all screen sizes
-ensure consistency across all pages using this component
-Important note
+adjust font size for better readability
+improve line height
+reduce unnecessary text wrapping
+ensure columns have better width allocation
+avoid text breaking into second/third line too aggressively unless truly necessary
+keep rows visually balanced and neat
+3. Refine table layout behavior
+improve spacing inside cells
+make the table look cleaner and more premium
+ensure column content alignment is consistent
+preserve responsiveness without making text collapse too early
+4. Refine pagination bar styling
 
-This is a UI/UX enhancement and component reusability task only.
-Do not change any existing business logic or pagination behavior.
-The goal is to create a better, more consistent, responsive, and reusable pagination experience across the system.
+For the sticky pagination bar:
+
+keep it sticky
+keep it reusable
+keep glassmorphism effect
+but soften the border significantly
+avoid strong bright white outline
+use a lighter, more subtle border treatment
+make it visually elegant and integrated with the page
+5. Fix pagination placement
+the pagination bar should align with the table width
+it should not feel unusually centered while the rest of the content is side-aligned
+it should visually sit as the bottom continuation of the table section
+Implementation expectations
+Do not change business logic
+Only improve layout, styling, spacing, typography, and alignment
+Keep the component reusable
+Maintain responsiveness
+Make the final result feel polished and consistent with the rest of the dashboard
+Expected result
+
+After the fix:
+
+page controls, table, and pagination should align perfectly
+table text should be more readable and less awkwardly wrapped
+pagination border should look subtle and premium
+the whole section should feel like one cohesive layout system
+
+Aik aur zyada direct developer version bhi use kar sakte ho:
+
+Developer Task Prompt:
+
+Fix the page layout and styling issues.
+
+Required fixes:
+
+align page content, filter/search section, table, and sticky pagination bar to the same container/grid width
+pagination bar currently looks visually disconnected and centered differently; make it align with the table/content area
+improve table typography: better font size, line height, spacing, and column balance
+reduce early text wrapping inside table cells so content does not go to second/third line unnecessarily
+refine cell spacing and row visual balance
+keep table responsive without hurting readability
+keep sticky pagination reusable and sticky, but soften its border
+current border is too bright/heavy; use a lighter subtle border while keeping the glassmorphism effect
+make the entire section feel visually cohesive
+
+Important:
+
+no logic changes
+styling/layout only
+maintain responsiveness and reusability

@@ -55,27 +55,27 @@ export function Pagination({
       : page * limit;
 
   const paginationContent = (
-    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
       {/* Left side: Range Info */}
       <div className="flex items-center gap-4 order-2 sm:order-1">
-        <p className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+        <p className="text-xs font-medium text-muted-foreground/70 whitespace-nowrap">
           {hasKnownTotal
-            ? <>Showing <span className="text-foreground">{rangeStart}</span> to <span className="text-foreground">{rangeEnd}</span> of <span className="text-foreground">{total}</span> {itemLabel}</>
-            : <>Showing <span className="text-foreground">{rangeStart}</span> to <span className="text-foreground">{rangeEnd}</span>{hasNextPage ? '+' : ''} {itemLabel}</>
+            ? <>Showing <span className="text-foreground/90 font-semibold">{rangeStart}</span> to <span className="text-foreground/90 font-semibold">{rangeEnd}</span> of <span className="text-foreground/90 font-semibold">{total}</span> {itemLabel}</>
+            : <>Showing <span className="text-foreground/90 font-semibold">{rangeStart}</span> to <span className="text-foreground/90 font-semibold">{rangeEnd}</span>{hasNextPage ? '+' : ''} {itemLabel}</>
           }
         </p>
 
         {onLimitChange && (
-          <div className="hidden md:flex items-center gap-2 border-l border-white/10 pl-4 ml-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">Per page</span>
+          <div className="hidden md:flex items-center gap-2 border-l border-white/5 pl-4 ml-2">
+            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/50 whitespace-nowrap">Per page</span>
             <Select
               value={String(limit)}
               onValueChange={(v) => onLimitChange(Number(v))}
             >
-              <SelectTrigger className="h-8 w-[70px] bg-white/5 border-white/10 text-xs">
+              <SelectTrigger className="h-7 w-[65px] bg-white/[0.03] border-white/5 text-[11px] font-medium transition-colors hover:bg-white/[0.05]">
                 <SelectValue placeholder={String(limit)} />
               </SelectTrigger>
-              <SelectContent className="bg-black/90 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-[#0a0a0a]/95 backdrop-blur-2xl border-white/10">
                 {[10, 20, 50, 100].map((size) => (
                   <SelectItem key={size} value={String(size)} className="text-xs">
                     {size}
@@ -89,52 +89,52 @@ export function Pagination({
 
       {/* Right side: Controls */}
       <div className="flex items-center gap-2 order-1 sm:order-2">
-        <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 backdrop-blur-md">
+        <div className="flex items-center bg-white/[0.02] border border-white/5 rounded-xl p-1 backdrop-blur-md">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onChange(1)}
             disabled={!canGoPrevious}
-            className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors"
+            className="h-7 w-7 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-30"
             title="First page"
           >
-            <ChevronsLeft className="h-4 w-4" />
+            <ChevronsLeft className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onChange(page - 1)}
             disabled={!canGoPrevious}
-            className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors"
+            className="h-7 w-7 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-30"
             title="Previous page"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
 
-          <div className="h-4 w-px bg-white/10 mx-1" />
+          <div className="h-3 w-px bg-white/5 mx-1" />
 
           <div className="flex items-center px-3">
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-xs font-bold text-foreground/90">
               {page}
             </span>
             {totalPages && (
-              <span className="text-sm text-muted-foreground ml-1">
-                / {totalPages}
+              <span className="text-[11px] text-muted-foreground/50 ml-1.5 font-medium">
+                of {totalPages}
               </span>
             )}
           </div>
 
-          <div className="h-4 w-px bg-white/10 mx-1" />
+          <div className="h-3 w-px bg-white/5 mx-1" />
 
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onChange(page + 1)}
             disabled={!canGoNext}
-            className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors"
+            className="h-7 w-7 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-30"
             title="Next page"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3.5 w-3.5" />
           </Button>
           {totalPages && (
             <Button
@@ -142,10 +142,10 @@ export function Pagination({
               size="icon"
               onClick={() => onChange(totalPages)}
               disabled={!canGoNext}
-              className="h-8 w-8 rounded-lg hover:bg-white/10 transition-colors"
+              className="h-7 w-7 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-30"
               title="Last page"
             >
-              <ChevronsRight className="h-4 w-4" />
+              <ChevronsRight className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
@@ -156,10 +156,10 @@ export function Pagination({
               value={String(limit)}
               onValueChange={(v) => onLimitChange(Number(v))}
             >
-              <SelectTrigger className="h-10 w-[70px] bg-white/5 border-white/10 rounded-xl">
+              <SelectTrigger className="h-9 w-[65px] bg-white/[0.03] border-white/5 rounded-xl">
                 <SelectValue placeholder={String(limit)} />
               </SelectTrigger>
-              <SelectContent className="bg-black/90 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-[#0a0a0a]/95 backdrop-blur-2xl border-white/10">
                 {[10, 20, 50, 100].map((size) => (
                   <SelectItem key={size} value={String(size)}>
                     {size}
@@ -173,23 +173,18 @@ export function Pagination({
     </div>
   );
 
-  if (!sticky) {
-    return (
-      <div className={cn('mt-8 py-4 px-4 sm:px-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm', className)}>
-        {paginationContent}
-      </div>
-    );
-  }
+  const stickyStyles = sticky
+    ? "sticky bottom-6 z-40 mt-10"
+    : "mt-8";
 
   return (
     <div className={cn(
-      'fixed bottom-6 left-0 right-0 z-40 px-4 sm:px-6 lg:px-8 pointer-events-none',
+      stickyStyles,
+      "w-full transition-all duration-500 animate-in fade-in slide-in-from-bottom-4",
       className
     )}>
-      <div className="max-w-7xl mx-auto pointer-events-auto">
-        <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 shadow-2xl shadow-black/40 ring-1 ring-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {paginationContent}
-        </div>
+      <div className="bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-2xl p-2.5 shadow-2xl shadow-black/40 ring-1 ring-white/[0.02]">
+        {paginationContent}
       </div>
     </div>
   );

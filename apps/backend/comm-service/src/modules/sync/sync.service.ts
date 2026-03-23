@@ -6,7 +6,7 @@
  * Sync phases:
  *   Phase A: 90-day fast import, triggered after OAuth callback
  *   Phase B: Full backfill (rate-limited, 10 calls/min)
- *   Incremental: Repeatable job every 2min using history.list
+ *   Incremental: Repeatable job every 5min using history.list
  */
 
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
@@ -68,8 +68,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    // Start incremental polling every 2 minutes
-    this.incrementalTimer = setInterval(() => this.triggerIncrementalSync(), 2 * 60 * 1000);
+    // Start incremental polling every 5 minutes
+    this.incrementalTimer = setInterval(() => this.triggerIncrementalSync(), 5 * 60 * 1000);
   }
 
   onModuleDestroy() {

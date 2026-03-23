@@ -111,7 +111,7 @@ export function useCommSocket() {
         useUIStore.getState().setCommConnectionStatus('connected');
         if (prevStatus !== 'connecting') {
           queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
-          queryClient.invalidateQueries({ queryKey: commKeys.all });
+          queryClient.invalidateQueries({ queryKey: commKeys.threads() });
         }
       });
 

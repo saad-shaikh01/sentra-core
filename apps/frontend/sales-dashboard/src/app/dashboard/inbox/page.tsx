@@ -371,6 +371,8 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
   const replyMutation = useReplyToMessage();
   const archiveMutation = useArchiveThread();
   const markRead = useMarkThreadRead();
+  const markReadRef = useRef(markRead);
+  markReadRef.current = markRead;
   const markUnread = useMarkThreadUnread();
   const [replyToolbarVisible, setReplyToolbarVisible] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -413,8 +415,8 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
   const lastMessage = messages[messages.length - 1];
 
   useEffect(() => {
-    if (thread?.hasUnread) markRead.mutate(threadId);
-  }, [threadId, thread?.hasUnread, markRead]);
+    if (thread?.hasUnread) markReadRef.current.mutate(threadId);
+  }, [threadId, thread?.hasUnread]);
 
   useEffect(() => {
     replyEditor?.commands.setContent('', { emitUpdate: false });

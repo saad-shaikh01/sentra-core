@@ -104,7 +104,7 @@ export function useUnreadCount() {
       : undefined,
     initialDataUpdatedAt: storedUnread?.timestamp ?? undefined,
     staleTime: COMM_UNREAD_STALE_TIME_MS,
-    refetchOnMount: 'always',
+    refetchOnMount: true,
     enabled: COMM_ENABLED,
   });
 }
@@ -130,6 +130,7 @@ export function useThread(id: string) {
       return (res?.data ?? res) as CommThread;
     },
     enabled: !!id,
+    staleTime: 3 * 60 * 1000,
   });
 }
 
@@ -141,6 +142,7 @@ export function useMessages(params?: ListMessagesParams) {
       return (res as PaginatedResponse<CommMessage>);
     },
     enabled: !!params?.threadId,
+    staleTime: 3 * 60 * 1000,
   });
 }
 
@@ -193,9 +195,11 @@ export function useReplyToMessage() {
       return api.replyToCommMessage(messageId, dto as unknown as Record<string, unknown>, idempotencyKey);
     },
     onSuccess: (_data, { dto }) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.all });
-      if ((dto as any).threadId) {
-        queryClient.invalidateQueries({ queryKey: commKeys.thread((dto as any).threadId) });
+      const threadId = (dto as any).threadId as string | undefined;
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      if (threadId) {
+        queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
+        queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
       }
       toast.success('Reply sent');
     },
@@ -234,9 +238,9 @@ export function useMarkThreadRead() {
   const decrementCommUnread = useUIStore((state) => state.decrementCommUnread);
   return useMutation({
     mutationFn: (threadId: string) => api.markCommThreadRead(threadId),
-    onSuccess: () => {
+    onSuccess: (_data, threadId) => {
       decrementCommUnread(1);
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },
   });
@@ -248,9 +252,9 @@ export function useMarkThreadUnread() {
   return useMutation({
     mutationFn: (threadId: string) =>
       api.fetch<void>(`/threads/${threadId}/unread`, { method: 'PATCH', service: 'comm' }),
-    onSuccess: () => {
+    onSuccess: (_data, threadId) => {
       incrementCommUnread(1);
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },
   });
