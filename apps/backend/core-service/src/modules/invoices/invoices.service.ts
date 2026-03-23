@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
+import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType, isSalesAgentRole } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService } from '../../common';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
@@ -298,7 +298,7 @@ export class InvoicesService {
     });
   }
 
-  async pay(id: string, orgId: string) {
+  async pay(id: string, orgId: string, userId?: string, role?: UserRole) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: { sale: true },
@@ -308,6 +308,17 @@ export class InvoicesService {
     if (invoice.status === InvoiceStatus.PAID) throw new BadRequestException('Invoice is already paid');
 
     const sale = invoice.sale;
+
+    // Agent-level roles: must be the assigned agent on this sale, and only allowed on MANUAL gateway
+    if (role && isSalesAgentRole(role)) {
+      if (sale.salesAgentId !== userId) {
+        throw new ForbiddenException('You are not the assigned agent for this sale');
+      }
+      if ((sale.gateway ?? GatewayType.MANUAL) !== GatewayType.MANUAL) {
+        throw new ForbiddenException('Sales agents can only mark manual payments as paid');
+      }
+    }
+
     const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
     const gateway = this.gatewayFactory.resolve(gatewayType);
 
@@ -382,6 +393,10 @@ export class InvoicesService {
       notes: invoice.notes ?? undefined,
       paymentToken: invoice.paymentToken ?? undefined,
       saleId: invoice.saleId,
+      clientName: invoice.sale?.client
+        ? (invoice.sale.client.contactName ?? invoice.sale.client.email)
+        : undefined,
+      salesAgentId: invoice.sale?.salesAgentId ?? undefined,
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,
     };

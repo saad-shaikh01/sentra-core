@@ -17,8 +17,11 @@ export class StripeGateway implements IPaymentGateway {
   private readonly stripe: Stripe;
 
   constructor(private readonly config: ConfigService) {
-    const secretKey = this.config.getOrThrow<string>('STRIPE_SECRET_KEY');
-    this.stripe = new Stripe(secretKey, { apiVersion: '2025-01-27.acacia' });
+    const secretKey = this.config.get<string>('STRIPE_SECRET_KEY');
+    if (!secretKey) {
+      throw new Error('STRIPE_SECRET_KEY is not configured. Cannot use Stripe gateway.');
+    }
+    this.stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' });
   }
 
   async createCustomer(params: IGatewayCustomerParams): Promise<IGatewayResponse> {

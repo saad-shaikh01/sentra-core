@@ -217,6 +217,17 @@ export function hasMinimumRole(userRole: UserRole, requiredRole: UserRole): bool
   return getRoleLevel(userRole) >= getRoleLevel(requiredRole);
 }
 
+// Agent-level roles (field reps with restricted permissions).
+// To add a new agent role in the future: add it to UserRole enum + this array. Done.
+export const SALES_AGENT_ROLES: UserRole[] = [
+  UserRole.FRONTSELL_AGENT,
+  UserRole.UPSELL_AGENT,
+];
+
+export function isSalesAgentRole(role: UserRole): boolean {
+  return SALES_AGENT_ROLES.includes(role);
+}
+
 // ==========================================
 // JWT PAYLOAD INTERFACE
 // ==========================================
@@ -630,6 +641,8 @@ export interface IInvoice {
   notes?: string;
   paymentToken?: string;
   saleId: string;
+  clientName?: string;
+  salesAgentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -765,6 +778,19 @@ export interface IAnalyticsSummary {
   revenueByMonth: Array<{ month: string; revenue: number }>;
   leadsByAgent: Array<{ agentName: string; total: number; converted: number }>;
   salesByBrand: Array<{ brandName: string; total: number; revenue: number }>;
+  // Month-over-month
+  thisMonthRevenue: number;
+  lastMonthRevenue: number;
+  newLeadsThisMonth: number;
+  newLeadsLastMonth: number;
+  // Invoice summary
+  invoiceSummary: {
+    overdue: { count: number; total: number };
+    unpaid: { count: number; total: number };
+    paidThisMonth: { count: number; total: number };
+  };
+  // Lead pipeline breakdown
+  leadStatusBreakdown: Array<{ status: string; count: number }>;
 }
 
 // ==========================================

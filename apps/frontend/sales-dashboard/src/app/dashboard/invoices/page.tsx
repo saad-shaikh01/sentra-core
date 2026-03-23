@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
 import { useDebounce } from '@/hooks/use-debounce';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useInvoices, useDeleteInvoice } from '@/hooks/use-invoices';
 import { useSales } from '@/hooks/use-sales';
+import { useMembers } from '@/hooks/use-organization';
 import { useUIStore } from '@/stores/ui-store';
 import { IInvoice, InvoiceStatus } from '@sentra-core/types';
 import { InvoiceFormModal } from './_components/invoice-form-modal';
@@ -40,10 +42,17 @@ export default function InvoicesPage() {
   }), [debouncedSearch, params.page, params.limit, params.status, params.saleId,
        params.dueBefore, params.dueAfter]);
 
+  const router = useRouter();
   const { data, isLoading, isError } = useInvoices(queryParams);
   const { data: salesData }          = useSales({ limit: 100 });
+  const { data: allMembers }         = useMembers();
   const deleteInvoice          = useDeleteInvoice();
   const openConfirmDialog      = useUIStore((s) => s.openConfirmDialog);
+
+  const agentMap = useMemo(
+    () => Object.fromEntries((allMembers ?? []).map((m) => [m.id, m.name])),
+    [allMembers],
+  );
 
   const [modalOpen, setModalOpen]             = useState(false);
   const [editInvoice, setEditInvoice]         = useState<IInvoice | null>(null);
@@ -101,6 +110,23 @@ export default function InvoicesPage() {
         render: (inv) => <span className="font-mono text-xs font-semibold text-primary/80">{inv.invoiceNumber}</span>,
       },
       {
+        key:    'clientName',
+        header: 'Client',
+        className: 'min-w-[160px]',
+        render: (inv) => (
+          <span className="text-sm font-medium">{inv.clientName ?? <span className="text-muted-foreground/60">—</span>}</span>
+        ),
+      },
+      {
+        key:    'salesAgentId',
+        header: 'Agent',
+        className: 'min-w-[140px]',
+        render: (inv) => {
+          const name = inv.salesAgentId ? (agentMap[inv.salesAgentId] ?? '—') : '—';
+          return <span className="text-sm text-muted-foreground/80">{name}</span>;
+        },
+      },
+      {
         key:    'amount',
         header: 'Amount',
         className: 'w-[120px]',
@@ -121,9 +147,21 @@ export default function InvoicesPage() {
       {
         key:       'actions',
         header:    '',
-        className: 'w-24',
+        className: 'w-32',
         render:    (inv) => (
           <div className="flex items-center gap-1 justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-400"
+              title="Go to Sale"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/dashboard/sales/${inv.saleId}`);
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -151,7 +189,7 @@ export default function InvoicesPage() {
         ),
       },
     ],
-    [handleDelete]
+    [handleDelete, agentMap, router]
   );
 
   return (

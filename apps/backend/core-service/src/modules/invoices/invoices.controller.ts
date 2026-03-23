@@ -14,7 +14,7 @@ import { Response } from 'express';
 import { InvoicesService } from './invoices.service';
 import { Roles, CurrentUser, Public } from '../auth/decorators';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
-import { UserRole, IInvoice, IPaginatedResponse } from '@sentra-core/types';
+import { UserRole, IInvoice, IPaginatedResponse, SALES_AGENT_ROLES } from '@sentra-core/types';
 
 @Controller('invoices')
 export class InvoicesController {
@@ -85,9 +85,14 @@ export class InvoicesController {
 
   @Post(':id/pay')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
-  pay(@Param('id') id: string, @CurrentUser('orgId') orgId: string) {
-    return this.invoicesService.pay(id, orgId);
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, ...SALES_AGENT_ROLES)
+  pay(
+    @Param('id') id: string,
+    @CurrentUser('orgId') orgId: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: UserRole,
+  ) {
+    return this.invoicesService.pay(id, orgId, userId, role);
   }
 
   @Post(':id/regenerate-token')

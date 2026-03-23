@@ -18,14 +18,18 @@ import Stripe from 'stripe';
 @Controller('webhooks')
 export class StripeWebhookController {
   private readonly logger = new Logger(StripeWebhookController.name);
-  private readonly stripe: Stripe;
+  private readonly stripe: Stripe | null = null;
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    const secretKey = this.config.getOrThrow<string>('STRIPE_SECRET_KEY');
-    this.stripe = new Stripe(secretKey, { apiVersion: '2025-01-27.acacia' });
+    const secretKey = this.config.get<string>('STRIPE_SECRET_KEY');
+    if (secretKey) {
+      this.stripe = new Stripe(secretKey, { apiVersion: '2026-02-25.clover' });
+    } else {
+      this.logger.warn('STRIPE_SECRET_KEY not configured — Stripe webhook handler is disabled');
+    }
   }
 
   @Public()
@@ -35,11 +39,20 @@ export class StripeWebhookController {
     @Req() req: Request,
     @Headers('stripe-signature') signature: string,
   ) {
+    if (!this.stripe) {
+      this.logger.warn('Stripe webhook received but STRIPE_SECRET_KEY is not configured — ignoring');
+      return { received: true };
+    }
+
     if (!signature) {
       throw new BadRequestException('Missing Stripe-Signature header');
     }
 
-    const webhookSecret = this.config.getOrThrow<string>('STRIPE_WEBHOOK_SECRET');
+    const webhookSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET') ?? '';
+    if (!webhookSecret) {
+      this.logger.warn('STRIPE_WEBHOOK_SECRET not configured — skipping signature verification');
+      return { received: true };
+    }
 
     let event: Stripe.Event;
     try {

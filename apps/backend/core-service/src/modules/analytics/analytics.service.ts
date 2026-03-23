@@ -14,11 +14,23 @@ export class AnalyticsService {
     twelveMonthsAgo.setDate(1);
     twelveMonthsAgo.setHours(0, 0, 0, 0);
 
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const leadWhere = scope.toLeadFilter();
     const saleWhere = scope.toSaleFilter();
 
-    const [totalLeads, convertedLeads, activeSales, revenueAgg, leads, sales, brands] = await Promise.all([
+    const invoiceSaleWhere = { organizationId: orgId, deletedAt: null };
+
+    const [
+      totalLeads, convertedLeads, activeSales, revenueAgg,
+      leads, sales, brands,
+      thisMonthRevenueAgg, lastMonthRevenueAgg,
+      newLeadsThisMonth, newLeadsLastMonth,
+      leadStatusGroups,
+      overdueInvoiceAgg, unpaidInvoiceAgg, paidThisMonthInvoiceAgg,
+    ] = await Promise.all([
       this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null } }),
       this.prisma.lead.count({ where: { ...leadWhere, convertedClientId: { not: null }, deletedAt: null } }),
       this.prisma.sale.count({ where: { ...saleWhere, status: 'ACTIVE' } }),
@@ -41,6 +53,51 @@ export class AnalyticsService {
       this.prisma.brand.findMany({
         where: { organizationId: orgId },
         select: { id: true, name: true, _count: { select: { sales: true } } },
+      }),
+      // This month revenue
+      this.prisma.sale.aggregate({
+        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, createdAt: { gte: startOfMonth } },
+        _sum: { totalAmount: true },
+      }),
+      // Last month revenue
+      this.prisma.sale.aggregate({
+        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+        _sum: { totalAmount: true },
+      }),
+      // New leads this month
+      this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null, createdAt: { gte: startOfMonth } } }),
+      // New leads last month
+      this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } } }),
+      // Lead status breakdown
+      this.prisma.lead.groupBy({
+        by: ['status'],
+        where: { ...leadWhere, deletedAt: null },
+        _count: { id: true },
+      }),
+      // Overdue invoices
+      this.prisma.invoice.aggregate({
+        where: {
+          OR: [{ status: 'OVERDUE' }, { status: 'UNPAID', dueDate: { lt: now } }],
+          sale: { is: invoiceSaleWhere },
+        },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      // Unpaid invoices (not yet due)
+      this.prisma.invoice.aggregate({
+        where: { status: 'UNPAID', dueDate: { gte: now }, sale: { is: invoiceSaleWhere } },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      // Paid this month
+      this.prisma.invoice.aggregate({
+        where: {
+          status: 'PAID',
+          updatedAt: { gte: startOfMonth },
+          sale: { is: invoiceSaleWhere },
+        },
+        _sum: { amount: true },
+        _count: { id: true },
       }),
     ]);
 
@@ -97,6 +154,16 @@ export class AnalyticsService {
       revenueByMonth,
       leadsByAgent,
       salesByBrand,
+      thisMonthRevenue: Number(thisMonthRevenueAgg._sum.totalAmount ?? 0),
+      lastMonthRevenue: Number(lastMonthRevenueAgg._sum.totalAmount ?? 0),
+      newLeadsThisMonth,
+      newLeadsLastMonth,
+      invoiceSummary: {
+        overdue:       { count: overdueInvoiceAgg._count.id,      total: Number(overdueInvoiceAgg._sum.amount ?? 0) },
+        unpaid:        { count: unpaidInvoiceAgg._count.id,       total: Number(unpaidInvoiceAgg._sum.amount ?? 0) },
+        paidThisMonth: { count: paidThisMonthInvoiceAgg._count.id, total: Number(paidThisMonthInvoiceAgg._sum.amount ?? 0) },
+      },
+      leadStatusBreakdown: leadStatusGroups.map((g) => ({ status: g.status, count: g._count.id })),
     };
   }
 }

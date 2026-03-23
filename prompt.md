@@ -1,85 +1,79 @@
-We need to enhance the Discussion tab inside the Leads module and Lead Detail sheet by making it more advanced and integrating the existing editor + mention + notification system.
+Please audit my dashboard and determine whether the data currently being displayed is:
 
-Context
-Currently, the Discussion tab is very basic/simple
-Previously, while building the notification system:
-we implemented user mentions (@mention)
-and a rich text editor component with formatting + mention support
-That component already exists but is not integrated here yet
-Objective
+real-time/live data
+dynamically fetched data
+static/hardcoded data
+dummy/mock/placeholder data
+What I want
 
-Upgrade the Discussion tab to a more advanced communication system with:
+I do not want assumptions. I want you to inspect the actual code and tell me clearly:
 
-rich text editor
-user mentions
-notification on mention
-Requirements
-1. Integrate Rich Text Editor
-Replace the current simple input with the existing editor component
-Support:
-text formatting (bold, italic, etc.)
-mentions (@user)
-Keep UI clean and consistent with system design
-2. Mention Functionality
-When user types @, show user suggestions
-Allow selecting users from list
-Insert mention properly in content
-Support multiple mentions in a single message
-3. Notification on Mention
+What data on the dashboard is real and what is not
+which widgets/cards/charts are connected to real backend data
+which ones are static, mocked, hardcoded, or placeholder-based
+whether any section looks dynamic in UI but is not actually using live data
+Fix the dashboard data source issues
+replace dummy/static data with real data wherever possible
+connect all dashboard widgets/cards/charts to actual backend/API data
+keep logic clean and scalable
+do not break existing functionality
+Review the dashboard from a team performance perspective
+I want suggestions on how team performance can be monitored from this dashboard more effectively.
 
-When a user is mentioned:
+Please recommend:
 
-send a notification to that specific user
-notification message format:
+what team performance metrics should be shown
+how they should be visualized
+what KPIs would be useful for sales/admin/management users
+Suggest additional useful data points
+Tell me what more information can be displayed on this dashboard to make it more useful, actionable, and management-friendly.
 
-“{actorName} mentioned you on this lead”
+Examples can include:
 
-include:
-lead reference (id or title)
-link to open that lead/discussion
-4. Discussion UI Improvement
-Improve overall discussion experience:
-better message layout
-timestamps
-user info (name/avatar)
-proper spacing and readability
-Make it feel like a modern activity/discussion feed
-5. Reuse Existing Logic
-Reuse already built:
-mention logic
-notification system
-editor component
-Do not rebuild from scratch
-Implementation Notes
-Keep it reusable for future modules (e.g., deals, clients, etc.)
-Ensure no performance issues with mentions
-Handle edge cases:
-duplicate mentions
-self-mention (optional behavior)
-deleted users (if applicable)
+team-wise performance
+agent-wise performance
+leads conversion
+sales trends
+invoice/payment stats
+pending follow-ups
+top performers
+target vs achieved
+overdue invoices
+brand-wise performance
+status breakdowns
+time-based comparisons
 Deliverables
-1. Integration Summary
-Where editor is integrated
-How mentions are handled
-2. Notification Flow
-How mention triggers notification
-Which service/function is used
-3. Final Result
-Clean, advanced discussion tab with:
-rich editor
-mentions
-notifications
-Important
-Do not break existing discussion data
-Keep backward compatibility
-Do not change unrelated logic
-Short Version
 
-Enhance Discussion tab in Leads module:
+Please respond in this structure:
 
-integrate existing rich text editor (with formatting + @mentions)
-enable user mentions with dropdown
-send notification on mention: “{user} mentioned you on this lead”
-improve discussion UI (layout, spacing, user info, timestamps)
-reuse existing editor + notification system
-keep implementation reusable and do not break existing logic
+1. Current Dashboard Audit
+which sections are real
+which sections are dummy/static
+how you verified it
+2. Data Fix Plan
+what needs to be connected or corrected
+frontend changes
+backend/API changes if needed
+3. Team Performance Monitoring Suggestions
+what metrics should be added
+how they should be displayed
+4. Recommended Dashboard Enhancements
+additional cards/charts/tables/insights that would make this dashboard more useful
+5. Implementation Plan
+safe step-by-step approach
+no unnecessary logic changes
+Important instructions
+inspect actual code, not just UI
+do not guess
+clearly separate real vs dummy data
+if any widget cannot be connected yet, mention why
+suggest practical and scalable improvements
+Goal
+
+I want this dashboard to become a truly useful operational and management dashboard, with real data and meaningful team performance visibility.
+
+A shorter version:
+
+Short Prompt:
+
+Audit my dashboard and identify whether the displayed data is real, dynamic, static, or dummy. Verify from code, not assumptions. Then fix any dummy/static sections by connecting them to real data where possible. Also suggest how team performance can be monitored better from this dashboard and what additional KPIs, cards, charts, and insights should be added to make it more useful for management and operations.
