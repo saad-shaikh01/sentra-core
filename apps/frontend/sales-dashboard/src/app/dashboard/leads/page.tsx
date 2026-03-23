@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
 import { Plus, LayoutGrid, List, Upload } from 'lucide-react';
-import { PageHeader, FilterBar, Pagination } from '@/components/shared';
+import { PageHeader, FilterBar, Pagination, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -99,6 +99,52 @@ export default function LeadsPage() {
     }));
   }, [data?.data, brandsData?.data, frontSellAgents]);
 
+  const activeFilters = useMemo(() => {
+    const filters: ActiveFilter[] = [];
+    if (!isKanban && params.status) {
+      filters.push({ key: 'status', label: 'Status', displayValue: params.status });
+    }
+    if (params.source) {
+      filters.push({ key: 'source', label: 'Source', displayValue: formatEnumLabel(params.source) });
+    }
+    if (params.leadType) {
+      filters.push({ key: 'leadType', label: 'Type', displayValue: formatEnumLabel(params.leadType) });
+    }
+    if (params.brandId) {
+      const brand = brandsData?.data.find((b) => b.id === params.brandId);
+      filters.push({ key: 'brandId', label: 'Brand', displayValue: brand?.name ?? params.brandId });
+    }
+    if (params.teamId) {
+      const team = teamsData?.data.find((t) => t.id === params.teamId);
+      filters.push({ key: 'teamId', label: 'Team', displayValue: team?.name ?? params.teamId });
+    }
+    if (params.assignedToId) {
+      const agent = (frontSellAgents ?? []).find((a) => a.id === params.assignedToId);
+      filters.push({ key: 'assignedToId', label: 'Assignee', displayValue: agent?.name ?? params.assignedToId });
+    }
+    if (params.dateFrom) {
+      filters.push({ key: 'dateFrom', label: 'From', displayValue: params.dateFrom });
+    }
+    if (params.dateTo) {
+      filters.push({ key: 'dateTo', label: 'To', displayValue: params.dateTo });
+    }
+    return filters;
+  }, [params, brandsData, teamsData, frontSellAgents, isKanban]);
+
+  const handleClearFilters = () => {
+    setParams({
+      status: null,
+      source: null,
+      leadType: null,
+      brandId: null,
+      teamId: null,
+      assignedToId: null,
+      dateFrom: null,
+      dateTo: null,
+      page: 1,
+    });
+  };
+
   return (
     <div>
       <PageHeader
@@ -158,123 +204,146 @@ export default function LeadsPage() {
           className="w-full sm:max-w-xs bg-white/5 border-white/10"
         />
 
-        {/* Status (table only) */}
-        {!isKanban && (
-          <Select
-            value={params.status ?? 'all'}
-            onValueChange={(v) =>
-              setParams({ status: v === 'all' ? null : (v as LeadStatus), page: 1 })
-            }
-          >
-            <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {Object.values(LeadStatus).map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <Select
-          value={params.source ?? 'all'}
-          onValueChange={(value) => setParams({ source: value === 'all' ? null : (value as LeadSource), page: 1 })}
+        <FilterGroup
+          activeCount={activeFilters.length}
+          onClear={handleClearFilters}
         >
-          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
-            <SelectValue placeholder="All sources" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All sources</SelectItem>
-            {Object.values(LeadSource).map((source) => (
-              <SelectItem key={source} value={source}>{formatEnumLabel(source)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Status (table only) */}
+          {!isKanban && (
+            <FilterLabel label="Status">
+              <Select
+                value={params.status ?? 'all'}
+                onValueChange={(v) =>
+                  setParams({ status: v === 'all' ? null : (v as LeadStatus), page: 1 })
+                }
+              >
+                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  {Object.values(LeadStatus).map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterLabel>
+          )}
 
-        <Select
-          value={params.leadType ?? 'all'}
-          onValueChange={(value) => setParams({ leadType: value === 'all' ? null : (value as LeadType), page: 1 })}
-        >
-          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
-            <SelectValue placeholder="All lead types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All lead types</SelectItem>
-            {Object.values(LeadType).map((leadType) => (
-              <SelectItem key={leadType} value={leadType}>{formatEnumLabel(leadType)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <FilterLabel label="Source">
+            <Select
+              value={params.source ?? 'all'}
+              onValueChange={(value) => setParams({ source: value === 'all' ? null : (value as LeadSource), page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All sources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sources</SelectItem>
+                {Object.values(LeadSource).map((source) => (
+                  <SelectItem key={source} value={source}>{formatEnumLabel(source)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Brand */}
-        <Select
-          value={params.brandId ?? 'all'}
-          onValueChange={(v) => setParams({ brandId: v === 'all' ? null : v, page: 1 })}
-        >
-          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-            <SelectValue placeholder="All brands" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All brands</SelectItem>
-            {brandsData?.data.map((b) => (
-              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <FilterLabel label="Lead Type">
+            <Select
+              value={params.leadType ?? 'all'}
+              onValueChange={(value) => setParams({ leadType: value === 'all' ? null : (value as LeadType), page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All lead types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All lead types</SelectItem>
+                {Object.values(LeadType).map((leadType) => (
+                  <SelectItem key={leadType} value={leadType}>{formatEnumLabel(leadType)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN) && (
-          <Select
-            value={params.teamId ?? 'all'}
-            onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
-          >
-            <SelectTrigger className="w-full sm:w-44 bg-white/5 border-white/10">
-              <SelectValue placeholder="All teams" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All teams</SelectItem>
-              {(teamsData?.data ?? []).map((team) => (
-                <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+          <FilterLabel label="Brand">
+            <Select
+              value={params.brandId ?? 'all'}
+              onValueChange={(v) => setParams({ brandId: v === 'all' ? null : v, page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All brands" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All brands</SelectItem>
+                {brandsData?.data.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Assignee — visible to managers and above */}
-        {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN || user?.role === UserRole.SALES_MANAGER) && (
-          <Select
-            value={params.assignedToId ?? 'all'}
-            onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
-          >
-            <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-              <SelectValue placeholder="All assignees" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All assignees</SelectItem>
-              {(frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
-                <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+          {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN) && (
+            <FilterLabel label="Team">
+              <Select
+                value={params.teamId ?? 'all'}
+                onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
+              >
+                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                  <SelectValue placeholder="All teams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All teams</SelectItem>
+                  {(teamsData?.data ?? []).map((team) => (
+                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterLabel>
+          )}
 
-        {/* Date range */}
-        <Input
-          type="date"
-          value={params.dateFrom ?? ''}
-          onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
-          className="w-full sm:w-36 bg-white/5 border-white/10"
-          title="From date"
-        />
-        <Input
-          type="date"
-          value={params.dateTo ?? ''}
-          onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
-          className="w-full sm:w-36 bg-white/5 border-white/10"
-          title="To date"
-        />
+          {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN || user?.role === UserRole.SALES_MANAGER) && (
+            <FilterLabel label="Assignee">
+              <Select
+                value={params.assignedToId ?? 'all'}
+                onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
+              >
+                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                  <SelectValue placeholder="All assignees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All assignees</SelectItem>
+                  {(frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
+                    <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterLabel>
+          )}
+
+          <FilterLabel label="From Date">
+            <Input
+              type="date"
+              value={params.dateFrom ?? ''}
+              onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
+              className="w-full bg-white/5 border-white/10"
+            />
+          </FilterLabel>
+
+          <FilterLabel label="To Date">
+            <Input
+              type="date"
+              value={params.dateTo ?? ''}
+              onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
+              className="w-full bg-white/5 border-white/10"
+            />
+          </FilterLabel>
+        </FilterGroup>
       </FilterBar>
+
+      <FilterChips
+        filters={activeFilters}
+        onRemove={(key: string) => setParams({ [key]: null, page: 1 })}
+        onClear={handleClearFilters}
+      />
 
       {isKanban ? (
         <LeadsKanban

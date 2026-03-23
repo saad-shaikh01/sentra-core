@@ -8,6 +8,10 @@ export {
 } from '@sentra-core/frontend-data-display';
 export { Pagination } from '../../src/components/shared/pagination';
 export { FilterBar } from '../../src/components/shared/filter-bar';
+export { FilterGroup } from '../../src/components/shared/filter-group';
+export { FilterChips } from '../../src/components/shared/filter-chips';
+export type { ActiveFilter } from '../../src/components/shared/filter-chips';
+export { FilterLabel } from '../../src/components/shared/filter-label';
 export type {
   TableSkeletonProps,
   EmptyStateProps,

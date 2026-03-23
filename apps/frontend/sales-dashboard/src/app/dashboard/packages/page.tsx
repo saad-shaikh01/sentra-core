@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2, Eye } from 'lucide-react';
-import { Column, DataTable, FilterBar, PageHeader } from '@/components/shared';
+import { Column, DataTable, FilterBar, PageHeader, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -153,6 +153,22 @@ export default function PackagesPage() {
     return list.filter((p) => p.category === categoryFilter);
   }, [packages, categoryFilter]);
 
+  const activeFilters = useMemo(() => {
+    const filters: ActiveFilter[] = [];
+    if (categoryFilter !== 'all') {
+      filters.push({
+        key: 'category',
+        label: 'Category',
+        displayValue: CATEGORY_LABELS[categoryFilter as PackageCategory],
+      });
+    }
+    return filters;
+  }, [categoryFilter]);
+
+  const handleClear = () => {
+    setCategoryFilter('all');
+  };
+
   const handleDelete = useCallback(
     (pkg: IProductPackage) => {
       openConfirmDialog({
@@ -279,20 +295,33 @@ export default function PackagesPage() {
       />
 
       <FilterBar>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-48 bg-white/5 border-white/10">
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {(Object.values(PackageCategory) as PackageCategory[]).map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {CATEGORY_LABELS[cat]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FilterGroup
+          activeCount={activeFilters.length}
+          onClear={handleClear}
+        >
+          <FilterLabel label="Category">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {(Object.values(PackageCategory) as PackageCategory[]).map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {CATEGORY_LABELS[cat]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
+        </FilterGroup>
       </FilterBar>
+
+      <FilterChips
+        filters={activeFilters}
+        onRemove={handleClear}
+        onClear={handleClear}
+      />
 
       <DataTable
         columns={columns}

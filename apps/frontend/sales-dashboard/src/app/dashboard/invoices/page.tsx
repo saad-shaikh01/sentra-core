@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge } from '@/components/shared';
+import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -41,6 +41,38 @@ export default function InvoicesPage() {
   const [modalOpen, setModalOpen]             = useState(false);
   const [editInvoice, setEditInvoice]         = useState<IInvoice | null>(null);
   const [detailInvoiceId, setDetailInvoiceId] = useState<string | null>(null);
+
+  const activeFilters = useMemo(() => {
+    const filters: ActiveFilter[] = [];
+    if (params.status) {
+      filters.push({ key: 'status', label: 'Status', displayValue: params.status });
+    }
+    if (params.saleId) {
+      const sale = salesData?.data.find((s) => s.id === params.saleId);
+      filters.push({
+        key: 'saleId',
+        label: 'Sale',
+        displayValue: sale ? `$${sale.totalAmount} ${sale.currency}` : params.saleId,
+      });
+    }
+    if (params.dueAfter) {
+      filters.push({ key: 'dueAfter', label: 'Due after', displayValue: params.dueAfter });
+    }
+    if (params.dueBefore) {
+      filters.push({ key: 'dueBefore', label: 'Due before', displayValue: params.dueBefore });
+    }
+    return filters;
+  }, [params, salesData]);
+
+  const handleClearFilters = () => {
+    setParams({
+      status: null,
+      saleId: null,
+      dueAfter: null,
+      dueBefore: null,
+      page: 1,
+    });
+  };
 
   const handleDelete = useCallback(
     (invoice: IInvoice) => {
@@ -129,60 +161,79 @@ export default function InvoicesPage() {
       />
 
       <FilterBar>
-        {/* Status */}
-        <Select
-          value={params.status ?? 'all'}
-          onValueChange={(v) =>
-            setParams({ status: v === 'all' ? null : (v as InvoiceStatus), page: 1 })
-          }
+        <FilterGroup
+          activeCount={activeFilters.length}
+          onClear={handleClearFilters}
         >
-          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {Object.values(InvoiceStatus).map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Status */}
+          <FilterLabel label="Status">
+            <Select
+              value={params.status ?? 'all'}
+              onValueChange={(v) =>
+                setParams({ status: v === 'all' ? null : (v as InvoiceStatus), page: 1 })
+              }
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {Object.values(InvoiceStatus).map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Sale */}
-        <Select
-          value={params.saleId ?? 'all'}
-          onValueChange={(v) =>
-            setParams({ saleId: v === 'all' ? null : v, page: 1 })
-          }
-        >
-          <SelectTrigger className="w-full sm:w-48 bg-white/5 border-white/10">
-            <SelectValue placeholder="All sales" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All sales</SelectItem>
-            {salesData?.data.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                ${s.totalAmount} {s.currency} · {s.status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Sale */}
+          <FilterLabel label="Sale">
+            <Select
+              value={params.saleId ?? 'all'}
+              onValueChange={(v) =>
+                setParams({ saleId: v === 'all' ? null : v, page: 1 })
+              }
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All sales" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sales</SelectItem>
+                {salesData?.data.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    ${s.totalAmount} {s.currency} · {s.status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Due date range */}
-        <Input
-          type="date"
-          value={params.dueAfter ?? ''}
-          onChange={(e) => setParams({ dueAfter: e.target.value || null, page: 1 })}
-          className="w-full sm:w-36 bg-white/5 border-white/10"
-          title="Due after"
-        />
-        <Input
-          type="date"
-          value={params.dueBefore ?? ''}
-          onChange={(e) => setParams({ dueBefore: e.target.value || null, page: 1 })}
-          className="w-full sm:w-36 bg-white/5 border-white/10"
-          title="Due before"
-        />
+          {/* Due date range */}
+          <FilterLabel label="Due After">
+            <Input
+              type="date"
+              value={params.dueAfter ?? ''}
+              onChange={(e) => setParams({ dueAfter: e.target.value || null, page: 1 })}
+              className="w-full bg-white/5 border-white/10"
+              title="Due after"
+            />
+          </FilterLabel>
+          <FilterLabel label="Due Before">
+            <Input
+              type="date"
+              value={params.dueBefore ?? ''}
+              onChange={(e) => setParams({ dueBefore: e.target.value || null, page: 1 })}
+              className="w-full bg-white/5 border-white/10"
+              title="Due before"
+            />
+          </FilterLabel>
+        </FilterGroup>
       </FilterBar>
+
+      <FilterChips
+        filters={activeFilters}
+        onRemove={(key: string) => setParams({ [key]: null, page: 1 })}
+        onClear={handleClearFilters}
+      />
 
       <DataTable
         columns={columns}

@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge } from '@/components/shared';
+import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -97,6 +97,48 @@ export default function SalesPage() {
       })),
     [data?.data, clientMap, brandMap]
   );
+
+  const activeFilters = useMemo(() => {
+    const filters: ActiveFilter[] = [];
+    if (params.status) {
+      filters.push({ key: 'status', label: 'Status', displayValue: params.status });
+    }
+    if (params.clientId) {
+      const client = clientsData?.data.find((c) => c.id === params.clientId);
+      filters.push({ key: 'clientId', label: 'Client', displayValue: client?.companyName ?? params.clientId });
+    }
+    if (params.brandId) {
+      const brand = brandsData?.data.find((b) => b.id === params.brandId);
+      filters.push({ key: 'brandId', label: 'Brand', displayValue: brand?.name ?? params.brandId });
+    }
+    if (params.salesAgentId) {
+      const agent = allAgents.find((a) => a.id === params.salesAgentId);
+      filters.push({ key: 'salesAgentId', label: 'Agent', displayValue: agent?.name ?? params.salesAgentId });
+    }
+    if (params.saleType) {
+      filters.push({ key: 'saleType', label: 'Type', displayValue: params.saleType === SaleType.FRONTSELL ? 'Frontsell' : 'Upsell' });
+    }
+    if (params.dateFrom) {
+      filters.push({ key: 'dateFrom', label: 'From', displayValue: params.dateFrom });
+    }
+    if (params.dateTo) {
+      filters.push({ key: 'dateTo', label: 'To', displayValue: params.dateTo });
+    }
+    return filters;
+  }, [params, clientsData, brandsData, allAgents]);
+
+  const handleClearFilters = () => {
+    setParams({
+      status: null,
+      clientId: null,
+      brandId: null,
+      salesAgentId: null,
+      saleType: null,
+      dateFrom: null,
+      dateTo: null,
+      page: 1,
+    });
+  };
 
   const handleDelete = useCallback(
     (sale: ISale) => {
@@ -229,107 +271,132 @@ export default function SalesPage() {
       <InvoiceOverviewWidget brandId={params.brandId ?? undefined} />
 
       <FilterBar>
-        {/* Status */}
-        <Select
-          value={params.status ?? 'all'}
-          onValueChange={(v) =>
-            setParams({ status: v === 'all' ? null : (v as SaleStatus), page: 1 })
-          }
+        <FilterGroup
+          activeCount={activeFilters.length}
+          onClear={handleClearFilters}
         >
-          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {Object.values(SaleStatus).map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Status */}
+          <FilterLabel label="Status">
+            <Select
+              value={params.status ?? 'all'}
+              onValueChange={(v) =>
+                setParams({ status: v === 'all' ? null : (v as SaleStatus), page: 1 })
+              }
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {Object.values(SaleStatus).map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Client */}
-        <Select
-          value={params.clientId ?? 'all'}
-          onValueChange={(v) =>
-            setParams({ clientId: v === 'all' ? null : v, page: 1 })
-          }
-        >
-          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
-            <SelectValue placeholder="All clients" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All clients</SelectItem>
-            {clientsData?.data.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Client */}
+          <FilterLabel label="Client">
+            <Select
+              value={params.clientId ?? 'all'}
+              onValueChange={(v) =>
+                setParams({ clientId: v === 'all' ? null : v, page: 1 })
+              }
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All clients" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {clientsData?.data.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Brand */}
-        <Select
-          value={params.brandId ?? 'all'}
-          onValueChange={(v) =>
-            setParams({ brandId: v === 'all' ? null : v, page: 1 })
-          }
-        >
-          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-            <SelectValue placeholder="All brands" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All brands</SelectItem>
-            {brandsData?.data.map((b) => (
-              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Brand */}
+          <FilterLabel label="Brand">
+            <Select
+              value={params.brandId ?? 'all'}
+              onValueChange={(v) =>
+                setParams({ brandId: v === 'all' ? null : v, page: 1 })
+              }
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All brands" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All brands</SelectItem>
+                {brandsData?.data.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Sales Agent */}
-        <Select
-          value={params.salesAgentId ?? 'all'}
-          onValueChange={(v) => setParams({ salesAgentId: v === 'all' ? null : v, page: 1 })}
-        >
-          <SelectTrigger className="w-full sm:w-40 bg-white/5 border-white/10">
-            <SelectValue placeholder="All agents" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All agents</SelectItem>
-            {allAgents.map((a) => (
-              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {/* Sales Agent */}
+          <FilterLabel label="Sales Agent">
+            <Select
+              value={params.salesAgentId ?? 'all'}
+              onValueChange={(v) => setParams({ salesAgentId: v === 'all' ? null : v, page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All agents" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All agents</SelectItem>
+                {allAgents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Sale Type */}
-        <Select
-          value={params.saleType ?? 'all'}
-          onValueChange={(v) => setParams({ saleType: v === 'all' ? null : v, page: 1 })}
-        >
-          <SelectTrigger className="w-full sm:w-36 bg-white/5 border-white/10">
-            <SelectValue placeholder="All types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value={SaleType.FRONTSELL}>Frontsell</SelectItem>
-            <SelectItem value={SaleType.UPSELL}>Upsell</SelectItem>
-          </SelectContent>
-        </Select>
+          {/* Sale Type */}
+          <FilterLabel label="Sale Type">
+            <Select
+              value={params.saleType ?? 'all'}
+              onValueChange={(v) => setParams({ saleType: v === 'all' ? null : v, page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value={SaleType.FRONTSELL}>Frontsell</SelectItem>
+                <SelectItem value={SaleType.UPSELL}>Upsell</SelectItem>
+              </SelectContent>
+            </Select>
+          </FilterLabel>
 
-        {/* Date range */}
-        <Input
-          type="date"
-          value={params.dateFrom ?? ''}
-          onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
-          className="w-full sm:w-36 bg-white/5 border-white/10"
-          title="From date"
-        />
-        <Input
-          type="date"
-          value={params.dateTo ?? ''}
-          onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
-          className="w-full sm:w-36 bg-white/5 border-white/10"
-          title="To date"
-        />
+          {/* Date range */}
+          <FilterLabel label="From Date">
+            <Input
+              type="date"
+              value={params.dateFrom ?? ''}
+              onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
+              className="w-full bg-white/5 border-white/10"
+              title="From date"
+            />
+          </FilterLabel>
+          <FilterLabel label="To Date">
+            <Input
+              type="date"
+              value={params.dateTo ?? ''}
+              onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
+              className="w-full bg-white/5 border-white/10"
+              title="To date"
+            />
+          </FilterLabel>
+        </FilterGroup>
       </FilterBar>
+
+      <FilterChips
+        filters={activeFilters}
+        onRemove={(key: string) => setParams({ [key]: null, page: 1 })}
+        onClear={handleClearFilters}
+      />
 
       <DataTable
         columns={columns}
