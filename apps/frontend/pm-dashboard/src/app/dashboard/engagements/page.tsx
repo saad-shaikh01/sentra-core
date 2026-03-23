@@ -42,7 +42,7 @@ export default function EngagementsPage() {
 
   const engagementsEnriched = useMemo(() => {
     const brandMap = Object.fromEntries(brandsData?.data.map((b) => [b.id, b.name]) ?? []);
-    const clientMap = Object.fromEntries(clientsData?.data.map((c) => [c.id, c.companyName]) ?? []);
+    const clientMap = Object.fromEntries(clientsData?.data.map((c) => [c.id, c.contactName ?? c.email]) ?? []);
     return (data?.data ?? []).map((e: any) => ({
       ...e,
       brandName: brandMap[e.brandId] ?? 'Unknown',

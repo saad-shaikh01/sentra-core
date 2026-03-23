@@ -1,14 +1,9 @@
-import { IsString, IsEmail, IsOptional, MinLength, IsNumber, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsNumber, IsEnum, IsUUID } from 'class-validator';
 import { PaymentPlanType } from '@sentra-core/types';
 
 export class ConvertLeadDto {
   @IsEmail()
   email: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(2)
-  companyName?: string;
 
   @IsOptional()
   @IsString()

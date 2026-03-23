@@ -34,13 +34,18 @@ export function LeadsKanbanCard({ lead, index, onClick, isDragDisabled }: LeadsK
           `}
         >
           <div className="flex items-start justify-between gap-2 mb-3">
-            <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
-              {lead.title ?? lead.name ?? lead.email ?? 'Untitled Lead'}
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+              {lead.name || lead.email || 'No Name'}
             </p>
             <StatusBadge status={lead.status} className="shrink-0" />
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
+            {lead.phone && (
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                {lead.phone}
+              </span>
+            )}
             {lead.brandName && (
               <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
                 {lead.brandName}

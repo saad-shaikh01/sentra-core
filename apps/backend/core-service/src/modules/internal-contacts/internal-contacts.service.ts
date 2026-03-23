@@ -22,7 +22,6 @@ export class InternalContactsService {
         id: true,
         email: true,
         contactName: true,
-        companyName: true,
       },
     });
 
@@ -31,7 +30,7 @@ export class InternalContactsService {
         email: client.email,
         id: client.id,
         entityType: 'client',
-        name: client.contactName || client.companyName,
+        name: client.contactName || client.email,
       });
     }
 

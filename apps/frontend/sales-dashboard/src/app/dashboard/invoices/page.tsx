@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
+import { useDebounce } from '@/hooks/use-debounce';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
@@ -18,20 +19,26 @@ export default function InvoicesPage() {
   const [params, setParams] = useQueryStates({
     page:       parseAsInteger.withDefault(1),
     limit:      parseAsInteger.withDefault(20),
+    search:     parseAsString.withDefault(''),
     status:     parseAsStringEnum<InvoiceStatus>(Object.values(InvoiceStatus)),
     saleId:     parseAsString,
     dueBefore:  parseAsString,
     dueAfter:   parseAsString,
   });
 
+  const [searchInput, setSearchInput] = useState(params.search);
+  const debouncedSearch = useDebounce(searchInput, 300);
+
   const queryParams = useMemo(() => ({
     page:  params.page,
     limit: params.limit,
+    ...(debouncedSearch  ? { search:    debouncedSearch }  : {}),
     ...(params.status    ? { status:    params.status }    : {}),
     ...(params.saleId    ? { saleId:    params.saleId }    : {}),
     ...(params.dueBefore ? { dueBefore: params.dueBefore } : {}),
     ...(params.dueAfter  ? { dueAfter:  params.dueAfter }  : {}),
-  }), [params]);
+  }), [debouncedSearch, params.page, params.limit, params.status, params.saleId,
+       params.dueBefore, params.dueAfter]);
 
   const { data, isLoading, isError } = useInvoices(queryParams);
   const { data: salesData }          = useSales({ limit: 100 });
@@ -165,6 +172,16 @@ export default function InvoicesPage() {
       />
 
       <FilterBar>
+        <Input
+          placeholder="Search invoices..."
+          value={searchInput}
+          onChange={(e) => {
+            setSearchInput(e.target.value);
+            setParams({ search: e.target.value, page: 1 });
+          }}
+          className="w-full sm:max-w-xs bg-white/[0.03] border-white/[0.05] focus:bg-white/[0.05] transition-all"
+        />
+
         <FilterGroup
           activeCount={activeFilters.length}
           onClear={handleClearFilters}

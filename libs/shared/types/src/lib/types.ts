@@ -492,7 +492,6 @@ export interface IGenericLeadWebhook {
 export interface IClient {
   id: string;
   email: string;
-  companyName: string;
   contactName?: string;
   phone?: string;
   address?: string;

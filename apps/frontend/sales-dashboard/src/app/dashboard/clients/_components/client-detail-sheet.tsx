@@ -132,7 +132,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
     <DetailSheet
       open={!!clientId}
       onClose={onClose}
-      title={detailClient?.companyName ?? 'Client Details'}
+      title={detailClient?.contactName ?? detailClient?.email ?? 'Client Details'}
       description={detailClient?.email}
       action={
         detailClient ? (
@@ -195,7 +195,6 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
           {activeTab === 'details' ? (
             <div className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InfoCard label="Company" value={detailClient.companyName} />
                 <InfoCard label="Contact" value={detailClient.contactName ?? '-'} />
                 <InfoCard label="Email" value={detailClient.email} />
                 <InfoCard label="Phone" value={detailClient.phone ?? '-'} />
@@ -426,7 +425,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
           open={saleModalOpen}
           onOpenChange={setSaleModalOpen}
           prefillClientId={detailClient.id}
-          prefillClientName={detailClient.companyName}
+          prefillClientName={detailClient.contactName ?? detailClient.email}
           prefillBrandId={detailClient.brandId}
           prefillSaleType={SaleType.UPSELL}
           prefillSalesAgentId={detailClient.upsellAgentId ?? undefined}

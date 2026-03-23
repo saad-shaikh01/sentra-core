@@ -14,4 +14,20 @@ export class QueryClientsDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   brandId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  upsellAgentId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  projectManagerId?: string;
+
+  @IsOptional()
+  @IsString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  dateTo?: string;
 }

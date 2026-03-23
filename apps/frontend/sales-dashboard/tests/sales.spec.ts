@@ -215,7 +215,6 @@ async function convertLead(
     data: {
       email,
       password: 'Client123!',
-      companyName: `Sales Spec Client ${Date.now()}`,
       contactName: 'Agent Visible Client',
       phone: '+15550000001',
     },
@@ -404,7 +403,7 @@ test.describe('Sales module e2e', () => {
     await openSales(managerPage);
     await managerPage.getByRole('button', { name: 'Simple Sale' }).click();
     await managerPage.waitForLoadState('networkidle');
-    await selectSaleModalClient(managerPage, client.companyName);
+    await selectSaleModalClient(managerPage, (client.contactName ?? client.email));
     await selectSaleModalBrand(managerPage, brand.name);
     await managerPage.getByPlaceholder('0.00').fill(String(totalAmount));
     await managerPage.getByRole('button', { name: 'Create Sale' }).click();
@@ -430,7 +429,7 @@ test.describe('Sales module e2e', () => {
     await openSaleDetail(managerPage, totalAmount);
 
     const sheet = getSaleSheet(managerPage);
-    await expect(sheet.getByText(client.companyName)).toBeVisible({ timeout: 10000 });
+    await expect(sheet.getByText((client.contactName ?? client.email))).toBeVisible({ timeout: 10000 });
     await expect(sheet.getByText(`$${totalAmount}`, { exact: true })).toBeVisible({ timeout: 10000 });
     await expect(sheet.getByText('Status: PENDING')).toBeVisible({ timeout: 10000 });
   });
@@ -443,7 +442,7 @@ test.describe('Sales module e2e', () => {
     await managerPage.getByRole('button', { name: 'Quick Sale' }).click();
     await managerPage.waitForLoadState('networkidle');
 
-    await selectSaleModalClient(managerPage, client.companyName);
+    await selectSaleModalClient(managerPage, (client.contactName ?? client.email));
     await selectSaleModalBrand(managerPage, brand.name);
     await managerPage.getByPlaceholder('Item name').fill(`TC3 Item ${totalAmount}`);
     await managerPage
@@ -566,7 +565,7 @@ test.describe('Sales module e2e', () => {
     const dialog = managerPage.getByRole('dialog').first();
     await expect(managerPage.getByRole('heading', { name: 'Edit Sale' })).toBeVisible({ timeout: 10000 });
     await expect(dialog.getByRole('combobox')).toHaveCount(0);
-    await expect(dialog.getByText(client.companyName)).toBeVisible({ timeout: 10000 });
+    await expect(dialog.getByText((client.contactName ?? client.email))).toBeVisible({ timeout: 10000 });
     await expect(dialog.getByText(brand.name)).toBeVisible({ timeout: 10000 });
 
     const patchResponsePromise = managerPage.waitForResponse((response) => {

@@ -30,12 +30,11 @@ export class SearchService {
         where: {
           organizationId: orgId,
           OR: [
-            { companyName: { contains: term, mode: 'insensitive' } },
             { email: { contains: term, mode: 'insensitive' } },
             { contactName: { contains: term, mode: 'insensitive' } },
           ],
         },
-        select: { id: true, companyName: true, email: true, contactName: true },
+        select: { id: true, email: true, contactName: true },
         take: MAX_PER_TYPE,
       }),
       this.prisma.sale.findMany({
@@ -43,10 +42,10 @@ export class SearchService {
           organizationId: orgId,
           OR: [
             { description: { contains: term, mode: 'insensitive' } },
-            { client: { companyName: { contains: term, mode: 'insensitive' } } },
+            { client: { contactName: { contains: term, mode: 'insensitive' } } },
           ],
         },
-        select: { id: true, totalAmount: true, currency: true, status: true, description: true, client: { select: { companyName: true } } },
+        select: { id: true, totalAmount: true, currency: true, status: true, description: true, client: { select: { contactName: true, email: true } } },
         take: MAX_PER_TYPE,
       }),
       this.prisma.invoice.findMany({
@@ -73,15 +72,15 @@ export class SearchService {
       ...clients.map((c): ISearchResult => ({
         type: 'client',
         id: c.id,
-        title: c.companyName,
-        subtitle: `Client · ${c.contactName ?? c.email}`,
+        title: c.contactName ?? c.email,
+        subtitle: `Client · ${c.email}`,
         url: `/dashboard/clients?highlight=${c.id}`,
       })),
       ...sales.map((s): ISearchResult => ({
         type: 'sale',
         id: s.id,
         title: s.description ?? `${s.currency} ${Number(s.totalAmount).toFixed(2)}`,
-        subtitle: `Sale · ${s.status} · ${s.client?.companyName ?? ''}`,
+        subtitle: `Sale · ${s.status} · ${s.client?.contactName ?? s.client?.email ?? ''}`,
         url: `/dashboard/sales?highlight=${s.id}`,
       })),
       ...invoices.map((i): ISearchResult => ({

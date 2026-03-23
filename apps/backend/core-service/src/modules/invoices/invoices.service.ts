@@ -142,7 +142,7 @@ export class InvoicesService {
               },
             },
             client: {
-              select: { companyName: true, contactName: true, email: true },
+              select: { contactName: true, email: true },
             },
           },
         },
@@ -159,7 +159,7 @@ export class InvoicesService {
     const cached = await this.cache.get<IPaginatedResponse<IInvoice>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, status, saleId, dueBefore, dueAfter } = query;
+    const { page, limit, search, status, saleId, dueBefore, dueAfter } = query;
 
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const invoiceScope = scope.toInvoiceFilter();
@@ -172,6 +172,7 @@ export class InvoicesService {
         },
       },
     };
+    if (search) where.invoiceNumber = { contains: search, mode: 'insensitive' };
     if (status) where.status = status;
     if (saleId) where.saleId = saleId;
     if (dueBefore || dueAfter) {
@@ -278,7 +279,6 @@ export class InvoicesService {
       status: invoice.status,
       notes: invoice.notes ?? undefined,
       client: {
-        companyName: invoice.sale.client.companyName,
         contactName: invoice.sale.client.contactName ?? undefined,
         email: invoice.sale.client.email,
         phone: invoice.sale.client.phone ?? undefined,

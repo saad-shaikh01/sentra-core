@@ -357,7 +357,6 @@ async function main() {
   const client = await prisma.client.create({
     data: {
       email: 'john.author@example.com',
-      companyName: 'John Author LLC',
       contactName: 'John Doe',
       brandId: urbanQuill.id,
       organizationId: org.id,

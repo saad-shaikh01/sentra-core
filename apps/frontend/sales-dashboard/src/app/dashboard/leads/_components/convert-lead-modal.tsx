@@ -20,7 +20,6 @@ interface ConvertLeadModalProps {
 
 interface FormValues {
   email: string;
-  companyName: string;
   contactName: string;
   phone: string;
   upsellAgentId: string;
@@ -39,7 +38,6 @@ export function ConvertLeadModal({ open, onOpenChange, lead, onSuccess }: Conver
     if (open && lead) {
       reset({
         email: lead.email ?? '',
-        companyName: lead.title ?? '',
         contactName: lead.name ?? '',
         phone: lead.phone ?? '',
         upsellAgentId: '',
@@ -52,7 +50,6 @@ export function ConvertLeadModal({ open, onOpenChange, lead, onSuccess }: Conver
     await convertLead.mutateAsync({
       id: lead.id,
       email: values.email,
-      ...(values.companyName.trim() && { companyName: values.companyName.trim() }),
       ...(values.contactName && { contactName: values.contactName }),
       ...(values.phone && { phone: values.phone }),
       ...(values.upsellAgentId && { upsellAgentId: values.upsellAgentId }),
@@ -76,12 +73,6 @@ export function ConvertLeadModal({ open, onOpenChange, lead, onSuccess }: Conver
           <Label>Email *</Label>
           <Input type="email" placeholder="john@company.com" {...register('email', { required: 'Required' })} />
           {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Company Name</Label>
-          <Input placeholder="Optional company name" {...register('companyName')} />
-          {errors.companyName && <p className="text-xs text-destructive">{errors.companyName.message}</p>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

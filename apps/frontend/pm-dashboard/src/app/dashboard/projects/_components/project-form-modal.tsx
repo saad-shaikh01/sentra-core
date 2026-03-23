@@ -165,7 +165,7 @@ export function ProjectFormModal({ open, onOpenChange, project }: ProjectFormMod
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
                 {clientsData?.data.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{c.contactName ?? c.email}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

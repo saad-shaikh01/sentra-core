@@ -109,8 +109,8 @@ export async function createScopeTestData(
   ]);
 
   const [clientA, clientB] = await Promise.all([
-    prisma.client.create({ data: { organizationId: org.id, brandId: brandA.id, email: `clienta-${org.id}@test.com`, companyName: 'Client A', upsellAgentId: upsell.id }, select: { id: true } }),
-    prisma.client.create({ data: { organizationId: org.id, brandId: brandB.id, email: `clientb-${org.id}@test.com`, companyName: 'Client B' }, select: { id: true } }),
+    prisma.client.create({ data: { organizationId: org.id, brandId: brandA.id, email: `clienta-${org.id}@test.com`, contactName: 'Client A', upsellAgentId: upsell.id }, select: { id: true } }),
+    prisma.client.create({ data: { organizationId: org.id, brandId: brandB.id, email: `clientb-${org.id}@test.com`, contactName: 'Client B' }, select: { id: true } }),
   ]);
 
   const [saleA, saleB] = await Promise.all([

@@ -1103,7 +1103,6 @@ model GenericLeadWebhook {
 model Client {
   id          String       @id @default(uuid())
   email       String
-  companyName String
   contactName String?
   phone       String?
   address     String?

@@ -838,7 +838,6 @@ function buildActivityMeta(activity: ILeadActivity, actorName: string): Activity
         title: `${actorName} converted this lead`,
         description: 'The lead was successfully converted into a client record.',
         details: compactDetails([
-          { label: 'Client', value: readString(data.companyName) },
           { label: 'Client ID', value: readString(data.clientId) },
         ]),
         accentClassName: 'border-emerald-500/20',

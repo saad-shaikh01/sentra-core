@@ -146,7 +146,7 @@ export function EngagementFormModal({
               <SelectContent>
                 <SelectItem value="none">Select client</SelectItem>
                 {clientsData?.data.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{c.contactName ?? c.email}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -23,7 +23,6 @@ interface PublicInvoice {
       secondaryColor?: string;
     };
     client: {
-      companyName: string;
       contactName?: string;
       email: string;
     };
@@ -115,7 +114,7 @@ export default async function PayPage({ params }: { params: { invoiceId: string 
                   {invoice.status}
                 </span>
                 <span className="text-sm text-gray-500">
-                  {invoice.sale.client.companyName}
+                  {invoice.sale.client.contactName ?? invoice.sale.client.email}
                 </span>
               </div>
             </div>

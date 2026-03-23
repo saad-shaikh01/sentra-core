@@ -14,7 +14,6 @@ import { SalesService } from './sales.service';
 interface ClientRecord {
   id: string;
   email: string;
-  companyName: string;
   organizationId: string;
 }
 
@@ -75,7 +74,6 @@ function makeClient(overrides: Partial<ClientRecord> = {}): ClientRecord {
   return {
     id: clientId,
     email: 'client@example.com',
-    companyName: 'Acme Co',
     organizationId: orgId,
     ...overrides,
   };

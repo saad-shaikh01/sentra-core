@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
+import { useDebounce } from '@/hooks/use-debounce';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, Pagination, FilterBar, Column, StatusBadge, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ export default function SalesPage() {
   const [params, setParams] = useQueryStates({
     page:         parseAsInteger.withDefault(1),
     limit:        parseAsInteger.withDefault(20),
+    search:       parseAsString.withDefault(''),
     status:       parseAsStringEnum<SaleStatus>(Object.values(SaleStatus)),
     clientId:     parseAsString,
     brandId:      parseAsString,
@@ -40,9 +42,13 @@ export default function SalesPage() {
     saleType:     parseAsString,
   });
 
+  const [searchInput, setSearchInput] = useState(params.search);
+  const debouncedSearch = useDebounce(searchInput, 300);
+
   const queryParams = useMemo(() => ({
     page:  params.page,
     limit: params.limit,
+    ...(debouncedSearch     ? { search:       debouncedSearch }     : {}),
     ...(params.status       ? { status:       params.status }       : {}),
     ...(params.clientId     ? { clientId:     params.clientId }     : {}),
     ...(params.brandId      ? { brandId:      params.brandId }      : {}),
@@ -50,7 +56,8 @@ export default function SalesPage() {
     ...(params.dateTo       ? { dateTo:       params.dateTo }       : {}),
     ...(params.salesAgentId ? { salesAgentId: params.salesAgentId } : {}),
     ...(params.saleType     ? { saleType:     params.saleType }     : {}),
-  }), [params]);
+  }), [debouncedSearch, params.page, params.limit, params.status, params.clientId,
+       params.brandId, params.dateFrom, params.dateTo, params.salesAgentId, params.saleType]);
 
   const router = useRouter();
   const { data, isLoading, isError } = useSales(queryParams);
@@ -79,12 +86,23 @@ export default function SalesPage() {
 
   // Build lookup maps for human-readable names
   const clientMap = useMemo(
-    () => Object.fromEntries(clientsData?.data.map((c) => [c.id, c.companyName]) ?? []),
+    () => Object.fromEntries(clientsData?.data.map((c) => [c.id, c.contactName ?? c.email]) ?? []),
     [clientsData?.data]
   );
   const brandMap = useMemo(
     () => Object.fromEntries(brandsData?.data.map((b) => [b.id, b.name]) ?? []),
     [brandsData?.data]
+  );
+
+  const agentMap = useMemo(
+    () => {
+      const map: Record<string, string> = {};
+      allAgents.forEach((a) => {
+        if (a.id) map[a.id] = a.name;
+      });
+      return map;
+    },
+    [allAgents]
   );
 
   // Enrich raw sales rows with display names
@@ -105,7 +123,7 @@ export default function SalesPage() {
     }
     if (params.clientId) {
       const client = clientsData?.data.find((c) => c.id === params.clientId);
-      filters.push({ key: 'clientId', label: 'Client', displayValue: client?.companyName ?? params.clientId });
+      filters.push({ key: 'clientId', label: 'Client', displayValue: client?.contactName ?? client?.email ?? params.clientId });
     }
     if (params.brandId) {
       const brand = brandsData?.data.find((b) => b.id === params.brandId);
@@ -156,6 +174,15 @@ export default function SalesPage() {
       const baseColumns: Column<SaleRow>[] = [
         { key: 'clientName', header: 'Client', className: 'min-w-[180px]' },
         { key: 'brandName',  header: 'Brand',  className: 'min-w-[120px]' },
+        { 
+          key: 'salesAgentId', 
+          header: 'Agent', 
+          className: 'min-w-[140px]',
+          render: (s) => {
+            const agent = allAgents.find((a) => a.id === s.salesAgentId);
+            return <span className="font-medium text-foreground/90">{agent?.name || 'Unassigned'}</span>;
+          }
+        },
         {
           key:    'totalAmount',
           header: 'Amount',
@@ -275,6 +302,16 @@ export default function SalesPage() {
       <InvoiceOverviewWidget brandId={params.brandId ?? undefined} />
 
       <FilterBar>
+        <Input
+          placeholder="Search sales..."
+          value={searchInput}
+          onChange={(e) => {
+            setSearchInput(e.target.value);
+            setParams({ search: e.target.value, page: 1 });
+          }}
+          className="w-full sm:max-w-xs bg-white/[0.03] border-white/[0.05] focus:bg-white/[0.05] transition-all"
+        />
+
         <FilterGroup
           activeCount={activeFilters.length}
           onClear={handleClearFilters}
@@ -313,7 +350,7 @@ export default function SalesPage() {
               <SelectContent>
                 <SelectItem value="all">All clients</SelectItem>
                 {clientsData?.data.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{c.contactName ?? c.email}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

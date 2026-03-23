@@ -881,8 +881,6 @@ export class LeadsService {
     if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
     if (lead.convertedClientId) throw new BadRequestException('Lead has already been converted');
 
-    const companyName = dto.companyName?.trim() || dto.contactName?.trim() || dto.email;
-
     let result;
 
     try {
@@ -890,7 +888,6 @@ export class LeadsService {
         const client = await tx.client.create({
           data: {
             email: dto.email,
-            companyName,
             contactName: dto.contactName,
             phone: dto.phone,
             brandId: dto.brandId ?? lead.brandId,
@@ -904,7 +901,7 @@ export class LeadsService {
         await tx.clientActivity.create({
           data: {
             type: ClientActivityType.CREATED,
-            data: { companyName },
+            data: { email: dto.email },
             clientId: client.id,
             userId,
           },
@@ -971,7 +968,7 @@ export class LeadsService {
         await tx.leadActivity.create({
           data: {
             type: LeadActivityType.CONVERSION,
-            data: { clientId: client.id, companyName },
+            data: { clientId: client.id },
             leadId: id,
             userId,
           },

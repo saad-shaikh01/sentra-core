@@ -170,7 +170,8 @@ describe('SalesService collision warning', () => {
     });
     prismaMock.client.findFirst.mockResolvedValue({
       id: matchedClientId,
-      companyName: 'Matched Client',
+      email: 'matched@example.com',
+      contactName: 'Matched Client',
     });
 
     const result = await (service as any).resolveClientIdFromLead(orgId, actorId, leadId);
@@ -219,7 +220,8 @@ describe('SalesService collision warning', () => {
     prismaMock.client.findFirst.mockResolvedValue(null);
     prismaMock.client.create.mockResolvedValue({
       id: clientId,
-      companyName: 'New Client',
+      email: 'new@example.com',
+      contactName: null,
     });
     prismaMock.clientActivity.create.mockResolvedValue({ id: 'activity-1' });
     prismaMock.lead.update.mockResolvedValue({});

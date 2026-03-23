@@ -30,9 +30,9 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
 
   const columns = useMemo<Column<EnrichedLead>[]>(() => {
     const baseColumns: Column<EnrichedLead>[] = [
-      { key: 'phone', header: 'Phone', render: (lead) => lead.phone ?? '—', className: 'min-w-[150px]' },
-      { key: 'name', header: 'Contact', render: (lead) => lead.name ?? '—', className: 'min-w-[150px]' },
+      { key: 'name', header: 'NAME', render: (lead) => lead.name ?? '—', className: 'min-w-[150px] font-semibold' },
       { key: 'email', header: 'Email', render: (lead) => lead.email ?? '—', className: 'min-w-[200px]' },
+      { key: 'phone', header: 'Phone', render: (lead) => lead.phone ?? '—', className: 'min-w-[150px]' },
       {
         key: 'status',
         header: 'Status',
@@ -68,7 +68,7 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
             onClick={(event) => {
               event.stopPropagation();
               openConfirmDialog({
-                title: `Delete "${lead.title}"?`,
+                title: `Delete lead "${lead.name || lead.email}"?`,
                 description: 'This action cannot be undone.',
                 onConfirm: () => deleteLead.mutate(lead.id),
               });
@@ -98,8 +98,8 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
         >
           <div className="flex justify-between items-start">
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm truncate">{lead.title}</p>
-              <p className="text-xs text-muted-foreground truncate">{lead.name || lead.email}</p>
+              <p className="font-bold text-sm truncate">{lead.name || '—'}</p>
+              <p className="text-xs text-muted-foreground truncate">{lead.email || lead.phone || 'No contact info'}</p>
             </div>
             <StatusBadge status={lead.status} />
           </div>

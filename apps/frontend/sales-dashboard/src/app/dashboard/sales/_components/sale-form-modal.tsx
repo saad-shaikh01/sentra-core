@@ -308,7 +308,7 @@ export function SaleFormModal({
   const brandId = watch('brandId');
   const clientName =
     prefillClientName
-    ?? clientsData?.data.find((c) => c.id === (sale?.clientId ?? prefillClientId))?.companyName
+    ?? (clientsData?.data.find((c) => c.id === (sale?.clientId ?? prefillClientId))?.contactName ?? clientsData?.data.find((c) => c.id === (sale?.clientId ?? prefillClientId))?.email)
     ?? '';
   const brandName =
     brandsData?.data.find((b) => b.id === (sale?.brandId ?? prefillBrandId))?.name
@@ -350,7 +350,7 @@ export function SaleFormModal({
                   </SelectTrigger>
                   <SelectContent>
                     {clientsData?.data.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{c.contactName ?? c.email}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

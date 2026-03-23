@@ -47,7 +47,6 @@ function makeSale(overrides: Record<string, unknown> = {}) {
     deletedAt: null,
     client: {
       id: clientId,
-      companyName: 'Acme Co',
       email: 'client@example.com',
     },
     items: [],

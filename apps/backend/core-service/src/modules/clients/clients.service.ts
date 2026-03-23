@@ -46,7 +46,6 @@ export class ClientsService {
       const client = await tx.client.create({
         data: {
           email: dto.email,
-          companyName: dto.companyName,
           contactName: dto.contactName,
           phone: dto.phone,
           address: dto.address,
@@ -60,7 +59,7 @@ export class ClientsService {
       await tx.clientActivity.create({
         data: {
           type: ClientActivityType.CREATED,
-          data: { companyName: client.companyName },
+          data: { email: client.email },
           clientId: client.id,
           userId,
         },
@@ -88,7 +87,7 @@ export class ClientsService {
       return cached;
     }
 
-    const { page = 1, limit = 20, search, status, brandId } = query;
+    const { page = 1, limit = 20, search, status, brandId, upsellAgentId, projectManagerId, dateFrom, dateTo } = query;
     const skip = (page - 1) * limit;
 
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
@@ -110,11 +109,17 @@ export class ClientsService {
         where.brandId = brandId;
       }
     }
+    if (upsellAgentId) where.upsellAgentId = upsellAgentId;
+    if (projectManagerId) where.projectManagerId = projectManagerId;
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) (where.createdAt as any).gte = new Date(`${dateFrom}T00:00:00.000Z`);
+      if (dateTo)   (where.createdAt as any).lte = new Date(`${dateTo}T23:59:59.999Z`);
+    }
 
     if (search) {
       where.OR = [
         { email: { contains: search, mode: 'insensitive' } },
-        { companyName: { contains: search, mode: 'insensitive' } },
         { contactName: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search, mode: 'insensitive' } },
       ];
@@ -205,7 +210,6 @@ export class ClientsService {
       where: { id },
       data: {
         email: dto.email,
-        companyName: dto.companyName,
         contactName: dto.contactName,
         phone: dto.phone,
         address: dto.address,
@@ -440,7 +444,7 @@ export class ClientsService {
       subject: `${client.brand.name} portal access invitation`,
       template: 'CLIENT_PORTAL_INVITE',
       context: {
-        name: client.contactName ?? client.companyName,
+        name: client.contactName ?? client.email,
         brandName: client.brand.name,
         portalUrl,
         otp,
@@ -510,7 +514,6 @@ export class ClientsService {
   private mapToIClient(client: {
     id: string;
     email: string;
-    companyName: string;
     contactName: string | null;
     phone: string | null;
     address: string | null;
@@ -533,7 +536,6 @@ export class ClientsService {
     return {
       id: client.id,
       email: client.email,
-      companyName: client.companyName,
       contactName: client.contactName ?? undefined,
       phone: client.phone ?? undefined,
       address: client.address ?? undefined,

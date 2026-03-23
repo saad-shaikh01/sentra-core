@@ -16,7 +16,7 @@ interface InvoiceDetailSheetProps {
 type InvoiceWithRelations = IInvoice & {
   transactions?: IPaymentTransaction[];
   sale?: { totalAmount: number; currency: string };
-  client?: { companyName: string };
+  client?: { contactName?: string; email?: string };
 };
 
 export function InvoiceDetailSheet({ invoiceId, onClose }: InvoiceDetailSheetProps) {

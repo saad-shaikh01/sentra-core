@@ -1,8 +1,12 @@
-import { IsOptional, IsEnum, IsUUID, IsDateString } from 'class-validator';
+import { IsOptional, IsEnum, IsUUID, IsDateString, IsString } from 'class-validator';
 import { InvoiceStatus } from '@sentra-core/types';
 import { PaginationQueryDto } from '../../../common';
 
 export class QueryInvoicesDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @IsOptional()
   @IsEnum(InvoiceStatus)
   status?: InvoiceStatus;

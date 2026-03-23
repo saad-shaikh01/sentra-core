@@ -42,8 +42,7 @@ export function SaleClientSection({ sale, collisionWarning }: SaleClientSectionP
               <User className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-medium text-sm">{client.companyName}</p>
-              {client.contactName ? <p className="text-xs text-muted-foreground">{client.contactName}</p> : null}
+              <p className="font-medium text-sm">{client.contactName ?? client.email}</p>
             </div>
           </div>
           {client.email ? (

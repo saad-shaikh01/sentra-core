@@ -10,7 +10,6 @@ export interface InvoicePdfData {
   status: string;
   notes?: string;
   client: {
-    companyName: string;
     contactName?: string;
     email: string;
     phone?: string;
@@ -66,7 +65,7 @@ export class InvoicePdfService {
       doc.fontSize(12).fillColor(primaryColor).text('Bill To:', 50, y);
       y += 20;
       doc.fontSize(10).fillColor('#333');
-      doc.text(data.client.companyName, 50, y);
+      doc.text(data.client.contactName ?? data.client.email, 50, y);
       y += 15;
       if (data.client.contactName) {
         doc.text(data.client.contactName, 50, y);

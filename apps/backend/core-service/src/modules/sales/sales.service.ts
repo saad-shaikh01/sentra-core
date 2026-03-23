@@ -473,7 +473,7 @@ export class SalesService {
       const reusableClient = lead.email
         ? await tx.client.findFirst({
             where: { email: lead.email, organizationId: orgId, deletedAt: null },
-            select: { id: true, companyName: true },
+            select: { id: true, email: true, contactName: true },
           })
         : null;
 
@@ -482,21 +482,20 @@ export class SalesService {
         (await tx.client.create({
           data: {
             email: lead.email ?? this.buildPlaceholderEmail(lead.id),
-            companyName: this.buildLeadCompanyName(lead),
             contactName: lead.name ?? undefined,
             phone: lead.phone ?? undefined,
             brandId: lead.brandId,
             organizationId: orgId,
             portalAccess: false,
           },
-          select: { id: true, companyName: true },
+          select: { id: true, email: true, contactName: true },
         }));
 
       const collisionWarning = reusableClient && reusableClient.id !== lead.convertedClientId
         ? {
             matched: true,
             matchedClientId: reusableClient.id,
-            matchedClientName: reusableClient.companyName,
+            matchedClientName: reusableClient.contactName ?? reusableClient.email,
           }
         : undefined;
 
@@ -504,7 +503,7 @@ export class SalesService {
         await tx.clientActivity.create({
           data: {
             type: ClientActivityType.CREATED,
-            data: { companyName: client.companyName, trigger: 'first_sale' },
+            data: { email: client.email, trigger: 'first_sale' },
             clientId: client.id,
             userId: actorId,
           },
@@ -524,7 +523,6 @@ export class SalesService {
           type: LeadActivityType.CONVERSION,
           data: {
             clientId: client.id,
-            companyName: client.companyName,
             trigger: 'first_sale',
           },
           leadId: lead.id,
@@ -543,17 +541,6 @@ export class SalesService {
     return `noemail-${leadId}@internal.sentra`;
   }
 
-  private buildLeadCompanyName(lead: {
-    title: string | null;
-    name: string | null;
-    email: string | null;
-  }): string {
-    return lead.name?.trim()
-      || lead.title?.trim()
-      || lead.email?.trim()
-      || 'New Client';
-  }
-
   async findAll(
     orgId: string,
     query: QuerySalesDto,
@@ -566,7 +553,7 @@ export class SalesService {
     const cached = await this.cache.get<IPaginatedResponse<ISale>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, status, clientId, brandId, dateFrom, dateTo, salesAgentId, saleType } = query;
+    const { page, limit, search, status, clientId, brandId, dateFrom, dateTo, salesAgentId, saleType } = query;
 
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const scopeWhere = scope.toSaleFilter();
@@ -576,6 +563,12 @@ export class SalesService {
       deletedAt: null,
     };
 
+    if (search) {
+      where.OR = [
+        { client: { contactName: { contains: search, mode: 'insensitive' } } },
+        { client: { email: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
     if (status) where.status = status as SaleStatus;
     if (clientId) where.clientId = clientId;
     if (brandId) {
@@ -978,7 +971,7 @@ export class SalesService {
       // Create CustomerProfile from opaque card data
       const profileResult = await this.authorizeNet.createCustomerProfile({
         email: sale.client.email,
-        description: `${sale.client.companyName} - Sale ${sale.id}`,
+        description: `${sale.client.contactName ?? sale.client.email} - Sale ${sale.id}`,
       });
       if (!profileResult.success || !profileResult.customerProfileId) {
         throw new BadRequestException(`Failed to create customer profile: ${profileResult.message}`);

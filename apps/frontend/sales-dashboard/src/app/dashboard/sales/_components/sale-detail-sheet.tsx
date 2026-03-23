@@ -61,7 +61,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
               <InfoCard label="Status" value={<StatusBadge status={sale.status} />} />
               <InfoCard label="Currency" value={<span className="text-sm">{sale.currency}</span>} />
               <InfoCard label="Amount" value={<span className="text-sm font-bold">${sale.totalAmount}</span>} />
-              <InfoCard label="Client" value={<span className="text-sm">{sale.client.companyName}</span>} />
+              <InfoCard label="Client" value={<span className="text-sm">{sale.client.contactName ?? sale.client.email}</span>} />
             </div>
 
             {sale.description && (

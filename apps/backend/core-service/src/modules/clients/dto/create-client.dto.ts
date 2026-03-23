@@ -4,11 +4,6 @@ export class CreateClientDto {
   @IsEmail()
   email: string;
 
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
-  companyName: string;
-
   @IsOptional()
   @IsString()
   contactName?: string;

@@ -233,7 +233,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
                   </SelectTrigger>
                   <SelectContent>
                     {clientsData?.data.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{c.contactName ?? c.email}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -573,7 +573,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
             <div className="rounded-xl border border-white/10 bg-white/[0.02] divide-y divide-white/10">
               <div className="px-4 py-3 flex justify-between text-sm">
                 <span className="text-muted-foreground">Client</span>
-                <span className="font-medium">{clientsData?.data.find(c => c.id === clientId)?.companyName ?? clientId}</span>
+                <span className="font-medium">{(clientsData?.data.find(c => c.id === clientId)?.contactName ?? clientsData?.data.find(c => c.id === clientId)?.email) ?? clientId}</span>
               </div>
               <div className="px-4 py-3 flex justify-between text-sm">
                 <span className="text-muted-foreground">Brand</span>

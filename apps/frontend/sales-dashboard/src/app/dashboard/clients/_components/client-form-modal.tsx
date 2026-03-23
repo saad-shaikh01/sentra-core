@@ -18,7 +18,6 @@ interface ClientFormModalProps {
 }
 
 interface FormValues {
-  companyName: string;
   contactName: string;
   email: string;
   password: string;
@@ -40,7 +39,6 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   useEffect(() => {
     if (open) {
       reset({
-        companyName: client?.companyName ?? '',
         contactName: client?.contactName ?? '',
         email: client?.email ?? '',
         password: '',
@@ -57,7 +55,6 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
 
   const onSubmit = async (values: FormValues) => {
     const dto: Record<string, unknown> = {
-      companyName: values.companyName,
       ...(values.contactName && { contactName: values.contactName }),
       ...(values.email && { email: values.email }),
       ...(!isEdit && values.password && { password: values.password }),
@@ -82,16 +79,9 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
       error={error}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label>Company Name *</Label>
-            <Input placeholder="Acme Inc." {...register('companyName', { required: 'Required' })} />
-            {errors.companyName && <p className="text-xs text-destructive">{errors.companyName.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label>Contact Name</Label>
-            <Input placeholder="John Doe" {...register('contactName')} />
-          </div>
+        <div className="space-y-1.5">
+          <Label>Contact Name</Label>
+          <Input placeholder="John Doe" {...register('contactName')} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
