@@ -211,6 +211,7 @@ export default function ClientsPage() {
         total={data?.meta.total ?? 0}
         limit={params.limit}
         onChange={(page) => setParams({ page })}
+        onLimitChange={(limit) => setParams({ limit, page: 1 })}
       />
 
       <ClientFormModal open={modalOpen} onOpenChange={setModalOpen} client={editClient} />

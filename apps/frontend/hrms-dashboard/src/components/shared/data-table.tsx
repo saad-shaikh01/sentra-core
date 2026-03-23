@@ -61,7 +61,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden">
+    <div className="rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden pb-24">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>

@@ -87,10 +87,11 @@ export default function NotificationsPage() {
 
         <div className="p-4 border-t border-white/5">
           <Pagination
-            page={params.page}
+            page={data?.page ?? params.page}
             total={data?.total ?? 0}
-            limit={params.limit}
+            limit={data?.limit ?? params.limit}
             onChange={(p) => setParams({ page: p })}
+            onLimitChange={(l) => setParams({ limit: l, page: 1 })}
           />
         </div>
       </div>

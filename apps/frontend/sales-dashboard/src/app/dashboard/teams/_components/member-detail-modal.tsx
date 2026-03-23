@@ -464,6 +464,7 @@ export function MemberDetailModal({
                         total={leadsQuery.data.meta.total}
                         limit={10}
                         onChange={setLeadsPage}
+                        sticky={false}
                       />
                     )}
                   </div>
@@ -487,6 +488,7 @@ export function MemberDetailModal({
                         total={salesQuery.data.meta.total}
                         limit={10}
                         onChange={setSalesPage}
+                        sticky={false}
                       />
                     )}
                   </div>
@@ -510,6 +512,7 @@ export function MemberDetailModal({
                         total={invoicesQuery.data.meta.total}
                         limit={10}
                         onChange={setInvoicesPage}
+                        sticky={false}
                       />
                     )}
                   </div>

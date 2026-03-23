@@ -162,10 +162,12 @@ export default function MyTasksPage() {
         <div className="p-4 border-t border-white/5">
           <Pagination
             page={params.page}
-            total={total}
+            total={data?.meta.total ?? 0}
             limit={params.limit}
             onChange={(p) => setParams({ page: p })}
+            onLimitChange={(l) => setParams({ limit: l, page: 1 })}
           />
+
         </div>
       </div>
 

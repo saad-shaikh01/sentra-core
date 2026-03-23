@@ -122,6 +122,7 @@ export default function BrandsPage() {
         total={data?.meta.total ?? 0}
         limit={params.limit}
         onChange={(p) => setParams({ page: p })}
+        onLimitChange={(l) => setParams({ limit: l, page: 1 })}
       />
 
       <BrandFormModal

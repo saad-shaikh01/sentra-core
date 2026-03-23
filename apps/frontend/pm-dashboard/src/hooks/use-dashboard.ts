@@ -3,13 +3,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
+import { UserRole } from '@sentra-core/types';
 
-export function usePmRole() {
+export type PmRole = 'pm-admin' | 'pm-project-manager' | 'pm-dept-lead' | 'pm-team-member';
+
+export function usePmRole(): PmRole | null {
   const { user } = useAuth();
   const role = user?.role;
   if (!role) return null;
-  if (role === 'OWNER' || role === 'ADMIN') return 'pm-admin';
-  if (role === 'PROJECT_MANAGER') return 'pm-project-manager';
+  if (role === UserRole.OWNER || role === UserRole.ADMIN) return 'pm-admin';
+  if (role === UserRole.SALES_MANAGER) return 'pm-dept-lead';
+  if (role === UserRole.PROJECT_MANAGER) return 'pm-project-manager';
   return 'pm-team-member';
 }
 

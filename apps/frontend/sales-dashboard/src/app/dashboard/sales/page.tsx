@@ -414,6 +414,7 @@ export default function SalesPage() {
         total={data?.meta.total ?? 0}
         limit={params.limit}
         onChange={(p) => setParams({ page: p })}
+        onLimitChange={(l) => setParams({ limit: l, page: 1 })}
       />
 
       <SaleFormModal open={modalOpen} onOpenChange={setModalOpen} sale={editSale} />

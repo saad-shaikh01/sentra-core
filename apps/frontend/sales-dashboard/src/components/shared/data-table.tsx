@@ -86,7 +86,7 @@ export function DataTable<T>({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       {/* Mobile Card View */}
       <div className="lg:hidden space-y-4">
         {data.map((row) => (

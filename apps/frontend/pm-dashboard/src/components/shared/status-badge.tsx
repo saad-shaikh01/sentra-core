@@ -14,7 +14,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   [LeadStatus.NEW]: { label: 'New', className: 'bg-blue-500/20 text-blue-400 border-blue-500/20' },
   [LeadStatus.CONTACTED]: { label: 'Contacted', className: 'bg-amber-500/20 text-amber-400 border-amber-500/20' },
   [LeadStatus.PROPOSAL]: { label: 'Proposal', className: 'bg-purple-500/20 text-purple-400 border-purple-500/20' },
-  [LeadStatus.CLOSED]: { label: 'Closed', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },
+  [LeadStatus.CLOSED_WON]: { label: 'Won', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },
+  [LeadStatus.CLOSED_LOST]: { label: 'Lost', className: 'bg-red-500/20 text-red-400 border-red-500/20' },
   // Sale
   [SaleStatus.PENDING]: { label: 'Pending', className: 'bg-amber-500/20 text-amber-400 border-amber-500/20' },
   [SaleStatus.ACTIVE]: { label: 'Active', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },

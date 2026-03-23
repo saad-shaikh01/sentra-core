@@ -44,6 +44,7 @@ async function fetchDepartments() {
 export default function EmployeesPage() {
   const [params, setParams] = useQueryStates({
     page: parseAsInteger.withDefault(1),
+    limit: parseAsInteger.withDefault(PAGE_SIZE),
     search: parseAsString.withDefault(''),
     status: parseAsStringEnum([...EMPLOYEE_STATUS_VALUES]),
     appCode: parseAsStringEnum([...EMPLOYEE_APP_FILTER_VALUES]),
@@ -59,13 +60,13 @@ export default function EmployeesPage() {
   const filters = useMemo<EmployeesFilters>(
     () => ({
       page: params.page,
-      limit: PAGE_SIZE,
+      limit: params.limit,
       search: debouncedSearch.trim() || undefined,
       status: params.status ?? undefined,
       appCode: params.appCode ?? undefined,
       departmentId: params.departmentId ?? undefined,
     }),
-    [debouncedSearch, params.appCode, params.departmentId, params.page, params.status],
+    [debouncedSearch, params.appCode, params.departmentId, params.page, params.status, params.limit],
   );
 
   const employeesQuery = useQuery({
@@ -130,8 +131,9 @@ export default function EmployeesPage() {
       <Pagination
         page={employeesQuery.data?.meta.page ?? params.page}
         total={employeesQuery.data?.meta.total ?? 0}
-        limit={employeesQuery.data?.meta.limit ?? PAGE_SIZE}
+        limit={employeesQuery.data?.meta.limit ?? params.limit}
         onChange={(page) => setParams({ page })}
+        onLimitChange={(limit) => setParams({ limit, page: 1 })}
       />
     </div>
   );

@@ -18,10 +18,10 @@ type PendingInvitationsResponse = {
   };
 };
 
-async function fetchPendingInvitations(page: number) {
+async function fetchPendingInvitations(page: number, limit: number) {
   return hrmsApi.get<PendingInvitationsResponse>('/invitations/pending', {
     page,
-    limit: 20,
+    limit,
   });
 }
 
@@ -36,10 +36,11 @@ async function fetchDepartments() {
 
 export default function InvitationsPage() {
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
 
   const invitationsQuery = useQuery({
-    queryKey: ['pending-invitations', page],
-    queryFn: () => fetchPendingInvitations(page),
+    queryKey: ['pending-invitations', page, limit],
+    queryFn: () => fetchPendingInvitations(page, limit),
     refetchInterval: 60_000,
   });
 
@@ -74,8 +75,12 @@ export default function InvitationsPage() {
       <Pagination
         page={invitationsQuery.data?.meta.page ?? page}
         total={invitationsQuery.data?.meta.total ?? 0}
-        limit={invitationsQuery.data?.meta.limit ?? 20}
+        limit={invitationsQuery.data?.meta.limit ?? limit}
         onChange={setPage}
+        onLimitChange={(l) => {
+          setLimit(l);
+          setPage(1);
+        }}
       />
     </div>
   );
