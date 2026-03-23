@@ -217,6 +217,53 @@ class ApiClient {
   getMyPermissions() {
     return this.get<{ data: string[] }>('/auth/my-permissions').then((response) => response.data);
   }
+
+  getAvailableApps() {
+    return this.fetch<Array<{
+      appCode: string;
+      appName: string;
+      baseUrl?: string;
+      isDefault: boolean;
+    }>>('/auth/apps');
+  }
+
+  // Session management
+  async getMySessions() {
+    return this.get<any[]>('/auth/my-sessions');
+  }
+
+  async revokeSession(sessionId: string) {
+    return this.delete<void>(`/auth/sessions/${sessionId}`);
+  }
+
+  async revokeOtherSessions() {
+    return this.delete<void>('/auth/sessions/others');
+  }
+
+  // User endpoints
+  async updateProfile(data: {
+    name?: string;
+    avatarUrl?: string;
+    jobTitle?: string;
+    phone?: string;
+    bio?: string;
+  }) {
+    return this.patch<any>('/users/me', data);
+  }
+
+  async uploadAvatar(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.fetch<any>('/users/me/avatar', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  // Global search
+  async search(q: string) {
+    return this.get<any[]>(`/search`, { q });
+  }
 }
 
 export const api = new ApiClient(CORE_API_URL, CORE_API_URL);

@@ -1,29 +1,42 @@
 'use client';
 
-import { useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Sidebar } from '@/components/sidebar';
 import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
+import { Toaster, ConfirmModal } from '@/components/shared';
+import { NotificationProvider, useNotificationSocket, NotificationPushInit } from '@sentra-core/notifications';
+import { api } from '@/lib/api';
+
+function NotificationSocketWatcher() {
+  useNotificationSocket(true);
+  return null;
+}
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
   return (
     <ProtectedRoute>
-      <SpotlightBackground>
-        <div className="flex min-h-screen">
-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <div className="flex min-h-screen flex-1 flex-col">
-            <TopNav onMenuClick={() => setSidebarOpen(true)} />
-            <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">{children}</main>
+      <NotificationProvider fetcher={api}>
+        <NotificationPushInit fetcher={api} autoRequest={true} />
+        <SpotlightBackground>
+          <div className="flex min-h-screen lg:h-screen lg:overflow-hidden">
+            <Sidebar />
+            <div className="flex-1 flex flex-col min-w-0">
+              <TopNav />
+              <main className="flex-1 lg:overflow-y-auto">
+                <div className="container max-w-7xl py-6 px-4 md:py-10 md:px-8">{children}</div>
+              </main>
+            </div>
           </div>
-        </div>
-      </SpotlightBackground>
+          <Toaster />
+          <ConfirmModal />
+          <NotificationSocketWatcher />
+        </SpotlightBackground>
+      </NotificationProvider>
     </ProtectedRoute>
   );
 }
