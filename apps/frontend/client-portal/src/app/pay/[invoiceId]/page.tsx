@@ -1,8 +1,13 @@
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { PaymentForm } from './payment-form';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:3001/api';
+
+// Required env vars for payment gateways:
+// NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY — Stripe publishable key (pk_test_... or pk_live_...)
+// NEXT_PUBLIC_AUTHORIZE_NET_LOGIN_ID — Authorize.Net API Login ID
+// NEXT_PUBLIC_AUTHORIZE_NET_CLIENT_KEY — Authorize.Net Client Key
+// NEXT_PUBLIC_AUTHORIZE_NET_ENV — 'production' or 'sandbox' (default: sandbox)
 
 interface PublicInvoice {
   id: string;
@@ -11,10 +16,12 @@ interface PublicInvoice {
   dueDate: string;
   status: string;
   notes?: string;
+  paymentToken?: string;
   sale: {
     id: string;
     currency: string;
     description?: string;
+    gateway?: string;
     brand: {
       name: string;
       logoUrl?: string;
@@ -136,13 +143,18 @@ export default async function PayPage({ params }: { params: { invoiceId: string 
                 invoiceNumber={invoice.invoiceNumber}
                 amount={amount}
                 currency={invoice.sale.currency}
-                saleId={invoice.sale.id}
+                paymentToken={invoice.paymentToken ?? invoice.id}
+                gatewayType={(invoice.sale.gateway ?? 'AUTHORIZE_NET') as 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL'}
               />
             )}
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
-            Payments secured by Authorize.Net. Your card details are never stored on our servers.
+            {invoice.sale.gateway === 'STRIPE'
+              ? 'Payments secured by Stripe. Your card details are never stored on our servers.'
+              : invoice.sale.gateway === 'MANUAL'
+              ? 'Invoice payment processed by your account manager.'
+              : 'Payments secured by Authorize.Net. Your card details are never stored on our servers.'}
           </p>
         </div>
       </div>
