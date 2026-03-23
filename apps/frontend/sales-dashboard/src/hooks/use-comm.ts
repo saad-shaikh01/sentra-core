@@ -109,7 +109,7 @@ export function useUnreadCount() {
   });
 }
 
-export function useThreads(params?: ListThreadsParams) {
+export function useThreads(params?: ListThreadsParams, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: commKeys.threads(params),
     queryFn: async ({ pageParam = 1 }) => {
@@ -119,6 +119,7 @@ export function useThreads(params?: ListThreadsParams) {
     getNextPageParam: (lastPage) =>
       lastPage.meta.page < lastPage.meta.totalPages ? lastPage.meta.page + 1 : undefined,
     initialPageParam: 1,
+    enabled: options?.enabled !== false,
   });
 }
 

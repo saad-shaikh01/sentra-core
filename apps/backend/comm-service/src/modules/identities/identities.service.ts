@@ -124,6 +124,23 @@ export class IdentitiesService {
     const oauth2Client = this.createOAuth2Client();
 
     const { tokens } = await oauth2Client.getToken(code);
+
+    // Extract display name from Google id_token JWT payload (no verification needed — we just want the name)
+    let ownerDisplayName: string | undefined;
+    if (tokens.id_token) {
+      try {
+        const [, payloadPart] = tokens.id_token.split('.');
+        const idTokenPayload = JSON.parse(
+          Buffer.from(payloadPart, 'base64url').toString('utf8'),
+        ) as Record<string, unknown>;
+        if (typeof idTokenPayload['name'] === 'string') {
+          ownerDisplayName = idTokenPayload['name'];
+        }
+      } catch {
+        // Not fatal — displayName stays undefined
+      }
+    }
+
     if (!tokens.access_token || !tokens.refresh_token) {
       throw new BadRequestException('Missing tokens from Google OAuth response');
     }
@@ -175,6 +192,7 @@ export class IdentitiesService {
           isActive: true,
           ...(brandId ? { brandId } : {}),
           ...(shouldBeDefault ? { isDefault: true } : {}),
+          ...(ownerDisplayName ? { displayName: ownerDisplayName } : {}),
         },
         $setOnInsert: {
           userId,
@@ -344,24 +362,38 @@ export class IdentitiesService {
     return identity;
   }
 
-  async setDefault(organizationId: string, id: string): Promise<void> {
+  async setDefault(
+    organizationId: string,
+    id: string,
+    userId: string,
+    role: UserRole,
+  ): Promise<void> {
     const identity = await this.identityModel.findOne({ _id: id, organizationId, isActive: true });
     if (!identity) {
       throw new NotFoundException(`Identity ${id} not found`);
+    }
+    if (!this.isPrivileged(role) && identity.userId !== userId) {
+      throw new ForbiddenException('You can only set your own Gmail account as default');
     }
     // Clear all defaults in org, then set this one
     await this.identityModel.updateMany({ organizationId }, { $set: { isDefault: false } });
     await this.identityModel.findByIdAndUpdate(id, { $set: { isDefault: true } });
   }
 
-  async deleteIdentity(organizationId: string, id: string): Promise<void> {
-    const result = await this.identityModel.findOneAndUpdate(
-      { _id: id, organizationId },
-      { $set: { isActive: false } },
-    );
-    if (!result) {
+  async deleteIdentity(
+    organizationId: string,
+    id: string,
+    userId: string,
+    role: UserRole,
+  ): Promise<void> {
+    const identity = await this.identityModel.findOne({ _id: id, organizationId });
+    if (!identity) {
       throw new NotFoundException(`Identity ${id} not found`);
     }
+    if (!this.isPrivileged(role) && identity.userId !== userId) {
+      throw new ForbiddenException('You can only disconnect your own Gmail account');
+    }
+    await this.identityModel.findByIdAndUpdate(id, { $set: { isActive: false } });
   }
 
   async markDegraded(identityId: string, errorMessage: string): Promise<void> {

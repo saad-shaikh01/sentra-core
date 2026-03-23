@@ -64,6 +64,9 @@ export class CommMessage {
   @Prop({ default: false })
   isSentByIdentity: boolean;
 
+  @Prop()
+  sentByUserId?: string;
+
   @Prop({ type: [String], default: [] })
   gmailLabels: string[];
 }

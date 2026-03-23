@@ -9,6 +9,8 @@ import Image from '@tiptap/extension-image';
 import DOMPurify from 'dompurify';
 import { Search, Mail, Inbox as InboxIcon, Circle, Archive, ChevronDown, ChevronRight, Paperclip, AlertCircle, RefreshCw, Bold, Italic, List, Link2, Underline as UnderlineIcon, SquarePen, MailOpen, ArrowLeft, X, Loader2 } from 'lucide-react';
 import { useThreads, useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities } from '@/hooks/use-comm';
+import { useAuth } from '@/hooks/use-auth';
+import { UserRole } from '@sentra-core/types';
 import { useDebounce } from '@/hooks/use-debounce';
 import { timeAgo } from '@/lib/format-date';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
@@ -167,9 +169,27 @@ function InboxContent() {
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  // For admin: '' = no account selected (empty state); '__all__' = all accounts; '<id>' = specific account
+  // For regular user: '' = all own accounts; '<id>' = specific own account
   const [identityFilter, setIdentityFilter] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const { data: identities } = useIdentities();
+  const { user } = useAuth();
+
+  const isPrivileged = user?.role === UserRole.ADMIN || user?.role === UserRole.OWNER;
+
+  // Split identities into own and team for the grouped dropdown
+  const ownIdentities = identities?.filter((id) => id.userId === user?.id) ?? [];
+  const teamIdentities = identities?.filter((id) => id.userId !== user?.id) ?? [];
+
+  // Compute thread query params based on role and selection
+  const threadsEnabled = !isPrivileged || identityFilter !== '';
+  const threadsParams = (() => {
+    if (identityFilter === '__all__') {
+      return { search: debouncedSearch || undefined, filter, scope: 'all' as const };
+    }
+    return { search: debouncedSearch || undefined, filter, identityId: identityFilter || undefined };
+  })();
 
   const {
     data,
@@ -179,7 +199,7 @@ function InboxContent() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useThreads({ search: debouncedSearch || undefined, filter, identityId: identityFilter || undefined });
+  } = useThreads(threadsParams, { enabled: threadsEnabled });
 
   const threads = data?.pages.flatMap((p) => p.data) ?? [];
 
@@ -251,26 +271,59 @@ function InboxContent() {
         </div>
 
         {/* Identity filter */}
-        {identities && identities.length > 1 && (
+        {identities && identities.length > 0 && (
           <div className="px-4 py-2 border-b border-white/10">
             <select
               value={identityFilter}
               onChange={(e) => setIdentityFilter(e.target.value)}
               className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:border-white/30"
             >
-              <option value="">All accounts</option>
-              {identities.map((id: CommIdentity) => (
-                <option key={id.id} value={id.id}>
-                  {id.displayName || id.email}
-                </option>
-              ))}
+              {isPrivileged ? (
+                <>
+                  <option value="">— Select an account —</option>
+                  <option value="__all__">All Accounts</option>
+                  {ownIdentities.length > 0 && (
+                    <optgroup label="Your Accounts">
+                      {ownIdentities.map((id: CommIdentity) => (
+                        <option key={id.id} value={id.id}>
+                          {id.displayName || id.email}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {teamIdentities.length > 0 && (
+                    <optgroup label="Team Accounts">
+                      {teamIdentities.map((id: CommIdentity) => (
+                        <option key={id.id} value={id.id}>
+                          {id.displayName ? `${id.displayName} · ${id.email}` : id.email}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              ) : (
+                <>
+                  {identities.length > 1 && <option value="">All my accounts</option>}
+                  {identities.map((id: CommIdentity) => (
+                    <option key={id.id} value={id.id}>
+                      {id.displayName || id.email}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
         )}
 
         {/* Thread list */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
+          {isPrivileged && !identityFilter ? (
+            <div className="py-16 text-center space-y-2 px-4">
+              <Mail className="h-8 w-8 mx-auto text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">Select an account to view inbox</p>
+              <p className="text-xs text-muted-foreground/50">Choose a Gmail account above or select "All Accounts"</p>
+            </div>
+          ) : isLoading ? (
             <div className="space-y-1 p-2 animate-pulse">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="h-16 bg-white/5 rounded-xl" />
@@ -324,6 +377,11 @@ function InboxContent() {
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {thread.snippet}
                         </p>
+                        {isPrivileged && identityFilter === '__all__' && thread.identityId && (
+                          <p className="text-[10px] text-primary/60 truncate mt-0.5">
+                            {identities?.find((id) => id.id === thread.identityId)?.email ?? thread.identityId}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -368,6 +426,7 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
   const { data: thread, isLoading: threadLoading, isError: threadError } = useThread(threadId);
   const { data: messagesRes, isLoading: messagesLoading, isError: messagesError, refetch: refetchMessages } = useMessages({ threadId });
   const { data: identities } = useIdentities();
+  const { user } = useAuth();
   const replyMutation = useReplyToMessage();
   const archiveMutation = useArchiveThread();
   const markRead = useMarkThreadRead();
@@ -590,9 +649,15 @@ function InlineThreadView({ threadId, onClose }: { threadId: string; onClose: ()
         {identities && identities.length > 0 && (
           <select value={activeIdentityId} onChange={(e) => setSelectedIdentityId(e.target.value)}
             className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-foreground focus:outline-none">
-            {identities.map((id: CommIdentity) => (
-              <option key={id.id} value={id.id}>{id.displayName} &lt;{id.email}&gt;</option>
-            ))}
+            {identities.map((id: CommIdentity) => {
+              const isOwn = id.userId === user?.id;
+              const label = isOwn
+                ? `${id.displayName || id.email} <${id.email}>`
+                : `${id.displayName ? `${id.displayName} · ` : ''}${id.email} (team)`;
+              return (
+                <option key={id.id} value={id.id}>{label}</option>
+              );
+            })}
           </select>
         )}
         <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-inner">

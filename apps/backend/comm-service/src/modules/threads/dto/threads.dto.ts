@@ -25,6 +25,10 @@ export class ListThreadsQueryDto extends CommPaginationQueryDto {
   @IsOptional()
   @IsString()
   label?: string;
+
+  @IsOptional()
+  @IsIn(['all'])
+  scope?: 'all';
 }
 
 export class ListMessagesQueryDto extends CommPaginationQueryDto {}

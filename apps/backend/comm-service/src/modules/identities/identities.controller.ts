@@ -145,7 +145,7 @@ export class IdentitiesController {
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
   ) {
-    await this.service.setDefault(ctx.organizationId, id);
+    await this.service.setDefault(ctx.organizationId, id, ctx.userId, ctx.userRole as UserRole);
     return COMM_MUTATION_OK;
   }
 
@@ -156,7 +156,7 @@ export class IdentitiesController {
     @GetOrgContext() ctx: OrgContext,
     @Param('id') id: string,
   ) {
-    await this.service.deleteIdentity(ctx.organizationId, id);
+    await this.service.deleteIdentity(ctx.organizationId, id, ctx.userId, ctx.userRole as UserRole);
     return COMM_MUTATION_OK;
   }
 

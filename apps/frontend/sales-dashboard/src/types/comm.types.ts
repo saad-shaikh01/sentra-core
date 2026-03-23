@@ -23,6 +23,7 @@ export interface SendAsAlias {
 
 export interface CommIdentity {
   id: string;
+  userId?: string;
   brandId?: string;
   email: string;
   displayName: string;
@@ -73,6 +74,7 @@ export interface CommMessage {
   sentAt?: string;
   labelIds?: string[];
   identityId?: string;
+  sentByUserId?: string;
 }
 
 export interface CommMessageSummary {
@@ -108,6 +110,7 @@ export interface ListThreadsParams {
   search?: string;
   filter?: 'all' | 'unread' | 'sent' | 'archived';
   identityId?: string;
+  scope?: 'all';
 }
 
 export interface ListMessagesParams {

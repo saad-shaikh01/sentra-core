@@ -29,9 +29,12 @@ export class ThreadsService {
     role: UserRole,
     query: ListThreadsQueryDto,
   ) {
-    const { page = 1, limit = 20, entityType, entityId, search, filter, identityId } = query;
+    const { page = 1, limit = 20, entityType, entityId, search, filter, identityId, scope } = query;
     const mongoFilter: Record<string, unknown> = { organizationId };
-    const userIdentityIds = this.isPrivileged(role)
+    // Admin with scope=all sees every thread in the org (explicit opt-in).
+    // Admin without scope=all sees only their own threads — same scoping as a regular user.
+    const isAdminViewAll = this.isPrivileged(role) && scope === 'all';
+    const userIdentityIds = isAdminViewAll
       ? []
       : await this.resolveUserIdentityIds(organizationId, userId);
 
@@ -41,11 +44,14 @@ export class ThreadsService {
     }
 
     if (identityId) {
+      // Privileged users can filter by any identity; regular users can only see their own
       mongoFilter.identityId = this.isPrivileged(role)
         ? identityId
         : { $in: userIdentityIds.filter((candidateId) => candidateId === identityId) };
-    } else if (!this.isPrivileged(role)) {
+    } else if (!isAdminViewAll) {
+      // Non-admin and admin-without-scope=all: scope to own identities only
       mongoFilter.identityId = { $in: userIdentityIds };
+      // isAdminViewAll + no identityId: no identity filter → sees all threads in org
     }
 
     if (search) {
