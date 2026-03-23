@@ -30,20 +30,22 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
 
   const columns = useMemo<Column<EnrichedLead>[]>(() => {
     const baseColumns: Column<EnrichedLead>[] = [
-      { key: 'title', header: 'Title' },
-      { key: 'name', header: 'Contact', render: (lead) => lead.name ?? '—' },
-      { key: 'email', header: 'Email', render: (lead) => lead.email ?? '—' },
+      { key: 'title', header: 'Title', className: 'min-w-[200px]' },
+      { key: 'name', header: 'Contact', render: (lead) => lead.name ?? '—', className: 'min-w-[150px]' },
+      { key: 'email', header: 'Email', render: (lead) => lead.email ?? '—', className: 'min-w-[200px]' },
       {
         key: 'status',
         header: 'Status',
+        className: 'w-[120px]',
         render: (lead) => <StatusBadge status={lead.status} />,
       },
-      { key: 'brandName', header: 'Brand', render: (lead) => lead.brandName ?? '—' },
-      { key: 'assigneeName', header: 'Assigned', render: (lead) => lead.assigneeName ?? '—' },
-      { key: 'source', header: 'Source', render: (lead) => lead.source ?? '—' },
+      { key: 'brandName', header: 'Brand', render: (lead) => lead.brandName ?? '—', className: 'min-w-[120px]' },
+      { key: 'assigneeName', header: 'Assigned', render: (lead) => lead.assigneeName ?? '—', className: 'min-w-[150px]' },
+      { key: 'source', header: 'Source', render: (lead) => lead.source ?? '—', className: 'w-[100px]' },
       {
         key: 'createdAt',
         header: 'Created',
+        className: 'w-[120px]',
         render: (lead) => new Date(lead.createdAt).toLocaleDateString(),
       },
     ];

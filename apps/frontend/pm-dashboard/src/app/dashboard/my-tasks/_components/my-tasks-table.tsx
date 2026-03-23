@@ -33,10 +33,11 @@ export function MyTasksTable({ tasks, isLoading, isError, onRowClick }: MyTasksT
     {
       key: 'name',
       header: 'Task Name',
+      className: 'min-w-[250px]',
       render: (t) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-foreground">{t.name}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-foreground/90 leading-tight">{t.name}</span>
+          <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold truncate">
             {t.project.name} &bull; {t.projectStage.name}
           </span>
         </div>
@@ -45,12 +46,13 @@ export function MyTasksTable({ tasks, isLoading, isError, onRowClick }: MyTasksT
     {
       key: 'status',
       header: 'Status',
+      className: 'w-[140px]',
       render: (t) => (
         <div className="flex flex-col gap-1">
           <StatusBadge status={t.status} />
           {t.isBlocked && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-400/10 px-1.5 py-0.5 rounded w-fit">
-              <AlertTriangle className="h-3 w-3" /> BLOCKED
+            <span className="inline-flex items-center gap-1 text-[9px] text-red-400 font-black bg-red-400/10 px-1.5 py-0.5 rounded-sm w-fit border border-red-400/20">
+              <AlertTriangle className="h-2.5 w-2.5" /> BLOCKED
             </span>
           )}
         </div>
@@ -59,15 +61,16 @@ export function MyTasksTable({ tasks, isLoading, isError, onRowClick }: MyTasksT
     {
       key: 'priority',
       header: 'Priority',
+      className: 'w-[110px]',
       render: (t) => {
         const colors: Record<string, string> = {
-          LOW: 'text-muted-foreground',
-          MEDIUM: 'text-blue-400',
-          HIGH: 'text-orange-400',
-          URGENT: 'text-red-400',
+          LOW: 'text-muted-foreground/70',
+          MEDIUM: 'text-blue-400/90',
+          HIGH: 'text-orange-400/90',
+          URGENT: 'text-red-400/90',
         };
         return (
-          <span className={cn('text-xs font-bold uppercase tracking-wider', colors[t.priority])}>
+          <span className={cn('text-[11px] font-black uppercase tracking-widest', colors[t.priority])}>
             {t.priority}
           </span>
         );
@@ -76,12 +79,13 @@ export function MyTasksTable({ tasks, isLoading, isError, onRowClick }: MyTasksT
     {
       key: 'dueAt',
       header: 'Due',
+      className: 'w-[130px]',
       render: (t) => {
-        if (!t.dueAt) return '—';
+        if (!t.dueAt) return <span className="text-muted-foreground/30">—</span>;
         const isOverdue = new Date(t.dueAt) < new Date() && t.status !== 'COMPLETED';
         return (
-          <div className={cn("flex items-center gap-1.5 text-xs", isOverdue ? "text-red-400 font-bold" : "text-muted-foreground")}>
-            <Clock className="h-3.5 w-3.5" />
+          <div className={cn("flex items-center gap-1.5 text-xs font-medium", isOverdue ? "text-red-400" : "text-muted-foreground/80")}>
+            <Clock className={cn("h-3.5 w-3.5", isOverdue ? "animate-pulse" : "opacity-50")} />
             {new Date(t.dueAt).toLocaleDateString()}
           </div>
         );

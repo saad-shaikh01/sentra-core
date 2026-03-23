@@ -154,18 +154,19 @@ export default function SalesPage() {
   const columns = useMemo<Column<SaleRow>[]>(
     () => {
       const baseColumns: Column<SaleRow>[] = [
-        { key: 'clientName', header: 'Client' },
-        { key: 'brandName',  header: 'Brand' },
+        { key: 'clientName', header: 'Client', className: 'min-w-[180px]' },
+        { key: 'brandName',  header: 'Brand',  className: 'min-w-[120px]' },
         {
           key:    'totalAmount',
           header: 'Amount',
+          className: 'w-[140px]',
           render: (s) => (
             <div>
               <span className="font-bold">
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.totalAmount)}
               </span>
               {s.discountedTotal != null && s.discountedTotal !== s.totalAmount ? (
-                <div className="text-xs text-emerald-400">
+                <div className="text-[11px] text-emerald-400/90 font-semibold leading-tight">
                   {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.discountedTotal)} net
                 </div>
               ) : null}
@@ -175,8 +176,9 @@ export default function SalesPage() {
         {
           key:    'paymentPlan',
           header: 'Plan',
+          className: 'w-[100px]',
           render: (s) => (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-muted-foreground">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/5 bg-white/5 text-muted-foreground/80">
               {s.paymentPlan === 'ONE_TIME' ? 'One-Time' : s.paymentPlan === 'INSTALLMENTS' ? `${s.installmentCount ?? '?'}x` : 'Sub'}
             </span>
           ),
@@ -184,11 +186,13 @@ export default function SalesPage() {
         {
           key:    'status',
           header: 'Status',
+          className: 'w-[120px]',
           render: (s) => <StatusBadge status={s.status} />,
         },
         {
           key:    'createdAt',
           header: 'Created',
+          className: 'w-[120px]',
           render: (s) => new Date(s.createdAt).toLocaleDateString(),
         },
       ];
@@ -283,7 +287,7 @@ export default function SalesPage() {
                 setParams({ status: v === 'all' ? null : (v as SaleStatus), page: 1 })
               }
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -303,7 +307,7 @@ export default function SalesPage() {
                 setParams({ clientId: v === 'all' ? null : v, page: 1 })
               }
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All clients" />
               </SelectTrigger>
               <SelectContent>
@@ -323,7 +327,7 @@ export default function SalesPage() {
                 setParams({ brandId: v === 'all' ? null : v, page: 1 })
               }
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All brands" />
               </SelectTrigger>
               <SelectContent>
@@ -341,7 +345,7 @@ export default function SalesPage() {
               value={params.salesAgentId ?? 'all'}
               onValueChange={(v) => setParams({ salesAgentId: v === 'all' ? null : v, page: 1 })}
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All agents" />
               </SelectTrigger>
               <SelectContent>
@@ -359,7 +363,7 @@ export default function SalesPage() {
               value={params.saleType ?? 'all'}
               onValueChange={(v) => setParams({ saleType: v === 'all' ? null : v, page: 1 })}
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All types" />
               </SelectTrigger>
               <SelectContent>
@@ -376,7 +380,7 @@ export default function SalesPage() {
               type="date"
               value={params.dateFrom ?? ''}
               onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
-              className="w-full bg-white/5 border-white/10"
+              className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
               title="From date"
             />
           </FilterLabel>
@@ -385,7 +389,7 @@ export default function SalesPage() {
               type="date"
               value={params.dateTo ?? ''}
               onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
-              className="w-full bg-white/5 border-white/10"
+              className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
               title="To date"
             />
           </FilterLabel>

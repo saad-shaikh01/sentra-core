@@ -27,24 +27,24 @@ export function FilterGroup({ children, activeCount = 0, onClear }: FilterGroupP
         <Button
           variant="outline"
           className={cn(
-            'flex items-center gap-2 bg-white/5 border-white/10 hover:bg-white/10 transition-all',
-            activeCount > 0 && 'border-primary/50 bg-primary/5 text-primary'
+            'flex items-center gap-2 bg-white/[0.03] border-white/[0.05] hover:bg-white/[0.08] transition-all',
+            activeCount > 0 && 'border-primary/30 bg-primary/5 text-primary'
           )}
         >
-          <Filter className="h-4 w-4" />
-          <span>Filter</span>
+          <Filter className="h-3.5 w-3.5" />
+          <span className="text-xs font-semibold">Filter</span>
           {activeCount > 0 && (
-            <span className="flex items-center justify-center bg-primary text-primary-foreground text-[10px] font-bold rounded-full h-4 w-4">
+            <span className="flex items-center justify-center bg-primary text-primary-foreground text-[9px] font-black rounded-full h-3.5 w-3.5">
               {activeCount}
             </span>
           )}
-          <ChevronDown className={cn('h-3.5 w-3.5 opacity-50 transition-transform', open && 'rotate-180')} />
+          <ChevronDown className={cn('h-3 w-3 opacity-40 transition-transform', open && 'rotate-180')} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-black/90 backdrop-blur-2xl border-white/10">
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-4">
-          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-            <Filter className="h-4 w-4 text-primary" />
+      <DialogContent className="sm:max-w-md bg-[#0a0a0a]/95 backdrop-blur-2xl border-white/[0.05] shadow-2xl">
+        <DialogHeader className="flex flex-row items-center justify-between border-b border-white/[0.05] pb-4">
+          <DialogTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
+            <Filter className="h-4 w-4 text-primary/80" />
             Filters
           </DialogTitle>
           {onClear && activeCount > 0 && (

@@ -53,12 +53,12 @@ export default function BrandsPage() {
       key: 'logoUrl',
       header: 'Logo',
       render: (b) => b.logoUrl
-        ? <img src={b.logoUrl} alt={b.name} className="h-8 w-8 rounded-lg object-cover" />
-        : <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center text-xs font-bold">{b.name[0]}</div>,
-      className: 'w-16',
+        ? <img src={b.logoUrl} alt={b.name} className="h-8 w-8 rounded-lg object-cover ring-1 ring-white/10" />
+        : <div className="h-8 w-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-[10px] font-bold text-muted-foreground">{b.name[0].toUpperCase()}</div>,
+      className: 'w-[80px]',
     },
-    { key: 'name', header: 'Name' },
-    { key: 'domain', header: 'Domain', render: (b) => b.domain ?? '—' },
+    { key: 'name', header: 'Name', className: 'min-w-[200px] font-semibold' },
+    { key: 'domain', header: 'Domain', render: (b) => b.domain ?? '—', className: 'min-w-[200px] text-primary/70' },
     {
       key: 'actions',
       header: '',

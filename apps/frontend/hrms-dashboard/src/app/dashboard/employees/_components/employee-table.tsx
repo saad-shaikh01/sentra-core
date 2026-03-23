@@ -27,16 +27,17 @@ export function EmployeeTable({
       {
         key: 'employee',
         header: 'Employee',
+        className: 'min-w-[250px]',
         render: (employee) => (
           <div className="flex items-center gap-3">
             <UserAvatar
               name={employee.fullName}
               avatarUrl={employee.avatarUrl}
-              className="h-10 w-10"
+              className="h-9 w-9 border border-white/10"
             />
             <div className="min-w-0">
-              <p className="truncate font-medium text-sm">{employee.fullName}</p>
-              <p className="truncate text-xs text-muted-foreground">{employee.email}</p>
+              <p className="truncate font-semibold text-[13px] text-foreground/90">{employee.fullName}</p>
+              <p className="truncate text-[11px] text-muted-foreground/60 font-medium">{employee.email}</p>
             </div>
           </div>
         ),
@@ -44,22 +45,26 @@ export function EmployeeTable({
       {
         key: 'jobTitle',
         header: 'Title',
-        render: (employee) => employee.jobTitle || <span className="text-muted-foreground">-</span>,
+        className: 'min-w-[150px]',
+        render: (employee) => <span className="text-foreground/70">{employee.jobTitle || '-'}</span>,
       },
       {
         key: 'department',
         header: 'Department',
+        className: 'min-w-[140px]',
         render: (employee) =>
-          employee.department?.name || <span className="text-muted-foreground">-</span>,
+          <span className="text-foreground/70">{employee.department?.name || '-'}</span>,
       },
       {
         key: 'status',
         header: 'Status',
+        className: 'w-[120px]',
         render: (employee) => <StatusBadge status={employee.status} />,
       },
       {
         key: 'apps',
         header: 'Apps',
+        className: 'min-w-[120px]',
         render: (employee) => <AppAccessBadges apps={employee.appAccess} />,
       },
       {

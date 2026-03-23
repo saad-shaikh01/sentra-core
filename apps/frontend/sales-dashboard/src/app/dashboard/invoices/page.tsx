@@ -90,21 +90,25 @@ export default function InvoicesPage() {
       {
         key:    'invoiceNumber',
         header: 'Invoice #',
-        render: (inv) => <span className="font-mono text-xs">{inv.invoiceNumber}</span>,
+        className: 'w-[140px]',
+        render: (inv) => <span className="font-mono text-xs font-semibold text-primary/80">{inv.invoiceNumber}</span>,
       },
       {
         key:    'amount',
         header: 'Amount',
-        render: (inv) => <span className="font-bold">${inv.amount}</span>,
+        className: 'w-[120px]',
+        render: (inv) => <span className="font-bold text-[14px]">${inv.amount.toLocaleString()}</span>,
       },
       {
         key:    'createdAt',
         header: 'Date',
-        render: (inv) => new Date(inv.createdAt).toLocaleDateString(),
+        className: 'w-[120px]',
+        render: (inv) => <span className="text-muted-foreground/80">{new Date(inv.createdAt).toLocaleDateString()}</span>,
       },
       {
         key:    'status',
         header: 'Status',
+        className: 'w-[120px]',
         render: (inv) => <StatusBadge status={inv.status} />,
       },
       {
@@ -173,7 +177,7 @@ export default function InvoicesPage() {
                 setParams({ status: v === 'all' ? null : (v as InvoiceStatus), page: 1 })
               }
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -193,7 +197,7 @@ export default function InvoicesPage() {
                 setParams({ saleId: v === 'all' ? null : v, page: 1 })
               }
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All sales" />
               </SelectTrigger>
               <SelectContent>
@@ -213,7 +217,7 @@ export default function InvoicesPage() {
               type="date"
               value={params.dueAfter ?? ''}
               onChange={(e) => setParams({ dueAfter: e.target.value || null, page: 1 })}
-              className="w-full bg-white/5 border-white/10"
+              className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
               title="Due after"
             />
           </FilterLabel>
@@ -222,7 +226,7 @@ export default function InvoicesPage() {
               type="date"
               value={params.dueBefore ?? ''}
               onChange={(e) => setParams({ dueBefore: e.target.value || null, page: 1 })}
-              className="w-full bg-white/5 border-white/10"
+              className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
               title="Due before"
             />
           </FilterLabel>

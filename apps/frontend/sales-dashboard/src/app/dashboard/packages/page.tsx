@@ -185,21 +185,24 @@ export default function PackagesPage() {
       {
         key:    'name',
         header: 'Name',
+        className: 'min-w-[200px] font-semibold',
         render: (pkg) => (
-          <span className="font-medium text-foreground">{pkg.name}</span>
+          <span className="text-foreground">{pkg.name}</span>
         ),
       },
       {
         key:    'category',
         header: 'Category',
+        className: 'w-[140px]',
         render: (pkg) => <CategoryBadge category={pkg.category} />,
       },
       {
         key:    'price',
         header: 'Price',
+        className: 'w-[140px]',
         render: (pkg) =>
           pkg.price != null ? (
-            <span>
+            <span className="font-medium">
               {pkg.currency}{' '}
               {pkg.price.toLocaleString(undefined, {
                 minimumFractionDigits: 0,
@@ -213,8 +216,9 @@ export default function PackagesPage() {
       {
         key:    'items',
         header: 'Services',
+        className: 'w-[120px]',
         render: (pkg) => (
-          <span className="text-muted-foreground text-sm">
+          <span className="text-muted-foreground/80 text-xs font-medium">
             {pkg.items?.length ?? 0} service{(pkg.items?.length ?? 0) !== 1 ? 's' : ''}
           </span>
         ),

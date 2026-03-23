@@ -72,10 +72,10 @@ export function DataTable<T>({
     >
       {columns.map((col) => (
         <div key={col.key} className="flex justify-between gap-4">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
             {col.header}
           </span>
-          <div className={cn("text-sm text-foreground text-right", col.className)}>
+          <div className={cn("text-xs font-medium text-foreground/90 text-right", col.className)}>
             {col.render
               ? col.render(row)
               : String((row as Record<string, unknown>)[col.key] ?? '—')}
@@ -86,7 +86,7 @@ export function DataTable<T>({
   );
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4">
       {/* Mobile Card View */}
       <div className="lg:hidden space-y-4">
         {data.map((row) => (
@@ -97,16 +97,16 @@ export function DataTable<T>({
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden">
+      <div className="hidden lg:block rounded-2xl bg-white/[0.02] border border-white/[0.05] overflow-hidden shadow-xl ring-1 ring-white/[0.02]">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed border-collapse">
             <thead>
-              <tr className="border-b border-white/10 bg-white/[0.02]">
+              <tr className="border-b border-white/[0.05] bg-white/[0.02]">
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     className={cn(
-                      'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground',
+                      'px-6 py-4 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60',
                       col.className
                     )}
                   >
@@ -115,20 +115,23 @@ export function DataTable<T>({
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-white/[0.02]">
               {data.map((row) => (
                 <tr
                   key={keyExtractor(row)}
                   onClick={() => onRowClick?.(row)}
                   className={cn(
-                    'border-b border-white/5 last:border-0 transition-colors duration-150',
-                    onRowClick && 'cursor-pointer hover:bg-white/[0.04]'
+                    'group transition-all duration-200',
+                    onRowClick && 'cursor-pointer hover:bg-white/[0.03]'
                   )}
                 >
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={cn('px-6 py-4 text-sm text-foreground', col.className)}
+                      className={cn(
+                        'px-6 py-3.5 text-[13px] font-medium text-foreground/80 transition-colors group-hover:text-foreground whitespace-nowrap overflow-hidden text-ellipsis',
+                        col.className
+                      )}
                     >
                       {col.render
                         ? col.render(row)

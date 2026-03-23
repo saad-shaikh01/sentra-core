@@ -38,36 +38,41 @@ export function EngagementsTable({
     { 
       key: 'name', 
       header: 'Engagement Name',
+      className: 'min-w-[220px]',
       render: (e) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-foreground">{e.name}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{e.engagementType}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-foreground/90 leading-none">{e.name}</span>
+          <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold">{e.engagementType}</span>
         </div>
       )
     },
     {
       key: 'status',
       header: 'Status',
+      className: 'w-[130px]',
       render: (e) => <StatusBadge status={e.status} />,
     },
-    { key: 'brandName', header: 'Brand', render: (e) => e.brandName ?? '—' },
-    { key: 'clientName', header: 'Client', render: (e) => e.clientName ?? '—' },
+    { key: 'brandName', header: 'Brand', className: 'min-w-[120px]', render: (e) => e.brandName ?? '—' },
+    { key: 'clientName', header: 'Client', className: 'min-w-[150px]', render: (e) => e.clientName ?? '—' },
     {
       key: 'projects',
       header: 'Projects',
+      className: 'w-[110px]',
       render: (e) => (
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">{e._count?.projects ?? 0} active</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] font-medium">{e._count?.projects ?? 0}</span>
+          <span className="text-[10px] text-muted-foreground uppercase font-bold">Active</span>
         </div>
       )
     },
     {
       key: 'dates',
       header: 'Timeline',
+      className: 'w-[160px]',
       render: (e) => (
-        <div className="flex flex-col text-[10px] text-muted-foreground uppercase tracking-tighter">
-          <span>S: {e.startDate ? new Date(e.startDate).toLocaleDateString() : '—'}</span>
-          <span>E: {e.endDate ? new Date(e.endDate).toLocaleDateString() : '—'}</span>
+        <div className="flex flex-col text-[10px] text-muted-foreground/70 font-medium uppercase leading-tight">
+          <span>S: <span className="text-foreground/60">{e.startDate ? new Date(e.startDate).toLocaleDateString() : '—'}</span></span>
+          <span>E: <span className="text-foreground/60">{e.endDate ? new Date(e.endDate).toLocaleDateString() : '—'}</span></span>
         </div>
       ),
     },

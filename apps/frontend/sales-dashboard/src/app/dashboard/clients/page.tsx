@@ -83,29 +83,33 @@ export default function ClientsPage() {
 
   const columns = useMemo<Column<ClientRow>[]>(
     () => [
-      { key: 'companyName', header: 'Company' },
-      { key: 'contactName', header: 'Contact', render: (client) => client.contactName ?? '-' },
-      { key: 'email', header: 'Email' },
-      { key: 'phone', header: 'Phone', render: (client) => client.phone ?? '-' },
-      { key: 'brandName', header: 'Brand' },
+      { key: 'companyName', header: 'Company', className: 'min-w-[180px] font-semibold' },
+      { key: 'contactName', header: 'Contact', render: (client) => client.contactName ?? '-', className: 'min-w-[150px]' },
+      { key: 'email', header: 'Email', className: 'min-w-[200px] text-primary/70' },
+      { key: 'phone', header: 'Phone', render: (client) => client.phone ?? '-', className: 'w-[140px]' },
+      { key: 'brandName', header: 'Brand', className: 'min-w-[120px]' },
       {
         key: 'status',
         header: 'Status',
+        className: 'w-[120px]',
         render: (client) => <StatusBadge status={client.status} />,
       },
       {
         key: 'portal',
         header: 'Portal',
+        className: 'w-[100px]',
         render: (client) => <PortalCell client={client} />,
       },
       {
         key: 'upsellAgent',
         header: 'Upsell',
+        className: 'min-w-[150px]',
         render: (client) => <AssigneeCell assignee={client.upsellAgent} emptyLabel="Unassigned" />,
       },
       {
         key: 'projectManager',
         header: 'PM',
+        className: 'min-w-[150px]',
         render: (client) => (
           <AssigneeCell assignee={client.projectManager} emptyLabel="Unassigned" />
         ),
@@ -113,6 +117,7 @@ export default function ClientsPage() {
       {
         key: 'createdAt',
         header: 'Created',
+        className: 'w-[120px]',
         render: (client) => new Date(client.createdAt).toLocaleDateString(),
       },
       {

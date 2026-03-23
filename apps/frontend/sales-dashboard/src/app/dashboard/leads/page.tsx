@@ -201,7 +201,7 @@ export default function LeadsPage() {
             setSearchInput(e.target.value);
             setParams({ search: e.target.value, page: 1 });
           }}
-          className="w-full sm:max-w-xs bg-white/5 border-white/10"
+          className="w-full sm:max-w-xs bg-white/[0.03] border-white/[0.05] focus:bg-white/[0.05] transition-all"
         />
 
         <FilterGroup
@@ -217,7 +217,7 @@ export default function LeadsPage() {
                   setParams({ status: v === 'all' ? null : (v as LeadStatus), page: 1 })
                 }
               >
-                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -235,7 +235,7 @@ export default function LeadsPage() {
               value={params.source ?? 'all'}
               onValueChange={(value) => setParams({ source: value === 'all' ? null : (value as LeadSource), page: 1 })}
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All sources" />
               </SelectTrigger>
               <SelectContent>
@@ -252,7 +252,7 @@ export default function LeadsPage() {
               value={params.leadType ?? 'all'}
               onValueChange={(value) => setParams({ leadType: value === 'all' ? null : (value as LeadType), page: 1 })}
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All lead types" />
               </SelectTrigger>
               <SelectContent>
@@ -269,7 +269,7 @@ export default function LeadsPage() {
               value={params.brandId ?? 'all'}
               onValueChange={(v) => setParams({ brandId: v === 'all' ? null : v, page: 1 })}
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10">
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                 <SelectValue placeholder="All brands" />
               </SelectTrigger>
               <SelectContent>
@@ -287,7 +287,7 @@ export default function LeadsPage() {
                 value={params.teamId ?? 'all'}
                 onValueChange={(v) => setParams({ teamId: v === 'all' ? null : v, page: 1 })}
               >
-                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                   <SelectValue placeholder="All teams" />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,7 +306,7 @@ export default function LeadsPage() {
                 value={params.assignedToId ?? 'all'}
                 onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
               >
-                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                   <SelectValue placeholder="All assignees" />
                 </SelectTrigger>
                 <SelectContent>
@@ -324,7 +324,7 @@ export default function LeadsPage() {
               type="date"
               value={params.dateFrom ?? ''}
               onChange={(e) => setParams({ dateFrom: e.target.value || null, page: 1 })}
-              className="w-full bg-white/5 border-white/10"
+              className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
             />
           </FilterLabel>
 
@@ -333,7 +333,7 @@ export default function LeadsPage() {
               type="date"
               value={params.dateTo ?? ''}
               onChange={(e) => setParams({ dateTo: e.target.value || null, page: 1 })}
-              className="w-full bg-white/5 border-white/10"
+              className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
             />
           </FilterLabel>
         </FilterGroup>

@@ -103,10 +103,11 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
     {
       key: 'name',
       header: 'Stage Name',
+      className: 'min-w-[250px]',
       render: (s) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-foreground">{s.name}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-foreground/90 leading-tight">{s.name}</span>
+          <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold truncate">
             {s.project.name} &bull; {s.project.serviceType}
           </span>
           {expanded[s.id] && (
@@ -120,8 +121,9 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
     {
       key: 'departmentCode',
       header: 'Department',
+      className: 'w-[140px]',
       render: (s) => (
-        <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider", getDepartmentColor(s.departmentCode))}>
+        <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border", getDepartmentColor(s.departmentCode).replace('text-', 'border-').replace('bg-', 'bg-').split(' ')[0] + '/20', getDepartmentColor(s.departmentCode))}>
           {s.departmentCode}
         </span>
       ),
@@ -129,17 +131,19 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
     {
       key: 'status',
       header: 'Status',
+      className: 'w-[130px]',
       render: (s) => <StatusBadge status={s.status} />,
     },
     {
       key: 'dueAt',
       header: 'Due',
+      className: 'w-[130px]',
       render: (s) => {
-        if (!s.dueAt) return '—';
+        if (!s.dueAt) return <span className="text-muted-foreground/30">—</span>;
         const isOverdue = new Date(s.dueAt) < new Date() && s.status !== 'COMPLETED';
         return (
-          <div className={cn("flex items-center gap-1.5 text-xs", isOverdue ? "text-red-400 font-bold" : "text-muted-foreground")}>
-            <Clock className="h-3.5 w-3.5" />
+          <div className={cn("flex items-center gap-1.5 text-xs font-medium", isOverdue ? "text-red-400" : "text-muted-foreground/80")}>
+            <Clock className={cn("h-3.5 w-3.5", isOverdue ? "animate-pulse" : "opacity-50")} />
             {new Date(s.dueAt).toLocaleDateString()}
           </div>
         );
@@ -148,8 +152,9 @@ export function StageQueueTable({ stages, isLoading, isError }: StageQueueTableP
     {
       key: 'tasks',
       header: 'Tasks',
+      className: 'w-[80px]',
       render: (s) => (
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-xs font-bold text-foreground/70">
           {s._count?.tasks ?? 0}
         </span>
       ),

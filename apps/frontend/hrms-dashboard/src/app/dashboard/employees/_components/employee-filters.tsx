@@ -62,7 +62,7 @@ export function EmployeeFilters({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search name or email..."
-          className="w-full min-w-[16rem] bg-white/5 border-white/10"
+          className="w-full min-w-[16rem] bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all"
         />
         {search ? (
           <Button
@@ -82,7 +82,7 @@ export function EmployeeFilters({
           onStatusChange(value === 'all' ? null : (value as EmployeeStatus))
         }
       >
-        <SelectTrigger className="w-[11rem] bg-white/5 border-white/10">
+        <SelectTrigger className="w-[11rem] bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
           <SelectValue placeholder="All statuses" />
         </SelectTrigger>
         <SelectContent>
@@ -101,7 +101,7 @@ export function EmployeeFilters({
           onAppCodeChange(value === 'all' ? null : (value as EmployeeAppFilter))
         }
       >
-        <SelectTrigger className="w-[11rem] bg-white/5 border-white/10">
+        <SelectTrigger className="w-[11rem] bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
           <SelectValue placeholder="All apps" />
         </SelectTrigger>
         <SelectContent>
@@ -118,7 +118,7 @@ export function EmployeeFilters({
         value={departmentId ?? 'all'}
         onValueChange={(value) => onDepartmentChange(value === 'all' ? null : value)}
       >
-        <SelectTrigger className="w-[12rem] bg-white/5 border-white/10">
+        <SelectTrigger className="w-[12rem] bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
           <SelectValue placeholder="All departments" />
         </SelectTrigger>
         <SelectContent>

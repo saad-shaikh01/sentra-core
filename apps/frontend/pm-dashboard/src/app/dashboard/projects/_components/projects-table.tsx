@@ -36,38 +36,43 @@ export function ProjectsTable({ projects, isLoading, isError, onRowClick }: Proj
     { 
       key: 'name', 
       header: 'Project Name',
+      className: 'min-w-[220px]',
       render: (p) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-foreground">{p.name}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{p.serviceType}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-foreground/90 leading-none">{p.name}</span>
+          <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold">{p.serviceType}</span>
         </div>
       )
     },
     {
       key: 'status',
       header: 'Status',
+      className: 'w-[130px]',
       render: (p) => <StatusBadge status={p.status} />,
     },
     {
       key: 'healthStatus',
       header: 'Health',
+      className: 'w-[110px]',
       render: (p) => <StatusBadge status={p.healthStatus} />,
     },
-    { key: 'brandName', header: 'Brand', render: (p) => p.brandName ?? '—' },
-    { key: 'clientName', header: 'Client', render: (p) => p.clientName ?? '—' },
+    { key: 'brandName', header: 'Brand', className: 'min-w-[120px]', render: (p) => p.brandName ?? '—' },
+    { key: 'clientName', header: 'Client', className: 'min-w-[150px]', render: (p) => p.clientName ?? '—' },
     {
       key: 'deliveryDueAt',
       header: 'Due Date',
+      className: 'w-[120px]',
       render: (p) => p.deliveryDueAt ? new Date(p.deliveryDueAt).toLocaleDateString() : '—',
     },
     {
       key: 'progress',
       header: 'Progress',
+      className: 'w-[140px]',
       render: (p) => (
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">{p._count?.stages ?? 0} Stages</span>
-          <span className="text-[10px] text-muted-foreground">/</span>
-          <span className="text-xs font-medium">{p._count?.tasks ?? 0} Tasks</span>
+        <div className="flex items-center gap-1.5 font-medium">
+          <span className="text-[12px]">{p._count?.stages ?? 0} <span className="text-[10px] text-muted-foreground uppercase font-bold">Stg</span></span>
+          <div className="h-2.5 w-px bg-white/10" />
+          <span className="text-[12px]">{p._count?.tasks ?? 0} <span className="text-[10px] text-muted-foreground uppercase font-bold">Tsk</span></span>
         </div>
       )
     },

@@ -42,10 +42,11 @@ export function QcQueueTable({ submissions, isLoading, isError, onRowClick }: Qc
     {
       key: 'taskName',
       header: 'Task / Project',
+      className: 'min-w-[250px]',
       render: (s) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-foreground">{s.task.name}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-foreground/90 leading-tight">{s.task.name}</span>
+          <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-bold truncate">
             {s.task.project.name} &bull; {s.task.projectStage.name}
           </span>
         </div>
@@ -54,8 +55,9 @@ export function QcQueueTable({ submissions, isLoading, isError, onRowClick }: Qc
     {
       key: 'department',
       header: 'Department',
+      className: 'w-[140px]',
       render: (s) => (
-        <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider", getDepartmentColor(s.task.projectStage.departmentCode))}>
+        <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border", getDepartmentColor(s.task.projectStage.departmentCode).replace('text-', 'border-').replace('bg-', 'bg-').split(' ')[0] + '/20', getDepartmentColor(s.task.projectStage.departmentCode))}>
           {s.task.projectStage.departmentCode}
         </span>
       ),
@@ -63,23 +65,26 @@ export function QcQueueTable({ submissions, isLoading, isError, onRowClick }: Qc
     {
       key: 'status',
       header: 'Status',
+      className: 'w-[130px]',
       render: (s) => <StatusBadge status={s.status} />,
     },
     {
       key: 'submissionNumber',
       header: 'Attempt',
+      className: 'w-[100px]',
       render: (s) => (
-        <span className="text-xs font-medium text-muted-foreground">
-          #{s.submissionNumber}
+        <span className="text-xs font-bold text-foreground/70">
+          Trial #{s.submissionNumber}
         </span>
       ),
     },
     {
       key: 'submittedAt',
       header: 'Submitted',
+      className: 'w-[130px]',
       render: (s) => (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Clock className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 font-medium">
+          <Clock className="h-3.5 w-3.5 opacity-50" />
           {new Date(s.submittedAt).toLocaleDateString()}
         </div>
       ),
