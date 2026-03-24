@@ -27,6 +27,19 @@ interface Session {
   isActive: boolean;
 }
 
+function normalizeSessionsResponse(payload: unknown): Session[] {
+  if (Array.isArray(payload)) return payload as Session[];
+  if (!payload || typeof payload !== 'object') return [];
+
+  const data = (payload as { data?: unknown }).data;
+  if (Array.isArray(data)) return data as Session[];
+
+  const sessions = (payload as { sessions?: unknown }).sessions;
+  if (Array.isArray(sessions)) return sessions as Session[];
+
+  return [];
+}
+
 function formatRelativeTime(dateStr: string | null): string {
   if (!dateStr) return 'Just signed in';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -48,9 +61,9 @@ export function MySessionsModal({
   const queryClient = useQueryClient();
   const currentJti = getCurrentJti();
 
-  const { data: sessions, isLoading } = useQuery<Session[]>({
+  const { data: sessions = [], isLoading } = useQuery<Session[]>({
     queryKey: ['my-sessions'],
-    queryFn: () => api.getMySessions() as Promise<Session[]>,
+    queryFn: async () => normalizeSessionsResponse(await api.getMySessions()),
     enabled: open,
   });
 
@@ -64,7 +77,7 @@ export function MySessionsModal({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-sessions'] }),
   });
 
-  const otherSessions = sessions?.filter((s) => s.id !== currentJti) ?? [];
+  const otherSessions = sessions.filter((s) => s.id !== currentJti);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -78,10 +91,10 @@ export function MySessionsModal({
           {isLoading && (
             <p className="text-sm text-muted-foreground text-center py-4">Loading sessions...</p>
           )}
-          {!isLoading && (!sessions || sessions.length === 0) && (
+          {!isLoading && sessions.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">No active sessions</p>
           )}
-          {sessions?.map((session) => (
+          {sessions.map((session) => (
             <div
               key={session.id}
               className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-3"

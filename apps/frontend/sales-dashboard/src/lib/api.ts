@@ -397,6 +397,15 @@ class ApiClient {
     return this.fetch<any>(`/brands/${id}`, { method: 'PATCH', body: JSON.stringify(dto) });
   }
 
+  async uploadBrandLogo(id: string, file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.fetch<any>(`/brands/${id}/upload/logo`, {
+      method: 'POST',
+      body: form,
+    });
+  }
+
   async deleteBrand(id: string) {
     return this.fetch<{ message: string }>(`/brands/${id}`, { method: 'DELETE' });
   }

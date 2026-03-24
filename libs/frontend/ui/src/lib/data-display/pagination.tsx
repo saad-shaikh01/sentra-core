@@ -67,7 +67,7 @@ export function Pagination({
 
         {onLimitChange && (
           <div className="hidden md:flex items-center gap-2 border-l border-white/5 pl-4 ml-2">
-            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/50 whitespace-nowrap">Per page</span>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/50 whitespace-nowrap px-2">Per page</span>
             <Select
               value={String(limit)}
               onValueChange={(v) => onLimitChange(Number(v))}
@@ -180,10 +180,10 @@ export function Pagination({
   return (
     <div className={cn(
       stickyStyles,
-      "w-full transition-all duration-500 animate-in fade-in slide-in-from-bottom-4",
+      "w-full transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 ",
       className
     )}>
-      <div className="bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-2xl p-2.5 shadow-2xl shadow-black/40 ring-1 ring-white/[0.02]">
+      <div className="bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-2xl px-4 py-2 mt-4 shadow-2xl shadow-black/40 ring-1 ring-white/[0.02]">
         {paginationContent}
       </div>
     </div>

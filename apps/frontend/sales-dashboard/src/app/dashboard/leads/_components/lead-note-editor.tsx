@@ -1,11 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { EditorContent, ReactRenderer, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
 import Mention from '@tiptap/extension-mention';
 import { AtSign, Bold, Italic, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import MentionList, { type MentionListRef, type MentionItem } from './mention-list';
 
@@ -18,6 +21,8 @@ interface LeadNoteEditorProps {
   submitLabel?: string;
   placeholder?: string;
 }
+
+const MAX_PASTED_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
 
 function extractMentionIds(json: Record<string, unknown>): string[] {
   const ids: string[] = [];
@@ -34,6 +39,15 @@ function extractMentionIds(json: Record<string, unknown>): string[] {
   return [...new Set(ids)];
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(new Error('Failed to read image'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function LeadNoteEditor({
   members,
   initialContent,
@@ -45,14 +59,60 @@ export function LeadNoteEditor({
 }: LeadNoteEditorProps) {
   const membersRef = useRef<MentionItem[]>(members);
   const submitFnRef = useRef<(() => void) | null>(null);
+  const editorRef = useRef<Editor | null>(null);
+  const [isEmpty, setIsEmpty] = useState(() => !initialContent?.trim());
+
+  const insertPastedImages = useCallback(async (files: File[]) => {
+    const activeEditor = editorRef.current;
+    if (!activeEditor) return;
+
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Unsupported paste', 'Only image files can be pasted into notes.');
+        continue;
+      }
+
+      if (file.size > MAX_PASTED_IMAGE_SIZE_BYTES) {
+        toast.error('Image too large', 'Please paste an image smaller than 2 MB.');
+        continue;
+      }
+
+      try {
+        const src = await readFileAsDataUrl(file);
+        activeEditor
+          .chain()
+          .focus()
+          .setImage({ src, alt: file.name || 'Pasted image' })
+          .run();
+      } catch (error) {
+        toast.error(
+          'Paste failed',
+          error instanceof Error ? error.message : 'Unable to paste this image.',
+        );
+      }
+    }
+  }, []);
 
   useEffect(() => {
     membersRef.current = members;
   }, [members]);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        defaultProtocol: 'https',
+        HTMLAttributes: {
+          class: 'mention',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
+      }),
+      Image,
       Mention.configure({
         HTMLAttributes: { class: 'mention' },
         suggestion: {
@@ -106,8 +166,28 @@ export function LeadNoteEditor({
       }),
     ],
     content: initialContent ?? '',
+    onCreate: ({ editor: currentEditor }) => {
+      setIsEmpty(currentEditor.isEmpty);
+    },
+    onUpdate: ({ editor: currentEditor }) => {
+      setIsEmpty(currentEditor.isEmpty);
+    },
     editorProps: {
       attributes: { class: 'text-sm outline-none min-h-[80px] leading-6' },
+      handlePaste: (_view, event) => {
+        const imageFiles = Array.from(event.clipboardData?.items ?? [])
+          .filter((item) => item.type.startsWith('image/'))
+          .map((item) => item.getAsFile())
+          .filter((file): file is File => file !== null);
+
+        if (imageFiles.length === 0) {
+          return false;
+        }
+
+        event.preventDefault();
+        void insertPastedImages(imageFiles);
+        return true;
+      },
       handleKeyDown: (_view, event) => {
         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
           submitFnRef.current?.();
@@ -117,6 +197,13 @@ export function LeadNoteEditor({
       },
     },
   });
+
+  useEffect(() => {
+    editorRef.current = editor;
+    return () => {
+      editorRef.current = null;
+    };
+  }, [editor]);
 
   const handleSubmit = useCallback(async () => {
     if (!editor || editor.isEmpty || isPending) return;
@@ -130,8 +217,6 @@ export function LeadNoteEditor({
   useEffect(() => {
     submitFnRef.current = handleSubmit;
   }, [handleSubmit]);
-
-  const isEmpty = !editor || editor.isEmpty;
 
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">

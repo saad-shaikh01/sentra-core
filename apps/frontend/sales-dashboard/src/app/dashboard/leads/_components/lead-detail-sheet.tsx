@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { DetailSheet, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import {
@@ -96,6 +97,93 @@ const activityIcons: Record<LeadActivityType, React.ReactNode> = {
   [LeadActivityType.CREATED]: <ClipboardList className="h-4 w-4" />,
 };
 
+const noteUrlPattern = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]])/gi;
+
+function renderPlainTextWithLinks(content: string) {
+  const lines = content.split('\n');
+
+  return lines.map((line, lineIndex) => {
+    const parts = line.split(noteUrlPattern);
+
+    return (
+      <Fragment key={`line-${lineIndex}`}>
+        {parts.map((part, partIndex) => {
+          if (part.startsWith('http://') || part.startsWith('https://')) {
+            return (
+              <a
+                key={`part-${lineIndex}-${partIndex}`}
+                href={part}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mention underline underline-offset-2"
+              >
+                {part}
+              </a>
+            );
+          }
+
+          return <Fragment key={`part-${lineIndex}-${partIndex}`}>{part}</Fragment>;
+        })}
+        {lineIndex < lines.length - 1 ? <br /> : null}
+      </Fragment>
+    );
+  });
+}
+
+function LeadNoteContent({
+  content,
+  onImageClick,
+}: {
+  content: string;
+  onImageClick: (src: string, alt?: string) => void;
+}) {
+  const safeHtml = useMemo(() => {
+    if (!content.startsWith('<')) {
+      return '';
+    }
+
+    return DOMPurify.sanitize(content, {
+      ADD_TAGS: ['img'],
+      ADD_ATTR: ['target', 'rel'],
+      ALLOWED_ATTR: ['src', 'alt', 'href', 'target', 'rel', 'class', 'style'],
+      ALLOW_DATA_ATTR: false,
+      ADD_DATA_URI_TAGS: ['img'],
+      FORCE_BODY: true,
+    });
+  }, [content]);
+
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const image = target.closest('img');
+    if (!(image instanceof HTMLImageElement)) {
+      return;
+    }
+
+    event.preventDefault();
+    onImageClick(image.currentSrc || image.src, image.alt);
+  };
+
+  if (!safeHtml) {
+    return (
+      <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">
+        {content ? renderPlainTextWithLinks(content) : 'No note content.'}
+      </p>
+    );
+  }
+
+  return (
+    <div
+      className="text-sm leading-6 text-foreground/90 [&_a]:cursor-pointer [&_a]:font-semibold [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_em]:italic [&_img]:mt-2 [&_img]:max-h-80 [&_img]:max-w-full [&_img]:cursor-zoom-in [&_img]:rounded-lg [&_img]:border [&_img]:border-white/10 [&_img]:object-contain [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-1 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc [&_.mention]:cursor-default [&_.mention]:font-semibold [&_.mention]:text-primary"
+      onClick={handleClick}
+      dangerouslySetInnerHTML={{ __html: safeHtml }}
+    />
+  );
+}
+
 export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProps) {
   const { data: lead, isLoading, isError } = useLead(leadId ?? '');
   const { data: activities } = useLeadActivities(leadId ?? '');
@@ -117,6 +205,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
   const [lostReason, setLostReason] = useState('');
   const [teamId, setTeamId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt?: string } | null>(null);
 
   const allowedTransitions = lead ? LEAD_STATUS_TRANSITIONS[lead.status] : [];
   const minFollowUpDate = new Date().toISOString().split('T')[0];
@@ -459,14 +548,10 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                             />
                           ) : (
                             <>
-                              {noteContent.startsWith('<') ? (
-                                <div
-                                  className="text-sm leading-6 text-foreground/90 [&_em]:italic [&_ol]:ml-4 [&_ol]:list-decimal [&_p]:mb-1 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:ml-4 [&_ul]:list-disc [&_.mention]:cursor-default [&_.mention]:font-semibold [&_.mention]:text-primary"
-                                  dangerouslySetInnerHTML={{ __html: noteContent }}
-                                />
-                              ) : (
-                                <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">{noteContent || 'No note content.'}</p>
-                              )}
+                              <LeadNoteContent
+                                content={noteContent}
+                                onImageClick={(src, alt) => setPreviewImage({ src, alt })}
+                              />
                               {canEditOrDelete ? (
                                 <div className="mt-3 flex justify-end gap-2">
                                   <Button type="button" variant="outline" size="sm" onClick={() => startEditingNote(item)}>
@@ -641,6 +726,24 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
           </DialogContent>
         </Dialog>
       ) : null}
+
+      <Dialog open={!!previewImage} onOpenChange={(open) => { if (!open) setPreviewImage(null); }}>
+        <DialogContent className="max-w-4xl border-white/10 bg-[#09090b]/95 p-3 sm:p-4">
+          <DialogHeader>
+            <DialogTitle>{previewImage?.alt || 'Note image'}</DialogTitle>
+            <DialogDescription>Preview of the image shared in discussion.</DialogDescription>
+          </DialogHeader>
+          {previewImage ? (
+            <div className="flex max-h-[75vh] items-center justify-center overflow-auto rounded-xl border border-white/10 bg-black/30 p-2">
+              <img
+                src={previewImage.src}
+                alt={previewImage.alt || 'Discussion note image'}
+                className="max-h-[68vh] max-w-full rounded-lg object-contain"
+              />
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {lead ? (
         <ConvertLeadModal

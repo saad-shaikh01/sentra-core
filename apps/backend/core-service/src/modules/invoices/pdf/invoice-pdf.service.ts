@@ -18,10 +18,20 @@ export interface InvoicePdfData {
   brand: {
     name: string;
     logoUrl?: string;
+    website?: string;
+    email?: string;
+    phone?: string;
     colors?: Record<string, string>;
   };
   sale: {
     description?: string;
+    items?: Array<{
+      name: string;
+      description?: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+    }>;
   };
   createdAt: Date;
 }
@@ -30,7 +40,7 @@ export interface InvoicePdfData {
 export class InvoicePdfService {
   async generatePdf(data: InvoicePdfData): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -38,89 +48,129 @@ export class InvoicePdfService {
       doc.on('error', reject);
 
       const primaryColor = data.brand.colors?.primary || '#1a1a2e';
-      const accentColor = data.brand.colors?.accent || '#16213e';
+      const accentColor = data.brand.colors?.accent || '#00bfa5'; // Teal from image
+      const grayText = '#6b7280';
+      const darkText = '#111827';
 
-      // Header
-      doc.fontSize(24).fillColor(primaryColor).text(data.brand.name, 50, 50);
-      doc.fontSize(10).fillColor('#666').text('INVOICE', 400, 50, { align: 'right' });
-      doc.fontSize(18).fillColor(primaryColor).text(data.invoiceNumber, 400, 65, { align: 'right' });
+      // 1. Header Card (Rounded rectangle)
+      const cardY = 40;
+      const cardHeight = 120;
+      doc.roundedRect(40, cardY, 515, cardHeight, 15)
+         .lineWidth(1)
+         .strokeColor('#f3f4f6')
+         .stroke();
 
-      doc.moveTo(50, 100).lineTo(545, 100).strokeColor(accentColor).lineWidth(2).stroke();
+      // Brand Logo/Name
+      if (data.brand.logoUrl) {
+         // Placeholder for logo handling if needed, otherwise text
+         doc.fontSize(20).fillColor(darkText).font('Helvetica-Bold').text(data.brand.name.toUpperCase(), 60, cardY + 25);
+      } else {
+         doc.fontSize(20).fillColor(darkText).font('Helvetica-Bold').text(data.brand.name.toUpperCase(), 60, cardY + 25);
+      }
 
-      // Invoice details
-      let y = 120;
-      doc.fontSize(10).fillColor('#333');
-      doc.text('Date:', 50, y);
-      doc.text(data.createdAt.toLocaleDateString(), 120, y);
-      y += 18;
-      doc.text('Due Date:', 50, y);
-      doc.text(data.dueDate.toLocaleDateString(), 120, y);
-      y += 18;
-      doc.text('Status:', 50, y);
-      doc.fillColor(data.status === 'PAID' ? '#27ae60' : '#e74c3c').text(data.status, 120, y);
-      doc.fillColor('#333');
+      // Invoice ID & Date (Top Right)
+      doc.fontSize(10).fillColor(grayText).font('Helvetica').text('Invoice ID: ', 380, cardY + 20, { continued: true })
+         .fillColor(darkText).font('Helvetica-Bold').text(data.invoiceNumber);
+      
+      doc.fontSize(10).fillColor(grayText).font('Helvetica').text('Date: ', 380, cardY + 35, { continued: true })
+         .fillColor(darkText).font('Helvetica-Bold').text(data.createdAt.toLocaleDateString());
 
-      // Bill To
-      y += 40;
-      doc.fontSize(12).fillColor(primaryColor).text('Bill To:', 50, y);
+      // Client Info & Status (Bottom of Card)
+      doc.fontSize(9).fillColor(grayText).font('Helvetica').text('Invoice to', 60, cardY + 70);
+      doc.fontSize(12).fillColor(darkText).font('Helvetica-Bold').text(data.client.contactName || 'Client Name', 60, cardY + 85);
+      doc.fontSize(9).fillColor(grayText).font('Helvetica').text(data.client.email, 60, cardY + 102);
+
+      doc.fontSize(9).fillColor(grayText).font('Helvetica').text('Payment Status', 240, cardY + 70);
+      doc.fontSize(12).fillColor(darkText).font('Helvetica-Bold').text(data.status, 240, cardY + 85);
+
+      // Total Due Highlight
+      doc.fontSize(9).fillColor(grayText).font('Helvetica').text('Total Due', 400, cardY + 75, { align: 'right', width: 130 });
+      doc.fontSize(22).fillColor(accentColor).font('Helvetica-Bold').text(`${data.currency === 'USD' ? '$' : data.currency}${data.amount.toFixed(2)}`, 400, cardY + 88, { align: 'right', width: 130 });
+
+      // 2. Items Table
+      let y = cardY + cardHeight + 40;
+      
+      // Divider
+      doc.moveTo(40, y).lineTo(555, y).lineWidth(1).dash(2, { space: 2 }).strokeColor('#e5e7eb').stroke().undash();
       y += 20;
-      doc.fontSize(10).fillColor('#333');
-      doc.text(data.client.contactName ?? data.client.email, 50, y);
+
+      // Table Header
+      doc.fontSize(10).fillColor(grayText).font('Helvetica');
+      doc.text('Sr.', 40, y);
+      doc.text('Name', 140, y);
+      doc.text('Price', 340, y);
+      doc.text('Qty', 460, y);
+      doc.text('Amount', 500, y, { align: 'right' });
+
       y += 15;
-      if (data.client.contactName) {
-        doc.text(data.client.contactName, 50, y);
-        y += 15;
-      }
-      doc.text(data.client.email, 50, y);
+      doc.moveTo(40, y).lineTo(555, y).lineWidth(0.5).strokeColor('#f3f4f6').stroke();
       y += 15;
-      if (data.client.phone) {
-        doc.text(data.client.phone, 50, y);
-        y += 15;
-      }
-      if (data.client.address) {
-        doc.text(data.client.address, 50, y);
-        y += 15;
-      }
 
-      // Items table
-      y += 30;
-      doc.rect(50, y, 495, 25).fill(accentColor);
-      doc.fontSize(10).fillColor('#fff');
-      doc.text('Description', 60, y + 7);
-      doc.text('Amount', 430, y + 7, { align: 'right' });
+      // Table Body
+      const items = data.sale.items || [
+        { name: data.sale.description || 'Services Rendered', quantity: 1, unitPrice: data.amount, total: data.amount }
+      ];
 
-      y += 25;
-      doc.fillColor('#333');
-      const description = data.sale.description || 'Services rendered';
-      doc.text(description, 60, y + 7);
-      doc.text(`${data.currency} ${data.amount.toFixed(2)}`, 430, y + 7, { align: 'right' });
+      items.forEach((item, index) => {
+        doc.fontSize(10).fillColor(darkText).font('Helvetica');
+        doc.text(String(index + 1), 40, y);
+        doc.text(item.name, 140, y, { width: 180 });
+        doc.text(`${data.currency === 'USD' ? '$' : ''}${item.unitPrice.toFixed(2)}`, 340, y);
+        doc.text(String(item.quantity), 460, y);
+        doc.font('Helvetica-Bold').text(`${data.currency === 'USD' ? '$' : ''}${item.total.toFixed(2)}`, 500, y, { align: 'right' });
+        
+        y += 30; // Spacing for next item
+      });
 
-      y += 25;
-      doc.moveTo(50, y).lineTo(545, y).strokeColor('#ddd').lineWidth(1).stroke();
+      // 3. Totals Section
+      y += 20;
+      const totalBoxY = y;
+      doc.roundedRect(360, y, 195, 80, 10).fill('#f9fafb');
+      
+      doc.fontSize(10).fillColor(grayText).font('Helvetica').text('Subtotal', 375, y + 15);
+      doc.fillColor(darkText).font('Helvetica-Bold').text(`${data.currency === 'USD' ? '$' : ''}${data.amount.toFixed(2)}`, 500, y + 15, { align: 'right', width: 45 });
+      
+      doc.fontSize(10).fillColor(grayText).font('Helvetica').text('Tax', 375, y + 35);
+      doc.fillColor(darkText).font('Helvetica-Bold').text('$0.00', 500, y + 35, { align: 'right', width: 45 });
 
-      // Total
-      y += 15;
-      doc.fontSize(12).fillColor(primaryColor);
-      doc.text('Total:', 350, y);
-      doc.text(`${data.currency} ${data.amount.toFixed(2)}`, 430, y, { align: 'right' });
+      doc.moveTo(375, y + 55).lineTo(540, y + 55).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
 
-      // Notes
-      if (data.notes) {
-        y += 50;
-        doc.fontSize(10).fillColor('#666');
-        doc.text('Notes:', 50, y);
-        y += 15;
-        doc.text(data.notes, 50, y, { width: 495 });
-      }
+      doc.fontSize(10).fillColor(grayText).font('Helvetica').text('Total Due', 375, y + 65);
+      doc.fillColor(accentColor).font('Helvetica-Bold').text(`${data.currency === 'USD' ? '$' : ''}${data.amount.toFixed(2)}`, 500, y + 65, { align: 'right', width: 45 });
 
-      // Footer
-      doc.fontSize(8).fillColor('#999');
-      doc.text(
-        `Generated by ${data.brand.name} via Sentra Core`,
-        50,
-        doc.page.height - 50,
-        { align: 'center', width: 495 },
-      );
+      // 4. Services Includes & Terms
+      y = totalBoxY + 110;
+      
+      doc.fontSize(12).fillColor(darkText).font('Helvetica-Bold').text('Services Includes', 40, y);
+      y += 20;
+      doc.fontSize(9).fillColor(darkText).font('Helvetica').text(data.sale.description || 'N/A', 40, y);
+      
+      y += 40;
+      doc.fontSize(12).fillColor(darkText).font('Helvetica-Bold').text('Terms', 40, y);
+      y += 20;
+
+      const terms = [
+        'All work is 100% original, professionally ghostwritten/edited, and fully owned by you. We provide unlimited revisions during the writing and editing process. Our dedicated in-house U.S.-based writing team works Monday to Friday to ensure consistent progress. Our Company claims no royalties, credit, or rights—you retain full ownership and profits from your book.',
+        'Publishing turnaround is typically 10–12 business days after final approval. Should you be dissatisfied or if agreed services are not delivered, you may cancel at any time during the project for a full refund. Please note: Refunds are not issued for change of mind.'
+      ];
+
+      terms.forEach(term => {
+        doc.circle(45, y + 3, 2).fill(darkText);
+        doc.fontSize(8.5).fillColor(darkText).font('Helvetica').text(term, 55, y, { width: 500, align: 'justify', lineGap: 2 });
+        y += doc.heightOfString(term, { width: 500 }) + 10;
+      });
+
+      // 5. Footer
+      const footerY = doc.page.height - 80;
+      doc.fontSize(10).fillColor(darkText).font('Helvetica-Bold');
+      
+      const brandWebsite = data.brand.website || `https://${data.brand.name.toLowerCase().replace(/\s+/g, '')}.com`;
+      const brandEmail = data.brand.email || `billing@${data.brand.name.toLowerCase().replace(/\s+/g, '')}.com`;
+      const brandPhone = data.brand.phone || '(888) 909-9431';
+
+      doc.text(brandWebsite, 40, footerY, { align: 'right', width: 515 });
+      doc.text(brandEmail, 40, footerY + 15, { align: 'right', width: 515 });
+      doc.text(brandPhone, 40, footerY + 30, { align: 'right', width: 515 });
 
       doc.end();
     });

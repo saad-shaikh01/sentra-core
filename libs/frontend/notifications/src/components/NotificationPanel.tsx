@@ -20,7 +20,7 @@ export function NotificationPanel({ onNavigate, onClose }: NotificationPanelProp
   }
 
   return (
-    <div className="flex flex-col w-80 max-h-[480px] bg-[#0f1117] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+    <div className="flex flex-col w-80 max-h-[480px] bg-[#09090b] border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
         <h2 className="text-sm font-semibold text-white">

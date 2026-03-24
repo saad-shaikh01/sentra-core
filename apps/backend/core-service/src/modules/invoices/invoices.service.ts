@@ -267,11 +267,19 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
-        sale: { include: { client: true, brand: true } },
+        sale: { 
+          include: { 
+            client: true, 
+            brand: true,
+            items: true,
+          } 
+        },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.sale.organizationId !== orgId) throw new ForbiddenException('Invoice belongs to another organization');
+
+    const themeConfig = (invoice.sale.brand.themeConfig as any) || {};
 
     return this.pdfService.generatePdf({
       invoiceNumber: invoice.invoiceNumber,
@@ -289,10 +297,20 @@ export class InvoicesService {
       brand: {
         name: invoice.sale.brand.name,
         logoUrl: invoice.sale.brand.logoUrl ?? undefined,
+        website: themeConfig.website ?? undefined,
+        email: themeConfig.email ?? undefined,
+        phone: themeConfig.phone ?? undefined,
         colors: invoice.sale.brand.colors as Record<string, string> ?? undefined,
       },
       sale: {
         description: invoice.sale.description ?? undefined,
+        items: invoice.sale.items.map(item => ({
+          name: item.name,
+          description: item.description ?? undefined,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          total: Number(item.unitPrice) * item.quantity,
+        })),
       },
       createdAt: invoice.createdAt,
     });

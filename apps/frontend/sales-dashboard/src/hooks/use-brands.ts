@@ -56,6 +56,19 @@ export function useUpdateBrand() {
   });
 }
 
+export function useUploadBrandLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => api.uploadBrandLogo(id, file),
+    onSuccess: (data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: brandsKeys.lists() });
+      queryClient.setQueryData(brandsKeys.detail(id), data);
+      toast.success('Brand logo uploaded');
+    },
+    onError: (e: Error) => toast.error('Failed to upload brand logo', e.message),
+  });
+}
+
 export function useDeleteBrand() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -128,6 +128,15 @@ export class BrandsService {
 
     const updated = await this.prisma.brand.update({ where: { id }, data });
 
+    const previousUrl =
+      field === 'logo'
+        ? brand.logoUrl
+        : brand.faviconUrl;
+
+    if (previousUrl) {
+      await this.storage.delete(previousUrl, orgId).catch(() => null);
+    }
+
     await this.cache.delByPrefix(`brands:${orgId}:`);
 
     return this.mapToIBrand(updated);
