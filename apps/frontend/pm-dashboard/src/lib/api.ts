@@ -319,7 +319,7 @@ class ApiClient {
     );
   }
 
-  async acceptInvitation(data: { token: string; name: string; password: string }) {
+  async acceptInvitation(data: { token: string; password: string; confirmPassword: string }) {
     return this.fetch<ILoginResponse>('/auth/accept-invite', {
       method: 'POST',
       body: JSON.stringify(data),

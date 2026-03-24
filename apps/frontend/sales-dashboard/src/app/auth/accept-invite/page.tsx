@@ -25,7 +25,6 @@ function AcceptInviteForm() {
     bundles?: Array<{ appCode: string }>;
   } | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
     password: '',
     confirmPassword: '',
   });
@@ -74,8 +73,8 @@ function AcceptInviteForm() {
 
     acceptMutation.mutate({
       token: token!,
-      name: formData.name,
       password: formData.password,
+      confirmPassword: formData.confirmPassword,
     });
   };
 
@@ -211,17 +210,6 @@ function AcceptInviteForm() {
                     value={invitation?.email || ''}
                     disabled
                     className="opacity-70"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    placeholder="Your full name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
