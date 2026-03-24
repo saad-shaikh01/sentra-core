@@ -4,7 +4,7 @@
 - DNS records added for:
   - `sales.sentracoresystems.com` → VPS IP
   - `api.sentracoresystems.com` → VPS IP
-  - `prod.sentracoresystems.com` → VPS IP
+- `pm2.sentracoresystems.com` → VPS IP
 - Wait for DNS propagation (5–30 min), verify with: `ping sales.sentracoresystems.com`
 
 ---
@@ -63,7 +63,7 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Step 5 — SSL certificate
 
 ```bash
-sudo certbot --nginx -d sentracoresystems.com -d sales.sentracoresystems.com -d api.sentracoresystems.com -d prod.sentracoresystems.com
+sudo certbot --nginx -d sentracoresystems.com -d sales.sentracoresystems.com -d api.sentracoresystems.com -d pm2.sentracoresystems.com
 ```
 
 ---

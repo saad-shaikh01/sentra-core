@@ -82,7 +82,7 @@ sudo systemctl reload nginx
 
 ```bash
 sudo certbot --nginx -d testinglinq.com -d sales.testinglinq.com -d pm.testinglinq.com -d hrms.testinglinq.com -d api.testinglinq.com
-sudo certbot --nginx -d sentracoresystems.com -d sales.sentracoresystems.com -d pm.sentracoresystems.com -d hrms.sentracoresystems.com -d api.sentracoresystems.com
+sudo certbot --nginx -d sentracoresystems.com -d sales.sentracoresystems.com -d pm2.sentracoresystems.com -d hrms.sentracoresystems.com -d api.sentracoresystems.com
 ```
 
 ## Deploy Commands
