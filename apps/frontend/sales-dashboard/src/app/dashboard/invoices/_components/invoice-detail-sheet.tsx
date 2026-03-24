@@ -14,7 +14,12 @@ interface InvoiceDetailSheetProps {
 }
 
 type InvoiceWithRelations = IInvoice & {
-  transactions?: IPaymentTransaction[];
+  transactions?: Array<
+    IPaymentTransaction & {
+      gateway?: GatewayType;
+      externalRef?: string;
+    }
+  >;
   sale?: { totalAmount: number; currency: string };
   client?: { contactName?: string; email?: string };
 };
