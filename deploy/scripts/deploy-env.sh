@@ -60,6 +60,12 @@ node deploy/scripts/run-with-env.cjs \
 node deploy/scripts/run-with-env.cjs \
   "${BACKEND_ENV_FILE}" \
   npx prisma migrate deploy --schema=libs/backend/prisma-client/prisma/schema.prisma
+
+# Next.js production serve expects built frontend output in dist/apps/frontend/*
+node deploy/scripts/run-with-env.cjs \
+  "${BACKEND_ENV_FILE}" \
+  npx nx run-many -t build -p sales-dashboard,pm-dashboard,hrms-dashboard --configuration=production
+
 pm2 startOrReload "${PM2_CONFIG}" --update-env
 pm2 save
 
