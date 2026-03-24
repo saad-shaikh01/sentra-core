@@ -17,6 +17,11 @@ interface SaleDetailSheetProps {
   onClose: () => void;
 }
 
+type SaleTransactionWithGateway = ISaleWithRelations['transactions'][number] & {
+  gateway?: GatewayType;
+  externalRef?: string;
+};
+
 export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
   const { data: sale, isLoading, isError } = useSale(saleId ?? '');
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -157,16 +162,18 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Transactions</h3>
                 <div className="space-y-2">
-                  {sale.transactions.map((t) => (
+                  {sale.transactions.map((t) => {
+                    const transaction = t as SaleTransactionWithGateway;
+                    return (
                     <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium">${t.amount}</p>
-                          <GatewayBadge gateway={t.gateway ?? 'AUTHORIZE_NET'} />
+                          <GatewayBadge gateway={transaction.gateway ?? 'AUTHORIZE_NET'} />
                         </div>
                         <p className="text-xs text-muted-foreground">{t.type} · {new Date(t.createdAt).toLocaleDateString()}</p>
-                        {t.externalRef && (
-                          <p className="text-xs text-muted-foreground/60 truncate">Ref: {t.externalRef}</p>
+                        {transaction.externalRef && (
+                          <p className="text-xs text-muted-foreground/60 truncate">Ref: {transaction.externalRef}</p>
                         )}
                         {t.responseMessage && (
                           <p className="text-xs text-muted-foreground/60 truncate">{t.responseMessage}</p>
@@ -176,7 +183,8 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
                         {t.status}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
