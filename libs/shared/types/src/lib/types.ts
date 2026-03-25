@@ -397,6 +397,23 @@ export interface ISignupResponse extends IAuthTokens {
 // BRAND INTERFACES
 // ==========================================
 
+export interface IBrandInvoiceConfig {
+  id: string;
+  brandId: string;
+  billingEmail?: string;
+  supportEmail?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  taxId?: string;
+  dueDays: number;
+  currency: string;
+  invoiceTerms?: string;
+  invoiceNotes?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface IBrand {
   id: string;
   name: string;
@@ -407,6 +424,7 @@ export interface IBrand {
   secondaryColor?: string;
   colors?: Record<string, string>;
   organizationId: string;
+  invoiceConfig?: IBrandInvoiceConfig;
   createdAt?: Date;
 }
 

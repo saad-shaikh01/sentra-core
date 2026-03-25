@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IBrand, IPaginatedResponse } from '@sentra-core/types';
+import { IBrand, IBrandInvoiceConfig, IPaginatedResponse } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService, StorageService } from '../../common';
 import { CreateBrandDto, UpdateBrandDto, QueryBrandsDto } from './dto';
 
@@ -76,12 +76,51 @@ export class BrandsService {
     const cached = await this.cache.get<IBrand>(cacheKey);
     if (cached) return cached;
 
-    const brand = await this.prisma.brand.findFirst({ where: { id, organizationId: orgId } });
+    const brand = await this.prisma.brand.findFirst({
+      where: { id, organizationId: orgId },
+      include: { invoiceConfig: true },
+    });
     if (!brand) throw new NotFoundException('Brand not found');
 
     const result = this.mapToIBrand(brand);
     await this.cache.set(cacheKey, result);
     return result;
+  }
+
+  async getInvoiceConfig(id: string, orgId: string): Promise<IBrandInvoiceConfig | null> {
+    const brand = await this.prisma.brand.findFirst({ where: { id, organizationId: orgId } });
+    if (!brand) throw new NotFoundException('Brand not found');
+
+    const config = await this.prisma.brandInvoiceConfig.findUnique({ where: { brandId: id } });
+    return config ? this.mapToIBrandInvoiceConfig(config) : null;
+  }
+
+  async upsertInvoiceConfig(id: string, orgId: string, dto: Partial<IBrandInvoiceConfig>): Promise<IBrandInvoiceConfig> {
+    const brand = await this.prisma.brand.findFirst({ where: { id, organizationId: orgId } });
+    if (!brand) throw new NotFoundException('Brand not found');
+
+    const data = {
+      billingEmail: dto.billingEmail,
+      supportEmail: dto.supportEmail,
+      phone: dto.phone,
+      website: dto.website,
+      address: dto.address,
+      taxId: dto.taxId,
+      dueDays: dto.dueDays,
+      currency: dto.currency,
+      invoiceTerms: dto.invoiceTerms,
+      invoiceNotes: dto.invoiceNotes,
+    };
+
+    const config = await this.prisma.brandInvoiceConfig.upsert({
+      where: { brandId: id },
+      create: { brandId: id, ...data },
+      update: data,
+    });
+
+    await this.cache.delByPrefix(`brands:${orgId}:`);
+
+    return this.mapToIBrandInvoiceConfig(config);
   }
 
   async update(id: string, orgId: string, dto: UpdateBrandDto): Promise<IBrand> {
@@ -192,7 +231,27 @@ export class BrandsService {
       secondaryColor: brand.secondaryColor ?? undefined,
       colors: (brand.colors as Record<string, string>) ?? undefined,
       organizationId: brand.organizationId,
+      invoiceConfig: brand.invoiceConfig ? this.mapToIBrandInvoiceConfig(brand.invoiceConfig) : undefined,
       createdAt: brand.createdAt,
+    };
+  }
+
+  private mapToIBrandInvoiceConfig(config: any): IBrandInvoiceConfig {
+    return {
+      id: config.id,
+      brandId: config.brandId,
+      billingEmail: config.billingEmail ?? undefined,
+      supportEmail: config.supportEmail ?? undefined,
+      phone: config.phone ?? undefined,
+      website: config.website ?? undefined,
+      address: config.address ?? undefined,
+      taxId: config.taxId ?? undefined,
+      dueDays: config.dueDays,
+      currency: config.currency,
+      invoiceTerms: config.invoiceTerms ?? undefined,
+      invoiceNotes: config.invoiceNotes ?? undefined,
+      createdAt: config.createdAt,
+      updatedAt: config.updatedAt,
     };
   }
 }

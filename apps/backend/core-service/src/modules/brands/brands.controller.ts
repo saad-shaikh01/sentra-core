@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Param,
@@ -15,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { BrandsService } from './brands.service';
 import { Roles, CurrentUser, Public } from '../auth/decorators';
 import { CreateBrandDto, UpdateBrandDto, QueryBrandsDto } from './dto';
-import { UserRole, IBrand, IPaginatedResponse } from '@sentra-core/types';
+import { UserRole, IBrand, IBrandInvoiceConfig, IPaginatedResponse } from '@sentra-core/types';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml', 'image/x-icon'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -87,6 +88,25 @@ export class BrandsController {
   ): Promise<IBrand> {
     this.validateImageFile(file);
     return this.brandsService.uploadAsset(id, orgId, 'favicon', file);
+  }
+
+  @Get(':id/invoice-config')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  getInvoiceConfig(
+    @Param('id') id: string,
+    @CurrentUser('orgId') orgId: string,
+  ): Promise<IBrandInvoiceConfig | null> {
+    return this.brandsService.getInvoiceConfig(id, orgId);
+  }
+
+  @Put(':id/invoice-config')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  upsertInvoiceConfig(
+    @Param('id') id: string,
+    @CurrentUser('orgId') orgId: string,
+    @Body() dto: Partial<IBrandInvoiceConfig>,
+  ): Promise<IBrandInvoiceConfig> {
+    return this.brandsService.upsertInvoiceConfig(id, orgId, dto);
   }
 
   @Delete(':id')

@@ -267,27 +267,27 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
-        sale: { 
-          include: { 
-            client: true, 
-            brand: true,
+        sale: {
+          include: {
+            client: true,
+            brand: { include: { invoiceConfig: true } },
             items: true,
-          } 
+          },
         },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.sale.organizationId !== orgId) throw new ForbiddenException('Invoice belongs to another organization');
 
-    const themeConfig = (invoice.sale.brand.themeConfig as any) || {};
+    const invoiceConfig = (invoice.sale.brand as any).invoiceConfig ?? {};
 
     return this.pdfService.generatePdf({
       invoiceNumber: invoice.invoiceNumber,
       amount: Number(invoice.amount),
-      currency: invoice.sale.currency,
+      currency: invoiceConfig.currency ?? invoice.sale.currency,
       dueDate: invoice.dueDate,
       status: invoice.status,
-      notes: invoice.notes ?? undefined,
+      notes: invoice.notes ?? invoiceConfig.invoiceNotes ?? undefined,
       client: {
         contactName: invoice.sale.client.contactName ?? undefined,
         email: invoice.sale.client.email,
@@ -297,9 +297,11 @@ export class InvoicesService {
       brand: {
         name: invoice.sale.brand.name,
         logoUrl: invoice.sale.brand.logoUrl ?? undefined,
-        website: themeConfig.website ?? undefined,
-        email: themeConfig.email ?? undefined,
-        phone: themeConfig.phone ?? undefined,
+        website: invoiceConfig.website ?? undefined,
+        email: invoiceConfig.billingEmail ?? invoiceConfig.supportEmail ?? undefined,
+        phone: invoiceConfig.phone ?? undefined,
+        address: invoiceConfig.address ?? undefined,
+        taxId: invoiceConfig.taxId ?? undefined,
         colors: invoice.sale.brand.colors as Record<string, string> ?? undefined,
       },
       sale: {
@@ -312,6 +314,7 @@ export class InvoicesService {
           total: Number(item.unitPrice) * item.quantity,
         })),
       },
+      invoiceTerms: invoiceConfig.invoiceTerms ?? undefined,
       createdAt: invoice.createdAt,
     });
   }

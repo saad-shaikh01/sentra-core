@@ -617,8 +617,34 @@ model Brand {
 
   members BrandAccess[]
   teamBrand TeamBrand?
+  invoiceConfig BrandInvoiceConfig?
 
   @@index([organizationId])
+}
+
+model BrandInvoiceConfig {
+  id      String @id @default(uuid())
+  brandId String @unique
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  // Contact info shown in invoice footer
+  billingEmail String?
+  supportEmail String?
+  phone        String?
+  website      String?
+  address      String?
+  taxId        String?
+
+  // Invoice defaults
+  dueDays  Int    @default(30)
+  currency String @default("USD")
+
+  // PDF content
+  invoiceTerms String? @db.Text
+  invoiceNotes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ==========================================

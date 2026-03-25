@@ -250,6 +250,7 @@ export class LeadsService {
   async create(
     orgId: string,
     userId: string,
+    userRole: UserRole,
     dto: CreateLeadDto,
   ): Promise<ILead> {
     const title = dto.title?.trim() || this.generateTitle({
@@ -258,7 +259,13 @@ export class LeadsService {
       source: dto.source,
     });
 
-    const teamId = await this.teamBrandHelper.resolveTeamForBrand(dto.brandId);
+    const shouldAutoAssignToCreator =
+      userRole === UserRole.FRONTSELL_AGENT && !dto.assignedToId;
+    const assignedToId = shouldAutoAssignToCreator ? userId : dto.assignedToId;
+    const creatorTeamId = shouldAutoAssignToCreator
+      ? await this.resolveCreatorTeamId(orgId, userId)
+      : null;
+    const teamId = creatorTeamId ?? await this.teamBrandHelper.resolveTeamForBrand(dto.brandId);
 
     const lead = await this.prisma.lead.create({
       data: {
@@ -274,7 +281,7 @@ export class LeadsService {
         status: LeadStatus.NEW,
         brandId: dto.brandId,
         organizationId: orgId,
-        assignedToId: dto.assignedToId,
+        assignedToId,
         teamId,
       },
     });
@@ -291,6 +298,26 @@ export class LeadsService {
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
     return this.mapToILead(lead);
+  }
+
+  private async resolveCreatorTeamId(
+    orgId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const membership = await this.prisma.teamMember.findFirst({
+      where: {
+        userId,
+        team: {
+          organizationId: orgId,
+          deletedAt: null,
+          isActive: true,
+        },
+      },
+      select: { teamId: true },
+      orderBy: { joinedAt: 'asc' },
+    });
+
+    return membership?.teamId ?? null;
   }
 
   async import(

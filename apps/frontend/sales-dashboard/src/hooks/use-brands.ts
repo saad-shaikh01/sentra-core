@@ -2,14 +2,15 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { IBrand, IPaginatedResponse } from '@sentra-core/types';
+import { IBrand, IBrandInvoiceConfig, IPaginatedResponse } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const brandsKeys = {
-  all:    ['brands'] as const,
-  lists:  () => [...brandsKeys.all, 'list'] as const,
-  list:   (params: object) => [...brandsKeys.lists(), params] as const,
-  detail: (id: string)     => [...brandsKeys.all, 'detail', id] as const,
+  all:           ['brands'] as const,
+  lists:         () => [...brandsKeys.all, 'list'] as const,
+  list:          (params: object) => [...brandsKeys.lists(), params] as const,
+  detail:        (id: string) => [...brandsKeys.all, 'detail', id] as const,
+  invoiceConfig: (id: string) => [...brandsKeys.all, 'invoice-config', id] as const,
 };
 
 export function useBrands(params?: Record<string, unknown>) {
@@ -25,6 +26,15 @@ export function useBrand(id: string) {
   return useQuery({
     queryKey: brandsKeys.detail(id),
     queryFn:  () => api.getBrand(id) as Promise<IBrand>,
+    enabled:  !!id,
+    staleTime: 60_000,
+  });
+}
+
+export function useBrandInvoiceConfig(id: string) {
+  return useQuery({
+    queryKey: brandsKeys.invoiceConfig(id),
+    queryFn:  () => api.getBrandInvoiceConfig(id) as Promise<IBrandInvoiceConfig | null>,
     enabled:  !!id,
     staleTime: 60_000,
   });
@@ -53,6 +63,20 @@ export function useUpdateBrand() {
       toast.success('Brand updated');
     },
     onError: (e: Error) => toast.error('Failed to update brand', e.message),
+  });
+}
+
+export function useUpdateBrandInvoiceConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
+      api.updateBrandInvoiceConfig(id, dto),
+    onSuccess: (data, { id }) => {
+      queryClient.setQueryData(brandsKeys.invoiceConfig(id), data);
+      queryClient.invalidateQueries({ queryKey: brandsKeys.detail(id) });
+      toast.success('Invoice config saved');
+    },
+    onError: (e: Error) => toast.error('Failed to save invoice config', e.message),
   });
 }
 

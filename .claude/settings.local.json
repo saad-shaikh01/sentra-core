@@ -47,7 +47,8 @@
       "Bash(grep -rn \"fcm.*token\\\\|saveFcmToken\\\\|registerFcm\\\\|fcmToken\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)",
       "Bash(grep -rn \"fcm\\\\|fcmToken\\\\|device.*token\\\\|registerToken\\\\|push.*token\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\backend\\\\core-service\\\\src\\\\modules\\\\notifications' --include=*.ts)",
       "Bash(grep -rn \"getToken\\\\|requestPermission\\\\|fcmToken\\\\|messaging\\\\\\(\\\\\\)\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)",
-      "Bash(grep -rn \"push-token\\\\|pushToken\\\\|registerPush\\\\|firebase.*messaging\\\\|getToken\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)"
+      "Bash(grep -rn \"push-token\\\\|pushToken\\\\|registerPush\\\\|firebase.*messaging\\\\|getToken\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)",
+      "Bash(grep -rn IBrandInvoiceConfig 'D:/Repositories/new crm/sentra-core/libs/shared/types/src' --include=*.ts)"
     ]
   }
 }

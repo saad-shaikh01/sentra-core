@@ -10,6 +10,7 @@ import { useBrands, useDeleteBrand } from '@/hooks/use-brands';
 import { useUIStore } from '@/stores/ui-store';
 import { IBrand } from '@sentra-core/types';
 import { BrandFormModal } from './_components/brand-form-modal';
+import { BrandDetailSheet } from './_components/brand-detail-sheet';
 import { useDebounce } from '@/hooks/use-debounce';
 
 export default function BrandsPage() {
@@ -34,6 +35,7 @@ export default function BrandsPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editBrand, setEditBrand] = useState<IBrand | null>(null);
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchInput(value);
@@ -113,6 +115,7 @@ export default function BrandsPage() {
         isLoading={isLoading}
         isError={isError}
         keyExtractor={(b) => b.id}
+        onRowClick={(b) => setSelectedBrandId(b.id)}
         emptyTitle="No brands yet"
         emptyDescription="Create your first brand to get started."
       />
@@ -129,6 +132,11 @@ export default function BrandsPage() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         brand={editBrand}
+      />
+
+      <BrandDetailSheet
+        brandId={selectedBrandId}
+        onClose={() => setSelectedBrandId(null)}
       />
     </div>
   );

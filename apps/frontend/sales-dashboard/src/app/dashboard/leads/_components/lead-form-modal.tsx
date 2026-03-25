@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/hooks/use-auth';
 import { useCreateLead, useUpdateLead } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { useTeams } from '@/hooks/use-teams';
-import { ILeadDetail, LeadSource, LeadType, UserRole } from '@sentra-core/types';
+import { hasMinimumRole, ILeadDetail, LeadSource, LeadType, UserRole } from '@sentra-core/types';
 
 const LEAD_TYPE_OPTIONS: Array<{ value: LeadType; label: string }> = [
   { value: LeadType.CHAT, label: 'Chat' },
@@ -90,11 +91,13 @@ const defaultValues: FormValues = {
 
 export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) {
   const isEdit = !!lead;
+  const { user } = useAuth();
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const { data: brandsData } = useBrands({ limit: 100 });
   const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
   const { data: teamsData } = useTeams({ limit: 100 });
+  const canManageAssignment = user?.role ? hasMinimumRole(user.role, UserRole.SALES_MANAGER) : false;
 
   const {
     register,
@@ -155,8 +158,8 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
       ...(values.leadType && { leadType: values.leadType }),
       ...(values.source && { source: values.source }),
       ...(values.leadDate && { leadDate: values.leadDate }),
-      ...(values.assignedToId && { assignedToId: values.assignedToId }),
-      ...(values.teamId && { teamId: values.teamId }),
+      ...(canManageAssignment && values.assignedToId && { assignedToId: values.assignedToId }),
+      ...(canManageAssignment && values.teamId && { teamId: values.teamId }),
     };
 
     if (isEdit && lead) {
@@ -252,7 +255,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${canManageAssignment ? 'sm:grid-cols-2' : ''}`}>
           <div className="space-y-1.5">
             <Label>Brand</Label>
             <Select
@@ -271,39 +274,43 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
             {errors.brandId && <p className="text-sm text-red-400 mt-1">{errors.brandId.message}</p>}
           </div>
 
+          {canManageAssignment && (
+            <div className="space-y-1.5">
+              <Label>Front Sell Agent</Label>
+              <Select value={assignedToId || 'none'} onValueChange={(v) => setValue('assignedToId', v === 'none' ? '' : v)}>
+                <SelectTrigger className="bg-white/5 border-white/10">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {frontSellAgents?.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        {canManageAssignment && (
           <div className="space-y-1.5">
-            <Label>Front Sell Agent</Label>
-            <Select value={assignedToId || 'none'} onValueChange={(v) => setValue('assignedToId', v === 'none' ? '' : v)}>
+            <Label>Team</Label>
+            <Select
+              value={teamId || 'none'}
+              onValueChange={(v) => setValue('teamId', v === 'none' ? '' : v)}
+            >
               <SelectTrigger className="bg-white/5 border-white/10">
-                <SelectValue placeholder="Unassigned" />
+                <SelectValue placeholder="No team assigned" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Unassigned</SelectItem>
-                {frontSellAgents?.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                <SelectItem value="none">No team</SelectItem>
+                {teamsData?.data.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Team</Label>
-          <Select
-            value={teamId || 'none'}
-            onValueChange={(v) => setValue('teamId', v === 'none' ? '' : v)}
-          >
-            <SelectTrigger className="bg-white/5 border-white/10">
-              <SelectValue placeholder="No team assigned" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No team</SelectItem>
-              {teamsData?.data.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

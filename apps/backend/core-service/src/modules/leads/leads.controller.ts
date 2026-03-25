@@ -103,7 +103,7 @@ export class LeadsController {
     @Body() dto: CreateLeadDto,
     @CurrentUser() user: JwtPayload,
   ): Promise<ILead> {
-    return this.leadsService.create(user.orgId, user.sub, dto);
+    return this.leadsService.create(user.orgId, user.sub, user.role, dto);
   }
 
   @Get()

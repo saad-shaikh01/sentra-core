@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
 import { CacheService } from '../../common';
-import { TeamsService } from '../teams';
+import { ScopeService } from '../scope/scope.service';
+import { TeamBrandHelper } from '../scope/team-brand.helper';
 import { LeadsService } from './leads.service';
 
 interface LeadRecord {
@@ -15,11 +17,15 @@ interface LeadRecord {
   phone: string | null;
   website: string | null;
   status: LeadStatus;
+  leadType: string | null;
   source: string | null;
+  leadDate: Date | null;
+  lostReason: string | null;
   data: Record<string, unknown> | null;
   brandId: string;
   organizationId: string;
   assignedToId: string | null;
+  teamId: string | null;
   convertedClientId: string | null;
   followUpDate: Date | null;
   createdAt: Date;
@@ -73,11 +79,15 @@ function makeLead(overrides: Partial<LeadRecord> = {}): LeadRecord {
     phone: '+15550000000',
     website: 'https://example.com',
     status: LeadStatus.NEW,
+    leadType: LeadType.INBOUND,
     source: 'Referral',
+    leadDate: new Date('2026-01-01T00:00:00.000Z'),
+    lostReason: null,
     data: null,
     brandId,
     organizationId: orgId,
     assignedToId: userId,
+    teamId: null,
     convertedClientId: null,
     followUpDate: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -120,6 +130,9 @@ describe('LeadsService', () => {
       create: jest.Mock;
       createMany: jest.Mock;
     };
+    teamMember: {
+      findFirst: jest.Mock;
+    };
     user: {
       findUnique: jest.Mock;
     };
@@ -132,8 +145,15 @@ describe('LeadsService', () => {
     delByPrefix: jest.Mock;
     hashQuery: jest.Mock;
   };
-  let teamsMock: {
-    getMemberIds: jest.Mock;
+  let scopeServiceMock: {
+    getUserScope: jest.Mock;
+  };
+  let teamBrandHelperMock: {
+    resolveTeamForBrand: jest.Mock;
+    resolveBrandTeamMap: jest.Mock;
+  };
+  let notifQueueMock: {
+    add: jest.Mock;
   };
   let transactionClient: TransactionClient;
 
@@ -167,6 +187,9 @@ describe('LeadsService', () => {
         create: jest.fn(),
         createMany: jest.fn(),
       },
+      teamMember: {
+        findFirst: jest.fn(),
+      },
       user: {
         findUnique: jest.fn(),
       },
@@ -181,8 +204,24 @@ describe('LeadsService', () => {
       hashQuery: jest.fn().mockReturnValue('hash'),
     };
 
-    teamsMock = {
-      getMemberIds: jest.fn().mockResolvedValue([]),
+    scopeServiceMock = {
+      getUserScope: jest.fn(async (requestedUserId: string, requestedOrgId: string, role: UserRole) => ({
+        isFullAccess: role === UserRole.ADMIN || role === UserRole.OWNER,
+        toLeadFilter: () => (
+          role === UserRole.FRONTSELL_AGENT
+            ? { organizationId: requestedOrgId, assignedToId: requestedUserId }
+            : { organizationId: requestedOrgId }
+        ),
+      })),
+    };
+
+    teamBrandHelperMock = {
+      resolveTeamForBrand: jest.fn().mockResolvedValue(null),
+      resolveBrandTeamMap: jest.fn().mockResolvedValue(new Map()),
+    };
+
+    notifQueueMock = {
+      add: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -190,11 +229,67 @@ describe('LeadsService', () => {
         LeadsService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: CacheService, useValue: cacheMock },
-        { provide: TeamsService, useValue: teamsMock },
+        { provide: ScopeService, useValue: scopeServiceMock },
+        { provide: TeamBrandHelper, useValue: teamBrandHelperMock },
+        { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: notifQueueMock },
       ],
     }).compile();
 
     service = module.get<LeadsService>(LeadsService);
+  });
+
+  it('TC-B0: create auto-assigns frontsell leads to the creator and creator team', async () => {
+    prismaMock.teamMember.findFirst.mockResolvedValue({ teamId: 'team-frontsell' });
+    prismaMock.lead.create.mockResolvedValue(
+      makeLead({
+        id: 'lead-created-frontsell',
+        assignedToId: userId,
+        teamId: 'team-frontsell',
+      }),
+    );
+    prismaMock.leadActivity.create.mockResolvedValue({ id: 'activity-created' });
+
+    const result = await service.create(orgId, userId, UserRole.FRONTSELL_AGENT, { brandId });
+
+    expect(prismaMock.lead.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        organizationId: orgId,
+        brandId,
+        assignedToId: userId,
+        teamId: 'team-frontsell',
+      }),
+    }));
+    expect(teamBrandHelperMock.resolveTeamForBrand).not.toHaveBeenCalled();
+    expect(result.assignedToId).toBe(userId);
+    expect(result.teamId).toBe('team-frontsell');
+  });
+
+  it('TC-B0.1: create preserves manual assignee behavior for admin users', async () => {
+    teamBrandHelperMock.resolveTeamForBrand.mockResolvedValue('team-brand');
+    prismaMock.lead.create.mockResolvedValue(
+      makeLead({
+        id: 'lead-created-admin',
+        assignedToId: otherUserId,
+        teamId: 'team-brand',
+      }),
+    );
+    prismaMock.leadActivity.create.mockResolvedValue({ id: 'activity-created-admin' });
+
+    const result = await service.create(orgId, adminId, UserRole.ADMIN, {
+      brandId,
+      assignedToId: otherUserId,
+    });
+
+    expect(prismaMock.teamMember.findFirst).not.toHaveBeenCalled();
+    expect(teamBrandHelperMock.resolveTeamForBrand).toHaveBeenCalledWith(brandId);
+    expect(prismaMock.lead.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        assignedToId: otherUserId,
+        teamId: 'team-brand',
+      }),
+    }));
+    expect(result.assignedToId).toBe(otherUserId);
+    expect(result.teamId).toBe('team-brand');
   });
 
   it('TC-B1: changeStatus to FOLLOW_UP without followUpDate throws BadRequestException', async () => {

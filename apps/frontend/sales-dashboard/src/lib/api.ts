@@ -410,6 +410,17 @@ class ApiClient {
     return this.fetch<{ message: string }>(`/brands/${id}`, { method: 'DELETE' });
   }
 
+  async getBrandInvoiceConfig(id: string) {
+    return this.fetch<any>(`/brands/${id}/invoice-config`);
+  }
+
+  async updateBrandInvoiceConfig(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/brands/${id}/invoice-config`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    });
+  }
+
   // Team-Brand endpoints
   async getTeamBrands() {
     return this.fetch<any[]>('/team-brands');
