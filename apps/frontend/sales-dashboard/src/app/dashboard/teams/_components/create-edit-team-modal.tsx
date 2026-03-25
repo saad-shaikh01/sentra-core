@@ -39,6 +39,8 @@ type FormState = {
   typeId: string;
   description: string;
   managerId: string | null;
+  leadVisibilityMode: 'OWN_ONLY' | 'TEAM_UNASSIGNED_ONLY' | 'TEAM_ALL';
+  allowMemberVisibility: boolean;
 };
 
 function getInitialForm(team: TeamEditable): FormState {
@@ -47,6 +49,8 @@ function getInitialForm(team: TeamEditable): FormState {
     typeId: team?.type.id ?? '',
     description: team?.description ?? '',
     managerId: team?.manager?.id ?? null,
+    leadVisibilityMode: (team as any)?.leadVisibilityMode ?? 'OWN_ONLY',
+    allowMemberVisibility: (team as any)?.allowMemberVisibility ?? false,
   };
 }
 
@@ -149,6 +153,55 @@ export function CreateEditTeamModal({
           </div>
 
           <div className="space-y-2">
+            <Label>Lead Visibility Mode</Label>
+            <Select
+              value={form.leadVisibilityMode}
+              onValueChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  leadVisibilityMode: value as FormState['leadVisibilityMode'],
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="OWN_ONLY">Own Only — agents see only their own leads</SelectItem>
+                <SelectItem value="TEAM_UNASSIGNED_ONLY">Team Unassigned — agents see unassigned pool</SelectItem>
+                <SelectItem value="TEAM_ALL">Team All — agents see all team leads</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-white/10 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Allow Member Visibility</p>
+              <p className="text-xs text-muted-foreground">Let team members see each other's leads</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.allowMemberVisibility}
+              onClick={() =>
+                setForm((current) => ({
+                  ...current,
+                  allowMemberVisibility: !current.allowMemberVisibility,
+                }))
+              }
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                form.allowMemberVisibility ? 'bg-primary' : 'bg-input'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                  form.allowMemberVisibility ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="manager-search">Manager Search</Label>
             <Input
               id="manager-search"
@@ -192,6 +245,8 @@ export function CreateEditTeamModal({
                 typeId: form.typeId,
                 description: form.description.trim() || undefined,
                 managerId: form.managerId ?? undefined,
+                leadVisibilityMode: form.leadVisibilityMode,
+                allowMemberVisibility: form.allowMemberVisibility,
               };
 
               if (editTarget?.id) {

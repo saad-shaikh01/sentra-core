@@ -552,7 +552,21 @@ export class LeadsService {
       } else if (leadView === 'collaborating') {
         viewFilter = { collaborators: { some: { userId } } };
       } else if (leadView === 'pool') {
-        viewFilter = { assignedToId: null, teamId: { not: null } };
+        if (scope.isFullAccess || scope.isManager) {
+          // Admins and managers have no scope OR conflict — simple AND filter works
+          viewFilter = { assignedToId: null, teamId: { not: null } };
+        } else {
+          // Agents: the scope OR (own + collaborating) conflicts with assignedToId: null.
+          // Remove the OR and filter directly to unassigned leads in the agent's own teams,
+          // regardless of per-team leadVisibilityMode — explicit pool request bypasses that.
+          const agentTeamIds = scopeData.teamIds;
+          if (agentTeamIds.length > 0) {
+            delete (where as any).OR;
+            viewFilter = { assignedToId: null, teamId: { in: agentTeamIds } };
+          } else {
+            viewFilter = { id: { in: [] } }; // agent has no teams → empty pool
+          }
+        }
       } else if (leadView === 'team') {
         viewFilter = scopeData.teamIds.length > 0
           ? { teamId: { in: scopeData.teamIds } }

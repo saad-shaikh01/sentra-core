@@ -233,7 +233,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const isFrontsell = userRole === UserRole.FRONTSELL_AGENT;
   const canAssign = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
   const canConvert = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
-  const canCreateSale = userRole ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) : false;
+  const canCreateSale = userRole ? (hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) || isFrontsell) : false;
   const showReadOnlyAssignee = !!userRole && !canAssign && !isFrontsell;
   const isLeadClosed = lead?.status === LeadStatus.CLOSED_WON || lead?.status === LeadStatus.CLOSED_LOST;
   const isOwner = !!user && lead?.assignedToId === user.id;

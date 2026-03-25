@@ -161,7 +161,7 @@ export class InvoicesService {
     const cached = await this.cache.get<IPaginatedResponse<IInvoice>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, search, status, saleId, dueBefore, dueAfter } = query;
+    const { page, limit, search, status, saleId, salesAgentId, brandId, dueBefore, dueAfter } = query;
 
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const invoiceScope = scope.toInvoiceFilter();
@@ -171,6 +171,8 @@ export class InvoicesService {
         is: {
           organizationId: orgId,
           ...(invoiceScope.sale?.is ?? {}),
+          ...(salesAgentId ? { salesAgentId } : {}),
+          ...(brandId ? { brandId } : {}),
         },
       },
     };

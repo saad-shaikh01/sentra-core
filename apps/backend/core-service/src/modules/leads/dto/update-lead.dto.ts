@@ -52,6 +52,6 @@ export class UpdateLeadDto {
 
   @IsOptional()
   @ValidateIf((o) => o.teamId !== null)
-  @IsUUID()
+  @IsString()
   teamId?: string | null;
 }

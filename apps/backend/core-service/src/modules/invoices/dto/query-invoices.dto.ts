@@ -16,6 +16,14 @@ export class QueryInvoicesDto extends PaginationQueryDto {
   saleId?: string;
 
   @IsOptional()
+  @IsString()
+  salesAgentId?: string;
+
+  @IsOptional()
+  @IsString()
+  brandId?: string;
+
+  @IsOptional()
   @IsDateString()
   dueBefore?: string;
 

@@ -1,80 +1,34 @@
-Task: Fix Invoice Visibility and Dashboard Invoice Summary Scoping
+Fix the role-based visibility issue for action buttons on **Lead Detail**.
 
-Context:
-We already have role-based scope logic in the sales CRM, and `Leads` / `Sales` are mostly scoped correctly by role. But `Invoices` currently have inconsistent behavior.
+### Problem
 
-Problem to fix:
-Invoice visibility must never be broader than the related Sale visibility.
+On **Lead Detail**, action buttons such as **New Sale** (and related sale/action buttons) are visible for **Admin** and **Manager**, but they are **not visible for Frontsell Agents**.
 
-Current issue observed in codebase:
-1. `GET /invoices` list is scoped using `scope.toInvoiceFilter()` and appears mostly correct.
-2. Dashboard invoice summary in analytics is NOT scoped by user role and can show org-wide invoice data.
-3. `GET /invoices/summary` is also NOT scoped by user role; it currently only uses `orgId` and optional `brandId`.
-4. `GET /invoices/:id` and `GET /invoices/:id/pdf` only validate `orgId`, not the requesting user’s role-based scope.
-This creates a risk where a user may not see other users’ leads/sales, but can still see invoice totals or access invoice details/PDFs that belong to other users within the same org.
+This needs to be investigated and fixed.
 
-Goal:
-Make invoice access consistent with sale access everywhere.
+### Current Issue
 
-Required behavior:
-1. Invoice access must inherit sale scope.
-2. A user must only be able to:
-   - list invoices for sales they are allowed to access
-   - see invoice summary for sales they are allowed to access
-   - open invoice detail only if the related sale is in their scope
-   - download invoice PDF only if the related sale is in their scope
-   - pay invoice only if the related sale is in their scope, in addition to any existing role/payment restrictions
-3. Dashboard invoice summary cards must use the same scoped invoice visibility as the invoices module.
-4. Do not widen access for any role.
+* **Admin** can see the button(s)
+* **Manager** can see the button(s)
+* **Frontsell Agent** cannot see the same button(s)
 
-Expected role behavior:
-- OWNER / ADMIN:
-  - full org invoice access
-- SALES_MANAGER:
-  - invoices only for their scoped brands / teams / sales
-- FRONTSELL_AGENT:
-  - invoices only for sales they are allowed to access
-- UPSELL_AGENT:
-  - invoices only for their scoped client sales
-- PROJECT_MANAGER:
-  - follow existing scope rules strictly; do not assume broader invoice access unless current sale scope explicitly allows it
+Because of this, Frontsell Agents are unable to access the expected sales flow from Lead Detail.
 
-Implementation guidance:
-1. Reuse existing scope infrastructure.
-2. Prefer using `ScopeService` + `scope.toInvoiceFilter()` or sale-scope derived filtering as the single source of truth.
-3. Fix these backend areas:
-   - analytics summary invoice cards
-   - invoices summary endpoint
-   - invoice detail endpoint
-   - invoice PDF endpoint
-   - invoice pay endpoint if needed for scope consistency
-4. If necessary, add a helper method to centralize “can current user access this invoice?” logic by checking the related sale against scope.
-5. Preserve existing non-scope business rules unless they conflict with security.
+### Expected Behavior
 
-Files likely involved:
-- `apps/backend/core-service/src/modules/analytics/analytics.service.ts`
-- `apps/backend/core-service/src/modules/invoices/invoices.controller.ts`
-- `apps/backend/core-service/src/modules/invoices/invoices.service.ts`
-- `apps/backend/core-service/src/modules/scope/user-scope.class.ts`
-- any related tests
+* If Frontsell Agents are supposed to have permission for this action, then the same button(s) should also be visible to them on **Lead Detail**.
+* Button visibility should be aligned with actual permissions and allowed actions.
+* UI role checks and backend permission logic should remain consistent.
+* A role should not be blocked at UI level if that role is allowed to perform the action.
 
-Testing requirements:
-Add or update tests to verify:
-1. Invoice list remains scoped.
-2. Dashboard invoice summary is scoped by role.
-3. `/invoices/summary` is scoped by role.
-4. `/invoices/:id` blocks access to invoices outside user scope.
-5. `/invoices/:id/pdf` blocks access to invoices outside user scope.
-6. Existing allowed access still works for authorized roles.
-7. No regression for OWNER / ADMIN full access.
+### What to Check
 
-Important constraints:
-- Do not change unrelated behavior.
-- Do not remove existing role restrictions already present on controller methods.
-- Do not assume current behavior is correct if it conflicts with scope consistency.
-- Security/correct scoping is the priority.
+* frontend role-based conditional rendering on Lead Detail
+* permission constants / role mapping for Frontsell Agent
+* whether visibility is based on wrong role name or missing role case
+* whether the button is hidden by UI only, even though API/action is allowed
+* whether Lead Detail action permissions differ incorrectly from other modules/pages
 
-Deliverables:
-1. Implement the fix.
-2. Add/update tests.
-3. Briefly summarize what was changed and any assumptions made.
+### Fix Requirement
+
+Make sure **Frontsell Agents** can see the relevant Lead Detail action button(s), including **New Sale**, wherever their role is supposed to have access, and keep the UI + permission behavior consistent across the module.

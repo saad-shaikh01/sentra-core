@@ -36,6 +36,8 @@ export interface TeamSummary {
   type: TeamTypeRecord;
   manager: TeamManager | null;
   memberCount: number;
+  allowMemberVisibility: boolean;
+  leadVisibilityMode: 'OWN_ONLY' | 'TEAM_UNASSIGNED_ONLY' | 'TEAM_ALL';
   isActive: boolean;
   deletedAt: string | null;
   createdAt: string;

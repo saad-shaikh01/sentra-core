@@ -20,7 +20,15 @@ type InvoiceWithRelations = IInvoice & {
       externalRef?: string;
     }
   >;
-  sale?: { totalAmount: number; currency: string };
+  sale?: {
+    totalAmount: number;
+    currency: string;
+    gateway?: GatewayType | string;
+    customerProfileId?: string;
+    paymentProfileId?: string;
+    gatewayCustomerId?: string;
+    gatewayPaymentMethodId?: string;
+  };
   client?: { contactName?: string; email?: string };
 };
 
@@ -86,15 +94,27 @@ export function InvoiceDetailSheet({ invoiceId, onClose }: InvoiceDetailSheetPro
               <Download className="h-4 w-4" />
               Download PDF
             </Button>
-            {invoice.status !== InvoiceStatus.PAID && (
-              <Button
-                className="flex-1"
-                onClick={handlePay}
-                disabled={payInvoice.isPending}
-              >
-                {payInvoice.isPending ? 'Processing…' : 'Pay Invoice'}
-              </Button>
-            )}
+            {invoice.status !== InvoiceStatus.PAID && (() => {
+              const saleGateway = invoice.sale?.gateway ?? 'MANUAL';
+              const isManual = saleGateway === 'MANUAL';
+              const hasProfiles =
+                !!(invoice.sale?.customerProfileId || invoice.sale?.gatewayCustomerId) &&
+                !!(invoice.sale?.paymentProfileId || invoice.sale?.gatewayPaymentMethodId);
+              const canPay = isManual || hasProfiles;
+              return canPay ? (
+                <Button
+                  className="flex-1"
+                  onClick={handlePay}
+                  disabled={payInvoice.isPending}
+                >
+                  {payInvoice.isPending ? 'Processing…' : 'Pay Invoice'}
+                </Button>
+              ) : (
+                <div className="flex-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+                  Payment profiles not configured on this sale. Use Charge from the sale detail instead.
+                </div>
+              );
+            })()}
           </div>
 
           {/* Transactions */}

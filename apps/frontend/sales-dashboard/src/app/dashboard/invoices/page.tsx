@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useInvoices, useDeleteInvoice } from '@/hooks/use-invoices';
 import { useSales } from '@/hooks/use-sales';
+import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { useUIStore } from '@/stores/ui-store';
 import { IInvoice, InvoiceStatus } from '@sentra-core/types';
@@ -19,13 +20,15 @@ import { InvoiceDetailSheet } from './_components/invoice-detail-sheet';
 
 export default function InvoicesPage() {
   const [params, setParams] = useQueryStates({
-    page:       parseAsInteger.withDefault(1),
-    limit:      parseAsInteger.withDefault(20),
-    search:     parseAsString.withDefault(''),
-    status:     parseAsStringEnum<InvoiceStatus>(Object.values(InvoiceStatus)),
-    saleId:     parseAsString,
-    dueBefore:  parseAsString,
-    dueAfter:   parseAsString,
+    page:          parseAsInteger.withDefault(1),
+    limit:         parseAsInteger.withDefault(20),
+    search:        parseAsString.withDefault(''),
+    status:        parseAsStringEnum<InvoiceStatus>(Object.values(InvoiceStatus)),
+    saleId:        parseAsString,
+    salesAgentId:  parseAsString,
+    brandId:       parseAsString,
+    dueBefore:     parseAsString,
+    dueAfter:      parseAsString,
   });
 
   const [searchInput, setSearchInput] = useState(params.search);
@@ -34,17 +37,20 @@ export default function InvoicesPage() {
   const queryParams = useMemo(() => ({
     page:  params.page,
     limit: params.limit,
-    ...(debouncedSearch  ? { search:    debouncedSearch }  : {}),
-    ...(params.status    ? { status:    params.status }    : {}),
-    ...(params.saleId    ? { saleId:    params.saleId }    : {}),
-    ...(params.dueBefore ? { dueBefore: params.dueBefore } : {}),
-    ...(params.dueAfter  ? { dueAfter:  params.dueAfter }  : {}),
+    ...(debouncedSearch       ? { search:       debouncedSearch }       : {}),
+    ...(params.status         ? { status:       params.status }         : {}),
+    ...(params.saleId         ? { saleId:       params.saleId }         : {}),
+    ...(params.salesAgentId   ? { salesAgentId: params.salesAgentId }   : {}),
+    ...(params.brandId        ? { brandId:      params.brandId }        : {}),
+    ...(params.dueBefore      ? { dueBefore:    params.dueBefore }      : {}),
+    ...(params.dueAfter       ? { dueAfter:     params.dueAfter }       : {}),
   }), [debouncedSearch, params.page, params.limit, params.status, params.saleId,
-       params.dueBefore, params.dueAfter]);
+       params.salesAgentId, params.brandId, params.dueBefore, params.dueAfter]);
 
   const router = useRouter();
   const { data, isLoading, isError } = useInvoices(queryParams);
   const { data: salesData }          = useSales({ limit: 100 });
+  const { data: brandsData }         = useBrands({ limit: 100 });
   const { data: allMembers }         = useMembers();
   const deleteInvoice          = useDeleteInvoice();
   const openConfirmDialog      = useUIStore((s) => s.openConfirmDialog);
@@ -71,6 +77,14 @@ export default function InvoicesPage() {
         displayValue: sale ? `$${sale.totalAmount} ${sale.currency}` : params.saleId,
       });
     }
+    if (params.salesAgentId) {
+      const agent = allMembers?.find((m) => m.id === params.salesAgentId);
+      filters.push({ key: 'salesAgentId', label: 'Agent', displayValue: agent?.name ?? params.salesAgentId });
+    }
+    if (params.brandId) {
+      const brand = brandsData?.data.find((b) => b.id === params.brandId);
+      filters.push({ key: 'brandId', label: 'Brand', displayValue: brand?.name ?? params.brandId });
+    }
     if (params.dueAfter) {
       filters.push({ key: 'dueAfter', label: 'Due after', displayValue: params.dueAfter });
     }
@@ -78,12 +92,14 @@ export default function InvoicesPage() {
       filters.push({ key: 'dueBefore', label: 'Due before', displayValue: params.dueBefore });
     }
     return filters;
-  }, [params, salesData]);
+  }, [params, salesData, allMembers, brandsData]);
 
   const handleClearFilters = () => {
     setParams({
       status: null,
       saleId: null,
+      salesAgentId: null,
+      brandId: null,
       dueAfter: null,
       dueBefore: null,
       page: 1,
@@ -261,6 +277,42 @@ export default function InvoicesPage() {
                   <SelectItem key={s.id} value={s.id}>
                     ${s.totalAmount} {s.currency} · {s.status}
                   </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
+
+          {/* Agent */}
+          <FilterLabel label="Agent">
+            <Select
+              value={params.salesAgentId ?? 'all'}
+              onValueChange={(v) => setParams({ salesAgentId: v === 'all' ? null : v, page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
+                <SelectValue placeholder="All agents" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All agents</SelectItem>
+                {(allMembers ?? []).map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterLabel>
+
+          {/* Brand */}
+          <FilterLabel label="Brand">
+            <Select
+              value={params.brandId ?? 'all'}
+              onValueChange={(v) => setParams({ brandId: v === 'all' ? null : v, page: 1 })}
+            >
+              <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
+                <SelectValue placeholder="All brands" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All brands</SelectItem>
+                {brandsData?.data.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

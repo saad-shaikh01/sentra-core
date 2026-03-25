@@ -151,9 +151,10 @@ function ChargeForm({
           <Select
             value={invoiceId}
             onValueChange={(v) => {
-              setInvoiceId(v);
-              if (v) {
-                const inv = unpaidInvoices.find((i) => i.id === v);
+              const id = v === 'none' ? '' : v;
+              setInvoiceId(id);
+              if (id) {
+                const inv = unpaidInvoices.find((i) => i.id === id);
                 if (inv) setAmount(String(inv.amount));
               }
             }}
@@ -162,7 +163,7 @@ function ChargeForm({
               <SelectValue placeholder="— None —" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">— None —</SelectItem>
+              <SelectItem value="none">— None —</SelectItem>
               {unpaidInvoices.map((inv) => (
                 <SelectItem key={inv.id} value={inv.id}>
                   {inv.invoiceNumber} — ${inv.amount}
@@ -296,9 +297,10 @@ function SavedProfileForm({
           <Select
             value={invoiceId}
             onValueChange={(v) => {
-              setInvoiceId(v);
-              if (v) {
-                const inv = unpaidInvoices.find((i) => i.id === v);
+              const id = v === 'none' ? '' : v;
+              setInvoiceId(id);
+              if (id) {
+                const inv = unpaidInvoices.find((i) => i.id === id);
                 if (inv) setAmount(String(inv.amount));
               }
             }}
@@ -307,7 +309,7 @@ function SavedProfileForm({
               <SelectValue placeholder="— None —" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">— None —</SelectItem>
+              <SelectItem value="none">— None —</SelectItem>
               {unpaidInvoices.map((inv) => (
                 <SelectItem key={inv.id} value={inv.id}>
                   {inv.invoiceNumber} — ${inv.amount}

@@ -15,7 +15,7 @@ import { useBrands } from '@/hooks/use-brands';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
 import { useUIStore } from '@/stores/ui-store';
-import { hasMinimumRole, ISale, SaleStatus, SaleType, UserRole } from '@sentra-core/types';
+import { hasMinimumRole, ISale, InstallmentMode, SaleStatus, SaleType, UserRole } from '@sentra-core/types';
 import { SaleFormModal } from './_components/sale-form-modal';
 import { SaleDetailSheet } from './_components/sale-detail-sheet';
 import { QuickSaleModal } from './_components/quick-sale-modal';
@@ -206,7 +206,11 @@ export default function SalesPage() {
           className: 'w-[100px]',
           render: (s) => (
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/5 bg-white/5 text-muted-foreground/80">
-              {s.paymentPlan === 'ONE_TIME' ? 'One-Time' : s.paymentPlan === 'INSTALLMENTS' ? `${s.installmentCount ?? '?'}x` : 'Sub'}
+              {s.paymentPlan === 'ONE_TIME'
+                ? 'One-Time'
+                : s.paymentPlan === 'INSTALLMENTS'
+                  ? (s.installmentMode === InstallmentMode.CUSTOM ? 'Custom' : `${s.installmentCount ?? '?'}x`)
+                  : 'Sub'}
             </span>
           ),
         },
@@ -268,7 +272,7 @@ export default function SalesPage() {
         },
       ];
     },
-    [canCreateEdit, canDelete, handleDelete, isAuthLoading]
+    [canCreateEdit, canDelete, handleDelete, isAuthLoading, allAgents]
   );
 
   return (

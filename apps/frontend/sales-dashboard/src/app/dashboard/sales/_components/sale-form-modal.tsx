@@ -305,6 +305,12 @@ export function SaleFormModal({
       };
 
       if (isEdit && sale) {
+        // Strip fields not accepted by UpdateSaleDto
+        delete dto.brandId;
+        delete dto.paymentPlan;
+        delete dto.installmentMode;
+        delete dto.customInstallments;
+        delete dto.installmentCount;
         await updateSale.mutateAsync({ id: sale.id, ...dto });
         onOpenChange(false);
       } else {
@@ -555,20 +561,29 @@ export function SaleFormModal({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Payment Plan *</Label>
-            <Select
-              value={watch('paymentPlan')}
-              onValueChange={(v) => setValue('paymentPlan', v as PaymentPlanType)}
-              disabled={isEdit}
-            >
-              <SelectTrigger className="border-white/10 bg-white/5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={PaymentPlanType.ONE_TIME}>One-Time</SelectItem>
-                <SelectItem value={PaymentPlanType.INSTALLMENTS}>Installments</SelectItem>
-                <SelectItem value={PaymentPlanType.SUBSCRIPTION}>Subscription</SelectItem>
-              </SelectContent>
-            </Select>
+            {isEdit ? (
+              <div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-muted-foreground">
+                {watch('paymentPlan') === PaymentPlanType.ONE_TIME
+                  ? 'One-Time'
+                  : watch('paymentPlan') === PaymentPlanType.INSTALLMENTS
+                    ? 'Installments'
+                    : 'Subscription'}
+              </div>
+            ) : (
+              <Select
+                value={watch('paymentPlan')}
+                onValueChange={(v) => setValue('paymentPlan', v as PaymentPlanType)}
+              >
+                <SelectTrigger className="border-white/10 bg-white/5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={PaymentPlanType.ONE_TIME}>One-Time</SelectItem>
+                  <SelectItem value={PaymentPlanType.INSTALLMENTS}>Installments</SelectItem>
+                  <SelectItem value={PaymentPlanType.SUBSCRIPTION}>Subscription</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>Status *</Label>

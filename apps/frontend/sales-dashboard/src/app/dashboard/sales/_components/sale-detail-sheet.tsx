@@ -5,6 +5,7 @@ import { DetailSheet, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { useSale, useCancelSubscription } from '@/hooks/use-sales';
 import { useAuth } from '@/hooks/use-auth';
+import { useMembers } from '@/hooks/use-organization';
 import { useUIStore } from '@/stores/ui-store';
 import { hasMinimumRole, ISaleWithRelations, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
 import { ChargePaymentModal } from '@/components/payment/charge-payment-modal';
@@ -24,7 +25,14 @@ type SaleTransactionWithGateway = ISaleWithRelations['transactions'][number] & {
 export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
   const { data: sale, isLoading, isError } = useSale(saleId ?? '');
   const { user, isLoading: isAuthLoading } = useAuth();
+  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
   const cancelSubscription = useCancelSubscription();
+
+  const allAgents = [...(frontsellAgents ?? []), ...(upsellAgents ?? [])];
+  const agentName = sale?.salesAgentId
+    ? (allAgents.find((a) => a.id === sale.salesAgentId)?.name ?? null)
+    : null;
   const openConfirmDialog = useUIStore((s) => s.openConfirmDialog);
 
   const [chargeOpen, setChargeOpen] = useState(false);
@@ -70,6 +78,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
               <InfoCard label="Currency" value={<span className="text-sm">{sale.currency}</span>} />
               <InfoCard label="Amount" value={<span className="text-sm font-bold">${sale.totalAmount}</span>} />
               <InfoCard label="Client" value={<span className="text-sm">{sale.client.contactName ?? sale.client.email}</span>} />
+              <InfoCard label="Agent" value={<span className="text-sm">{agentName ?? 'Unassigned'}</span>} />
             </div>
 
             {sale.description && (

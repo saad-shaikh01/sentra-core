@@ -297,6 +297,7 @@ export class SalesService {
     actorId: string,
     organizationId: string,
   ): Promise<void> {
+    // Frontsell path: agent owns a lead that was converted to this client
     const lead = await this.prisma.lead.findFirst({
       where: {
         organizationId,
@@ -307,7 +308,19 @@ export class SalesService {
       select: { id: true },
     });
 
-    if (!lead) {
+    if (lead) return;
+
+    // Upsell path: agent is directly assigned as the upsell agent on the client
+    const client = await this.prisma.client.findFirst({
+      where: {
+        id: clientId,
+        organizationId,
+        upsellAgentId: actorId,
+      },
+      select: { id: true },
+    });
+
+    if (!client) {
       throw new ForbiddenException('Agents can only create sales for their own assigned clients');
     }
   }
@@ -818,7 +831,11 @@ export class SalesService {
     }
 
     if (this.isAgentRole(actorRole)) {
-      await this.validateAgentClientScope(sale.clientId, actorId, orgId);
+      // If the agent is the assigned salesAgent on this sale they may update it;
+      // otherwise verify they own the underlying client relationship.
+      if (sale.salesAgentId !== actorId) {
+        await this.validateAgentClientScope(sale.clientId, actorId, orgId);
+      }
 
       const dtoFields = dto as Record<string, unknown>;
       const financialFields = ['totalAmount', 'currency', 'paymentPlan', 'discountType', 'discountValue'];

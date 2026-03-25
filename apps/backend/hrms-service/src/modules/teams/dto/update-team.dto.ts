@@ -1,4 +1,10 @@
-import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+
+enum LeadVisibilityMode {
+  OWN_ONLY = 'OWN_ONLY',
+  TEAM_UNASSIGNED_ONLY = 'TEAM_UNASSIGNED_ONLY',
+  TEAM_ALL = 'TEAM_ALL',
+}
 
 export class UpdateTeamDto {
   @IsOptional()
@@ -24,4 +30,8 @@ export class UpdateTeamDto {
   @IsOptional()
   @IsBoolean()
   allowMemberVisibility?: boolean;
+
+  @IsOptional()
+  @IsEnum(LeadVisibilityMode)
+  leadVisibilityMode?: LeadVisibilityMode;
 }

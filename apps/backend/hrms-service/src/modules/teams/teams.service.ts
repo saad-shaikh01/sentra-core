@@ -99,6 +99,8 @@ export class TeamsService {
         typeId: dto.typeId,
         description: dto.description?.trim() || null,
         managerId: dto.managerId ?? null,
+        ...(dto.leadVisibilityMode !== undefined ? { leadVisibilityMode: dto.leadVisibilityMode } : {}),
+        ...(dto.allowMemberVisibility !== undefined ? { allowMemberVisibility: dto.allowMemberVisibility } : {}),
       },
       include: this.teamDetailInclude,
     });
@@ -126,12 +128,13 @@ export class TeamsService {
         ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
         ...(dto.managerId !== undefined ? { managerId: dto.managerId || null } : {}),
         ...(dto.allowMemberVisibility !== undefined ? { allowMemberVisibility: dto.allowMemberVisibility } : {}),
+      ...(dto.leadVisibilityMode !== undefined ? { leadVisibilityMode: dto.leadVisibilityMode } : {}),
       },
       include: this.teamDetailInclude,
     });
 
     // Invalidate scope cache for all team members when visibility changes
-    if (dto.allowMemberVisibility !== undefined) {
+    if (dto.allowMemberVisibility !== undefined || dto.leadVisibilityMode !== undefined) {
       await this.notifyScopeInvalidation('team', { teamId: id, orgId: organizationId });
     }
 
@@ -351,6 +354,8 @@ export class TeamsService {
       },
       manager: team.manager ? this.mapManager(team.manager) : null,
       memberCount: team._count.members,
+      allowMemberVisibility: team.allowMemberVisibility,
+      leadVisibilityMode: team.leadVisibilityMode,
       isActive: team.isActive,
       deletedAt: team.deletedAt?.toISOString() ?? null,
       createdAt: team.createdAt.toISOString(),
@@ -372,6 +377,8 @@ export class TeamsService {
       manager: team.manager ? this.mapManager(team.manager) : null,
       memberCount: team.members.length,
       members: team.members.map((member: any) => this.mapTeamMember(member)),
+      allowMemberVisibility: team.allowMemberVisibility,
+      leadVisibilityMode: team.leadVisibilityMode,
       isActive: team.isActive,
       createdAt: team.createdAt.toISOString(),
       updatedAt: team.updatedAt.toISOString(),
