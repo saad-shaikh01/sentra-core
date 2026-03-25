@@ -8,7 +8,7 @@ import { CheckCircle2, CircleAlert, Loader2 } from 'lucide-react';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Input, PasswordInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { setTokens } from '@/lib/tokens';
@@ -219,9 +219,8 @@ export default function AcceptInvitePage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="invite-password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="invite-password"
-                    type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     autoComplete="new-password"
@@ -245,9 +244,8 @@ export default function AcceptInvitePage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="invite-confirm-password">Confirm password</Label>
-                  <Input
+                  <PasswordInput
                     id="invite-confirm-password"
-                    type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"

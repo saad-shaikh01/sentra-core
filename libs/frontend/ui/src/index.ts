@@ -1,7 +1,7 @@
 export { cn } from './lib/utils';
 export { Button, buttonVariants } from './lib/button';
 export type { ButtonProps } from './lib/button';
-export { Input } from './lib/input';
+export { Input, PasswordInput } from './lib/input';
 export type { InputProps } from './lib/input';
 export { Label } from './lib/label';
 export {

@@ -7,7 +7,7 @@ import { IFacebookIntegration } from '@sentra-core/types';
 import { PageHeader } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Input, PasswordInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -272,8 +272,7 @@ export default function FacebookLeadIntegrationsPage() {
 
             <div className="space-y-1.5">
               <Label>Access Token {editing ? '(leave blank to keep current token)' : ''}</Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={form.accessToken}
                 onChange={(event) => setForm((current) => ({ ...current, accessToken: event.target.value }))}
                 required={!editing}

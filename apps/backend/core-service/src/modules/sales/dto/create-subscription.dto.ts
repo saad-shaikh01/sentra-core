@@ -1,4 +1,6 @@
-import { IsString, IsNumber, IsEnum, Min, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsEnum, Min, IsOptional, IsObject, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { OpaqueDataDto } from './charge-sale.dto';
 
 export class CreateSubscriptionDto {
   @IsString()
@@ -21,4 +23,14 @@ export class CreateSubscriptionDto {
   @IsNumber()
   @Min(0.01)
   amount: number;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => OpaqueDataDto)
+  opaqueData?: OpaqueDataDto;
+
+  @IsOptional()
+  @IsString()
+  stripePaymentMethodId?: string;
 }

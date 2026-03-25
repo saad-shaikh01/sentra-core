@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useSignup } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, PasswordInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
@@ -137,10 +137,9 @@ export default function SignupPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
                     name="password"
-                    type="password"
                     placeholder="At least 6 characters"
                     value={formData.password}
                     onChange={handleChange}
@@ -149,10 +148,9 @@ export default function SignupPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
+                  <PasswordInput
                     id="confirmPassword"
                     name="confirmPassword"
-                    type="password"
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={handleChange}

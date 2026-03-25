@@ -43,13 +43,13 @@ export function NotificationPushInit({ fetcher, autoRequest = false }: Notificat
         }
       : null;
 
-  const { requestPermission } = usePushNotifications(config);
+  const { requestPermission, isSupported } = usePushNotifications(config);
 
   useEffect(() => {
-    if (autoRequest && config) {
+    if (autoRequest && config && isSupported) {
       requestPermission();
     }
-  }, [autoRequest]);
+  }, [autoRequest, isSupported]);  // re-fires once isSupported becomes true
 
   return null;
 }

@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { FormModal } from '@/components/shared';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, PasswordInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateClient, useUpdateClient } from '@/hooks/use-clients';
@@ -92,7 +92,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
           {!isEdit && (
             <div className="space-y-1.5">
               <Label>Password</Label>
-              <Input type="password" placeholder="••••••••" {...register('password')} />
+              <PasswordInput placeholder="••••••••" {...register('password')} />
             </div>
           )}
         </div>

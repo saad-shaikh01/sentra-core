@@ -6,9 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, PasswordInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
@@ -119,16 +119,12 @@ function ResetPasswordContent() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password" className="text-zinc-300">New Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  {...register('password')}
-                  className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-500 focus:border-primary/50 focus:ring-primary/20"
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                placeholder="••••••••"
+                {...register('password')}
+                className="bg-white/5 border-white/10 text-white placeholder:text-zinc-500 focus:border-primary/50 focus:ring-primary/20"
+              />
               {errors.password && (
                 <p className="text-xs text-red-400">{errors.password.message}</p>
               )}
@@ -136,16 +132,12 @@ function ResetPasswordContent() {
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-zinc-300">Confirm Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  {...register('confirmPassword')}
-                  className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-zinc-500 focus:border-primary/50 focus:ring-primary/20"
-                />
-              </div>
+              <PasswordInput
+                id="confirmPassword"
+                placeholder="••••••••"
+                {...register('confirmPassword')}
+                className="bg-white/5 border-white/10 text-white placeholder:text-zinc-500 focus:border-primary/50 focus:ring-primary/20"
+              />
               {errors.confirmPassword && (
                 <p className="text-xs text-red-400">{errors.confirmPassword.message}</p>
               )}

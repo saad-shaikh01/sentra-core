@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useLogin, AuthError } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, PasswordInput } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { SpotlightBackground } from '@/components/spotlight-background';
@@ -97,9 +97,8 @@ export default function LoginPage() {
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Password</Label>
                   </div>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

@@ -1021,8 +1021,15 @@ export class SalesService {
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
 
-    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
-    const gateway = this.gatewayFactory.resolve(gatewayType);
+    // Detect gateway from payload — stripePaymentMethodId → STRIPE, opaqueData → AUTHORIZE_NET,
+    // neither (saved profile) → use whatever is already stored on the sale.
+    const detectedGatewayType: GatewayType = dto.stripePaymentMethodId
+      ? GatewayType.STRIPE
+      : dto.opaqueData
+      ? GatewayType.AUTHORIZE_NET
+      : (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+
+    const gateway = this.gatewayFactory.resolve(detectedGatewayType);
 
     // Resolve profile IDs — support both legacy Authorize.Net fields and new gateway-agnostic fields
     let gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId ?? null;
@@ -1039,9 +1046,8 @@ export class SalesService {
       }
       gatewayCustomerId = profileResult.gatewayCustomerId;
 
-      const saveData: Record<string, string> = { gatewayCustomerId };
-      // Also persist to legacy field for Authorize.Net backward compatibility
-      if (gatewayType === GatewayType.AUTHORIZE_NET) saveData.customerProfileId = gatewayCustomerId;
+      const saveData: Record<string, string> = { gatewayCustomerId, gateway: detectedGatewayType };
+      if (detectedGatewayType === GatewayType.AUTHORIZE_NET) saveData.customerProfileId = gatewayCustomerId;
       await this.prisma.sale.update({ where: { id }, data: saveData });
     }
 
@@ -1060,7 +1066,7 @@ export class SalesService {
       gatewayPaymentMethodId = pmResult.gatewayPaymentMethodId;
 
       const saveData: Record<string, string> = { gatewayPaymentMethodId };
-      if (gatewayType === GatewayType.AUTHORIZE_NET) saveData.paymentProfileId = gatewayPaymentMethodId;
+      if (detectedGatewayType === GatewayType.AUTHORIZE_NET) saveData.paymentProfileId = gatewayPaymentMethodId;
       await this.prisma.sale.update({ where: { id }, data: saveData });
     }
 
@@ -1069,6 +1075,8 @@ export class SalesService {
         'Sale does not have payment profiles configured. Provide opaqueData or stripePaymentMethodId to link a payment method.',
       );
     }
+
+    const gatewayType = detectedGatewayType;
 
     const result = await gateway.chargeOnce({
       gatewayCustomerId,
@@ -1212,24 +1220,70 @@ export class SalesService {
   }
 
   async subscribe(id: string, orgId: string, actorId: string, dto: CreateSubscriptionDto): Promise<any> {
-    const sale = await this.prisma.sale.findUnique({ where: { id } });
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+      include: { client: true },
+    });
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
-
-    const gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId;
-    const gatewayPaymentMethodId = sale.paymentProfileId ?? sale.gatewayPaymentMethodId;
-
-    if (!gatewayCustomerId || !gatewayPaymentMethodId) {
-      throw new BadRequestException('Sale does not have payment profiles configured');
-    }
 
     const existingSubId = sale.subscriptionId ?? sale.gatewaySubscriptionId;
     if (existingSubId) {
       throw new BadRequestException('Sale already has an active subscription');
     }
 
-    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+    // Detect gateway from payload — same logic as charge()
+    const detectedGatewayType: GatewayType = dto.stripePaymentMethodId
+      ? GatewayType.STRIPE
+      : dto.opaqueData
+      ? GatewayType.AUTHORIZE_NET
+      : (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+
+    const gatewayType = detectedGatewayType;
     const gateway = this.gatewayFactory.resolve(gatewayType);
+
+    let gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId ?? null;
+    let gatewayPaymentMethodId = sale.paymentProfileId ?? sale.gatewayPaymentMethodId ?? null;
+
+    // Auto-create customer/payment profiles from provided token if not yet linked
+    if (!gatewayCustomerId && (dto.opaqueData || dto.stripePaymentMethodId)) {
+      const profileResult = await gateway.createCustomer({
+        email: sale.client.email,
+        description: `${sale.client.contactName ?? sale.client.email} - Sale ${sale.id}`,
+      });
+      if (!profileResult.success || !profileResult.gatewayCustomerId) {
+        throw new BadRequestException(`Failed to create customer profile: ${profileResult.message}`);
+      }
+      gatewayCustomerId = profileResult.gatewayCustomerId;
+      // Lock gateway on first real charge
+      const saveData: Record<string, string> = { gatewayCustomerId, gateway: detectedGatewayType };
+      if (gatewayType === GatewayType.AUTHORIZE_NET) saveData.customerProfileId = gatewayCustomerId;
+      await this.prisma.sale.update({ where: { id }, data: saveData });
+    }
+
+    if (!gatewayPaymentMethodId && (dto.opaqueData || dto.stripePaymentMethodId)) {
+      if (!gatewayCustomerId) {
+        throw new BadRequestException('Cannot create payment method: customer profile not found');
+      }
+      const pmResult = await gateway.createPaymentMethod({
+        gatewayCustomerId,
+        opaqueData: dto.opaqueData,
+        stripePaymentMethodId: dto.stripePaymentMethodId,
+      });
+      if (!pmResult.success || !pmResult.gatewayPaymentMethodId) {
+        throw new BadRequestException(`Failed to create payment profile: ${pmResult.message}`);
+      }
+      gatewayPaymentMethodId = pmResult.gatewayPaymentMethodId;
+      const saveData: Record<string, string> = { gatewayPaymentMethodId };
+      if (gatewayType === GatewayType.AUTHORIZE_NET) saveData.paymentProfileId = gatewayPaymentMethodId;
+      await this.prisma.sale.update({ where: { id }, data: saveData });
+    }
+
+    if (!gatewayCustomerId || !gatewayPaymentMethodId) {
+      throw new BadRequestException(
+        'Sale does not have payment profiles configured. Provide opaqueData or stripePaymentMethodId to link a payment method.',
+      );
+    }
 
     const result = await gateway.createSubscription({
       name: dto.name,

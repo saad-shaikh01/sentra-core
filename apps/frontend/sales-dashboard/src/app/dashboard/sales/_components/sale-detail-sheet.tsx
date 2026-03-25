@@ -7,9 +7,8 @@ import { useSale, useCancelSubscription } from '@/hooks/use-sales';
 import { useAuth } from '@/hooks/use-auth';
 import { useUIStore } from '@/stores/ui-store';
 import { hasMinimumRole, ISaleWithRelations, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
-import { ChargeSaleModal } from './charge-sale-modal';
+import { ChargePaymentModal } from '@/components/payment/charge-payment-modal';
 import { SubscribeModal } from './subscribe-modal';
-import { RecordPaymentModal } from './record-payment-modal';
 import { CreditCard, RefreshCw, AlertCircle, FileText } from 'lucide-react';
 
 interface SaleDetailSheetProps {
@@ -30,7 +29,6 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
 
   const [chargeOpen, setChargeOpen] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const userRole = user?.role;
   const canChargeOrSubscribe =
     !isAuthLoading && !!userRole && hasMinimumRole(userRole, UserRole.ADMIN);
@@ -150,7 +148,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
                 </Button>
               ) : null}
               {canChargeOrSubscribe ? (
-                <Button variant="outline" className="flex-1 gap-2" onClick={() => setRecordPaymentOpen(true)}>
+                <Button variant="outline" className="flex-1 gap-2" onClick={() => setChargeOpen(true)}>
                   <FileText className="h-4 w-4" />
                   Record Payment
                 </Button>
@@ -213,18 +211,12 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
         ) : null}
       </DetailSheet>
 
-      {saleId && (
+      {saleId && sale ? (
         <>
-          <ChargeSaleModal open={chargeOpen} onOpenChange={setChargeOpen} saleId={saleId} />
-          <SubscribeModal open={subscribeOpen} onOpenChange={setSubscribeOpen} saleId={saleId} />
-          <RecordPaymentModal
-            open={recordPaymentOpen}
-            onOpenChange={setRecordPaymentOpen}
-            saleId={saleId}
-            invoices={sale?.invoices?.map((inv) => ({ id: inv.id, invoiceNumber: inv.invoiceNumber, amount: Number(inv.amount), status: inv.status })) ?? []}
-          />
+          <ChargePaymentModal open={chargeOpen} onOpenChange={setChargeOpen} sale={sale} />
+          <SubscribeModal open={subscribeOpen} onOpenChange={setSubscribeOpen} sale={sale} />
         </>
-      )}
+      ) : null}
     </>
   );
 }

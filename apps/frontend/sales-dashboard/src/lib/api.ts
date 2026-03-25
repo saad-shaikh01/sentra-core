@@ -907,6 +907,18 @@ class ApiClient {
     return this.fetch<any>('/analytics/summary');
   }
 
+  // Push notifications
+  async registerPushToken(token: string, platform = 'web') {
+    return this.fetch<void>('/notifications/push-tokens', {
+      method: 'POST',
+      body: JSON.stringify({ token, platform }),
+    });
+  }
+
+  async unregisterPushToken(token: string) {
+    return this.fetch<void>(`/notifications/push-tokens/${encodeURIComponent(token)}`, { method: 'DELETE' });
+  }
+
   // Global search
   async search(q: string) {
     return this.fetch<any[]>(`/search?q=${encodeURIComponent(q)}`);
