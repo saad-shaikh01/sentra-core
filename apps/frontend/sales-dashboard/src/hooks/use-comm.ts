@@ -239,8 +239,28 @@ export function useMarkThreadRead() {
   const decrementCommUnread = useUIStore((state) => state.decrementCommUnread);
   return useMutation({
     mutationFn: (threadId: string) => api.markCommThreadRead(threadId),
+    onMutate: (threadId) => {
+      // Optimistically mark thread as read in every cached threads list
+      queryClient.setQueriesData(
+        { queryKey: commKeys.threads() },
+        (old: any) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.map((t: any) =>
+              String(t._id ?? t.id) === threadId ? { ...t, hasUnread: false } : t,
+            ),
+          };
+        },
+      );
+      // Also update single thread cache
+      queryClient.setQueryData(commKeys.thread(threadId), (old: any) =>
+        old ? { ...old, hasUnread: false } : old,
+      );
+    },
     onSuccess: (_data, threadId) => {
       decrementCommUnread(1);
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
       queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },
@@ -253,8 +273,27 @@ export function useMarkThreadUnread() {
   return useMutation({
     mutationFn: (threadId: string) =>
       api.fetch<void>(`/threads/${threadId}/unread`, { method: 'PATCH', service: 'comm' }),
+    onMutate: (threadId) => {
+      // Optimistically mark thread as unread in every cached threads list
+      queryClient.setQueriesData(
+        { queryKey: commKeys.threads() },
+        (old: any) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.map((t: any) =>
+              String(t._id ?? t.id) === threadId ? { ...t, hasUnread: true } : t,
+            ),
+          };
+        },
+      );
+      queryClient.setQueryData(commKeys.thread(threadId), (old: any) =>
+        old ? { ...old, hasUnread: true } : old,
+      );
+    },
     onSuccess: (_data, threadId) => {
       incrementCommUnread(1);
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
       queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },

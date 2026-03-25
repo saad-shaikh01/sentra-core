@@ -15,6 +15,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { timeAgo } from '@/lib/format-date';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { CommThread, CommMessage, CommIdentity, CommAttachment } from '@/types/comm.types';
 import { COMM_ENABLED } from '@/lib/feature-flags';
@@ -273,45 +274,49 @@ function InboxContent() {
         {/* Identity filter */}
         {identities && identities.length > 0 && (
           <div className="px-4 py-2 border-b border-white/10">
-            <select
-              value={identityFilter}
-              onChange={(e) => setIdentityFilter(e.target.value)}
-              className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:border-white/30"
-            >
-              {isPrivileged ? (
-                <>
-                  <option value="">— Select an account —</option>
-                  <option value="__all__">All Accounts</option>
-                  {ownIdentities.length > 0 && (
-                    <optgroup label="Your Accounts">
-                      {ownIdentities.map((id: CommIdentity) => (
-                        <option key={id.id} value={id.id}>
-                          {id.displayName || id.email}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {teamIdentities.length > 0 && (
-                    <optgroup label="Team Accounts">
-                      {teamIdentities.map((id: CommIdentity) => (
-                        <option key={id.id} value={id.id}>
-                          {id.displayName ? `${id.displayName} · ${id.email}` : id.email}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </>
-              ) : (
-                <>
-                  {identities.length > 1 && <option value="">All my accounts</option>}
-                  {identities.map((id: CommIdentity) => (
-                    <option key={id.id} value={id.id}>
-                      {id.displayName || id.email}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
+            <Select value={identityFilter} onValueChange={setIdentityFilter}>
+              <SelectTrigger className="w-full h-8 text-xs bg-white/5 border-white/10">
+                <SelectValue placeholder="— Select an account —" />
+              </SelectTrigger>
+              <SelectContent>
+                {isPrivileged ? (
+                  <>
+                    <SelectItem value="__all__">All Accounts</SelectItem>
+                    {ownIdentities.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Your Accounts</SelectLabel>
+                        {ownIdentities.map((id: CommIdentity) => (
+                          <SelectItem key={id.id} value={id.id}>
+                            {id.displayName || id.email}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                    {teamIdentities.length > 0 && (
+                      <SelectGroup>
+                        <SelectLabel>Team Accounts</SelectLabel>
+                        {teamIdentities.map((id: CommIdentity) => (
+                          <SelectItem key={id.id} value={id.id}>
+                            {id.displayName ? `${id.displayName} · ${id.email}` : id.email}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {identities.length > 1 && (
+                      <SelectItem value="">All my accounts</SelectItem>
+                    )}
+                    {identities.map((id: CommIdentity) => (
+                      <SelectItem key={id.id} value={id.id}>
+                        {id.displayName || id.email}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { Plus, CheckCircle2, AlertCircle, Clock, Wifi, Trash2, Star } from 'luci
 import { UserRole } from '@sentra-core/types';
 import { PageHeader } from '@/components/shared';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useIdentities, useDisconnectIdentity, useInitiateOAuth } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -142,21 +143,22 @@ function GmailSettingsPage() {
             <p className="text-sm text-muted-foreground">Select which brand this Gmail account belongs to.</p>
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Brand</label>
-              <select
+              <Select
                 value={selectedBrandId}
-                onChange={(e) => setSelectedBrandId(e.target.value)}
-                className="w-full text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-white/30"
+                onValueChange={setSelectedBrandId}
                 disabled={brandsLoading || brandOptions.length === 0}
               >
-                <option value="">
-                  {brandsLoading ? 'Loading brands...' : 'Select a brand'}
-                </option>
-                {brandOptions.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full bg-white/5 border-white/10">
+                  <SelectValue placeholder={brandsLoading ? 'Loading brands...' : 'Select a brand'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {brandOptions.map((brand) => (
+                    <SelectItem key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {brandsError && (
                 <p className="text-xs text-red-300">{brandsError}</p>
               )}
