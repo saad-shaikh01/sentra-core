@@ -337,7 +337,34 @@ export class InvoicesService {
       }
     }
 
-    const gatewayType = (sale.gateway ?? GatewayType.AUTHORIZE_NET) as GatewayType;
+    const gatewayType = (sale.gateway ?? GatewayType.MANUAL) as GatewayType;
+
+    // Manual payment — no gateway involved, just mark as paid
+    if (gatewayType === GatewayType.MANUAL) {
+      const transaction = await this.prisma.paymentTransaction.create({
+        data: {
+          transactionId: `MANUAL-${Date.now()}`,
+          type: TransactionType.ONE_TIME,
+          amount: Number(invoice.amount),
+          status: TransactionStatus.SUCCESS,
+          gateway: GatewayType.MANUAL,
+          responseCode: 'MANUAL',
+          responseMessage: 'Manually marked as paid',
+          saleId: sale.id,
+          invoiceId: id,
+        },
+      });
+
+      await this.prisma.invoice.update({
+        where: { id },
+        data: { status: InvoiceStatus.PAID },
+      });
+
+      await this.cache.delByPrefix(`invoices:${orgId}:`);
+
+      return { transaction, paid: true };
+    }
+
     const gateway = this.gatewayFactory.resolve(gatewayType);
 
     // Resolve IDs — support both legacy Authorize.Net fields and new gateway-agnostic fields

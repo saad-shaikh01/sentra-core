@@ -43,7 +43,11 @@
       "Bash(grep -n \"departmentId\\\\|IsUUID\\\\|@IsOptional\" \"D:/Repositories/new crm/sentra-core/apps/backend/hrms-service/src/modules/invitations/dto\"/*.ts)",
       "Bash(sort find:*)",
       "Bash(grep -r \"ILead\\\\|ISale\\\\|IInvoice\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\libs\\\\types\\\\src' --include=*.ts -l)",
-      "Bash(/dev/null find:*)"
+      "Bash(/dev/null find:*)",
+      "Bash(grep -rn \"fcm.*token\\\\|saveFcmToken\\\\|registerFcm\\\\|fcmToken\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)",
+      "Bash(grep -rn \"fcm\\\\|fcmToken\\\\|device.*token\\\\|registerToken\\\\|push.*token\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\backend\\\\core-service\\\\src\\\\modules\\\\notifications' --include=*.ts)",
+      "Bash(grep -rn \"getToken\\\\|requestPermission\\\\|fcmToken\\\\|messaging\\\\\\(\\\\\\)\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)",
+      "Bash(grep -rn \"push-token\\\\|pushToken\\\\|registerPush\\\\|firebase.*messaging\\\\|getToken\" 'D:\\\\Repositories\\\\new crm\\\\sentra-core\\\\apps\\\\frontend\\\\sales-dashboard\\\\src' --include=*.ts --include=*.tsx)"
     ]
   }
 }

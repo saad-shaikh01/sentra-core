@@ -6,9 +6,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AppCode, JwtPayload } from '@sentra-core/types';
+import { AppCode, JwtPayload, UserRole } from '@sentra-core/types';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { PermissionsService } from '../services/permissions.service';
+
+const SUPERUSER_ROLES: string[] = [UserRole.OWNER, UserRole.ADMIN];
 
 const APP_BY_PERMISSION_PREFIX: Record<string, AppCode> = {
   sales: AppCode.SALES_DASHBOARD,
@@ -41,6 +43,11 @@ export class PermissionsGuard implements CanActivate {
 
     if (!user?.sub || !orgId) {
       throw new UnauthorizedException();
+    }
+
+    // OWNER and ADMIN have full access — skip DB permission lookup
+    if (user.role && SUPERUSER_ROLES.includes(user.role)) {
+      return true;
     }
 
     this.assertHasRequiredAppAccess(user, requiredPermissions);

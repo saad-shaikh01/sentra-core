@@ -33,9 +33,9 @@ export class AnalyticsService {
     ] = await Promise.all([
       this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null } }),
       this.prisma.lead.count({ where: { ...leadWhere, convertedClientId: { not: null }, deletedAt: null } }),
-      this.prisma.sale.count({ where: { ...saleWhere, status: 'ACTIVE' } }),
+      this.prisma.sale.count({ where: { ...saleWhere, status: 'ACTIVE', deletedAt: null } }),
       this.prisma.sale.aggregate({
-        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] } },
+        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, deletedAt: null },
         _sum: { totalAmount: true },
       }),
       // Leads by agent (last 12 months)
@@ -46,7 +46,7 @@ export class AnalyticsService {
       }),
       // Sales by month
       this.prisma.sale.findMany({
-        where: { ...saleWhere, createdAt: { gte: twelveMonthsAgo } },
+        where: { ...saleWhere, deletedAt: null, createdAt: { gte: twelveMonthsAgo } },
         select: { totalAmount: true, createdAt: true, brandId: true, brand: { select: { name: true } } },
       }),
       // Brands for distribution
@@ -56,12 +56,12 @@ export class AnalyticsService {
       }),
       // This month revenue
       this.prisma.sale.aggregate({
-        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, createdAt: { gte: startOfMonth } },
+        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, deletedAt: null, createdAt: { gte: startOfMonth } },
         _sum: { totalAmount: true },
       }),
       // Last month revenue
       this.prisma.sale.aggregate({
-        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, deletedAt: null, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
         _sum: { totalAmount: true },
       }),
       // New leads this month
