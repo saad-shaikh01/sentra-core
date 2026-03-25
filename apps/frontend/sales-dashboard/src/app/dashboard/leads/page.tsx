@@ -12,7 +12,7 @@ import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { useTeams } from '@/hooks/use-teams';
 import { useAuth } from '@/hooks/use-auth';
-import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
+import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, LeadViewTab, UserRole } from '@sentra-core/types';
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
 import { LeadFormModal } from './_components/lead-form-modal';
@@ -45,6 +45,7 @@ export default function LeadsPage() {
     dateFrom:     parseAsString,
     dateTo:       parseAsString,
     view:         parseAsStringEnum<ViewMode>(['kanban', 'table']).withDefault('kanban'),
+    leadView:     parseAsStringEnum<LeadViewTab>(['my', 'collaborating', 'pool', 'team']),
   });
 
   const [searchInput, setSearchInput] = useState(params.search);
@@ -63,8 +64,9 @@ export default function LeadsPage() {
     ...(params.assignedToId  ? { assignedToId: params.assignedToId } : {}),
     ...(params.dateFrom      ? { dateFrom: params.dateFrom }         : {}),
     ...(params.dateTo        ? { dateTo: params.dateTo }             : {}),
+    ...(params.leadView      ? { leadView: params.leadView }         : {}),
   }), [isKanban, params.page, params.limit, debouncedSearch, params.status,
-       params.source, params.leadType, params.brandId, params.teamId, params.assignedToId, params.dateFrom, params.dateTo]);
+       params.source, params.leadType, params.brandId, params.teamId, params.assignedToId, params.dateFrom, params.dateTo, params.leadView]);
 
   const { data, isLoading, isError } = useLeads(queryParams);
   const { data: brandsData }  = useBrands({ limit: 100 });
@@ -96,6 +98,9 @@ export default function LeadsPage() {
       ...l,
       brandName:    brandMap[l.brandId] ?? undefined,
       assigneeName: l.assignedToId ? (memberMap[l.assignedToId] ?? 'Assigned') : 'Unassigned',
+      assignmentState: l.assignedToId
+        ? ((l.collaboratorCount ?? 0) > 0 ? 'Shared' : 'Assigned')
+        : 'Unassigned',
     }));
   }, [data?.data, brandsData?.data, frontSellAgents]);
 
@@ -141,9 +146,19 @@ export default function LeadsPage() {
       assignedToId: null,
       dateFrom: null,
       dateTo: null,
+      leadView: null,
       page: 1,
     });
   };
+
+  const isFrontsell = user?.role === UserRole.FRONTSELL_AGENT;
+
+  const leadViewTabs: Array<{ value: LeadViewTab; label: string }> = [
+    { value: 'my', label: 'My Leads' },
+    { value: 'collaborating', label: 'Collaborating' },
+    { value: 'pool', label: 'Unassigned Pool' },
+    { value: 'team', label: 'Team Leads' },
+  ];
 
   return (
     <div>
@@ -191,6 +206,25 @@ export default function LeadsPage() {
           </div>
         }
       />
+
+      {isFrontsell && (
+        <div className="flex border-b border-white/[0.06] mb-1">
+          {leadViewTabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setParams({ leadView: params.leadView === tab.value ? null : tab.value, page: 1 })}
+              className={cn(
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                params.leadView === tab.value
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-white/20',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <FilterBar>
         {/* Search */}

@@ -7,13 +7,28 @@ import {
   IsInt,
   IsUrl,
   IsArray,
+  IsDateString,
   ValidateNested,
   Min,
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DiscountType, PaymentPlanType, SaleStatus, SaleType } from '@sentra-core/types';
+import { DiscountType, InstallmentMode, PaymentPlanType, SaleStatus, SaleType } from '@sentra-core/types';
 import { SalePackageDto } from './sale-package.dto';
+
+export class CustomInstallmentDto {
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
 
 export class SaleItemDto {
   @IsString()
@@ -93,6 +108,16 @@ export class CreateSaleDto {
   @Min(2)
   @Max(60)
   installmentCount?: number;
+
+  @IsOptional()
+  @IsEnum(InstallmentMode)
+  installmentMode?: InstallmentMode;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomInstallmentDto)
+  customInstallments?: CustomInstallmentDto[];
 
   @IsOptional()
   @IsArray()

@@ -13,6 +13,7 @@ import { useUIStore } from '@/stores/ui-store';
 export interface EnrichedLead extends ILead {
   brandName?: string;
   assigneeName?: string;
+  assignmentState?: 'Assigned' | 'Unassigned' | 'Shared';
 }
 
 interface LeadsTableProps {
@@ -40,7 +41,28 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
         render: (lead) => <StatusBadge status={lead.status} />,
       },
       { key: 'brandName', header: 'Brand', render: (lead) => lead.brandName ?? '—', className: 'min-w-[120px]' },
-      { key: 'assigneeName', header: 'Assigned', render: (lead) => lead.assigneeName ?? '—', className: 'min-w-[150px]' },
+      {
+        key: 'assigneeName',
+        header: 'Assigned',
+        className: 'min-w-[150px]',
+        render: (lead) => (
+          <div className="flex flex-col gap-0.5">
+            <span>{lead.assigneeName ?? '—'}</span>
+            {lead.assignmentState && (
+              <span className={`text-[10px] font-semibold uppercase tracking-wide ${
+                lead.assignmentState === 'Shared' ? 'text-blue-400' :
+                lead.assignmentState === 'Unassigned' ? 'text-amber-400' :
+                'text-green-400'
+              }`}>
+                {lead.assignmentState}
+              </span>
+            )}
+            {(lead.collaboratorCount ?? 0) > 0 && (
+              <span className="text-[10px] text-muted-foreground">+{lead.collaboratorCount} collaborator{lead.collaboratorCount === 1 ? '' : 's'}</span>
+            )}
+          </div>
+        ),
+      },
       { key: 'source', header: 'Source', render: (lead) => lead.source ?? '—', className: 'w-[100px]' },
       {
         key: 'createdAt',

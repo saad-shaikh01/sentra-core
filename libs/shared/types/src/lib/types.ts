@@ -104,6 +104,17 @@ export enum PaymentPlanType {
   SUBSCRIPTION = 'SUBSCRIPTION',
 }
 
+export enum InstallmentMode {
+  EQUAL = 'EQUAL',
+  CUSTOM = 'CUSTOM',
+}
+
+export interface ICustomInstallment {
+  amount: number;
+  dueDate?: string; // ISO date string
+  note?: string;
+}
+
 export enum DiscountType {
   PERCENTAGE = 'PERCENTAGE',
   FIXED_AMOUNT = 'FIXED_AMOUNT',
@@ -121,7 +132,22 @@ export enum LeadActivityType {
   ASSIGNMENT_CHANGE = 'ASSIGNMENT_CHANGE',
   CONVERSION = 'CONVERSION',
   CREATED = 'CREATED',
+  OUTREACH_STARTED = 'OUTREACH_STARTED',
+  OUTREACH_SENT = 'OUTREACH_SENT',
+  OUTREACH_REPLIED = 'OUTREACH_REPLIED',
+  COLLABORATOR_ADDED = 'COLLABORATOR_ADDED',
+  COLLABORATOR_REMOVED = 'COLLABORATOR_REMOVED',
+  CLAIMED = 'CLAIMED',
+  UNCLAIMED = 'UNCLAIMED',
 }
+
+export enum LeadVisibilityMode {
+  OWN_ONLY = 'OWN_ONLY',
+  TEAM_UNASSIGNED_ONLY = 'TEAM_UNASSIGNED_ONLY',
+  TEAM_ALL = 'TEAM_ALL',
+}
+
+export type LeadViewTab = 'my' | 'collaborating' | 'pool' | 'team';
 
 export enum TransactionStatus {
   PENDING = 'PENDING',
@@ -451,8 +477,18 @@ export interface ILead {
   teamId?: string;
   convertedClientId?: string;
   followUpDate?: Date | string;
+  collaboratorCount?: number;
   createdAt: Date | string;
   updatedAt: Date | string;
+}
+
+export interface ILeadCollaborator {
+  id: string;
+  leadId: string;
+  userId: string;
+  addedByUserId: string;
+  user?: { id: string; name: string; avatarUrl?: string };
+  createdAt: Date | string;
 }
 
 export interface ILeadAssignee {
@@ -602,6 +638,7 @@ export interface ISale {
   contractUrl?: string;
   paymentPlan: PaymentPlanType;
   installmentCount?: number;
+  installmentMode?: InstallmentMode;
   discountType?: DiscountType;
   discountValue?: number;
   discountedTotal?: number;

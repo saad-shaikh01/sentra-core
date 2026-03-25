@@ -7,3 +7,4 @@ export * from './assign-lead.dto';
 export * from './add-note.dto';
 export * from './convert-lead.dto';
 export * from './import-leads.dto';
+export * from './add-collaborator.dto';

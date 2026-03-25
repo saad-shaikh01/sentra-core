@@ -117,6 +117,11 @@ enum PaymentPlanType {
   SUBSCRIPTION
 }
 
+enum InstallmentMode {
+  EQUAL
+  CUSTOM
+}
+
 enum DiscountType {
   PERCENTAGE
   FIXED_AMOUNT
@@ -134,6 +139,19 @@ enum LeadActivityType {
   ASSIGNMENT_CHANGE
   CONVERSION
   CREATED
+  OUTREACH_STARTED
+  OUTREACH_SENT
+  OUTREACH_REPLIED
+  COLLABORATOR_ADDED
+  COLLABORATOR_REMOVED
+  CLAIMED
+  UNCLAIMED
+}
+
+enum LeadVisibilityMode {
+  OWN_ONLY
+  TEAM_UNASSIGNED_ONLY
+  TEAM_ALL
 }
 
 enum TransactionStatus {
@@ -681,8 +699,10 @@ model User {
   emailConfig UserEmailConfig? // Gmail Integration
   userInvitation UserInvitation?
 
-  assignedLeads      Lead[]
-  leadActivities     LeadActivity[]
+  assignedLeads       Lead[]
+  leadActivities      LeadActivity[]
+  leadCollaborations  LeadCollaborator[] @relation("LeadCollaboratorUser")
+  addedCollaborations LeadCollaborator[] @relation("LeadCollaboratorAddedBy")
   clientActivities   ClientActivity[]
   saleActivities     SaleActivity[]
   upsellClients      Client[]           @relation("ClientUpsellAgent")
@@ -788,11 +808,12 @@ model Team {
   typeId         String
   description    String?
   managerId      String?
-  isActive                Boolean   @default(true)
+  isActive                Boolean            @default(true)
   deletedAt               DateTime?
-  allowMemberVisibility   Boolean   @default(false)
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  allowMemberVisibility   Boolean            @default(false)
+  leadVisibilityMode      LeadVisibilityMode @default(OWN_ONLY)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   teamType     TeamType     @relation(fields: [typeId], references: [id])
@@ -1067,7 +1088,8 @@ model Lead {
   followUpDate DateTime? // Required when status = FOLLOW_UP
   deletedAt    DateTime? // Soft-delete timestamp
 
-  activities LeadActivity[]
+  activities    LeadActivity[]
+  collaborators LeadCollaborator[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1093,6 +1115,22 @@ model LeadActivity {
   createdAt DateTime @default(now())
 
   @@index([leadId, createdAt])
+}
+
+model LeadCollaborator {
+  id            String   @id @default(uuid())
+  leadId        String
+  userId        String
+  addedByUserId String
+  createdAt     DateTime @default(now())
+
+  lead    Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user    User @relation("LeadCollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  addedBy User @relation("LeadCollaboratorAddedBy", fields: [addedByUserId], references: [id])
+
+  @@unique([leadId, userId])
+  @@index([leadId])
+  @@index([userId])
 }
 
 model FacebookIntegration {
@@ -1188,8 +1226,9 @@ model Sale {
   contractUrl String? // Optional uploaded contract file URL
 
   // Payment plan config
-  paymentPlan     PaymentPlanType @default(ONE_TIME)
-  installmentCount Int?            // Number of installments (null = 1)
+  paymentPlan      PaymentPlanType  @default(ONE_TIME)
+  installmentCount Int?             // Number of equal installments (null = 1)
+  installmentMode  InstallmentMode? // null = legacy / EQUAL or CUSTOM
   discountType     DiscountType?
   discountValue    Decimal?        @db.Decimal(10, 2)
   discountedTotal  Decimal?        @db.Decimal(10, 2)

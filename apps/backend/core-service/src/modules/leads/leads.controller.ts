@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   BadRequestException,
   PayloadTooLargeException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
@@ -27,6 +28,7 @@ import {
   ConvertLeadDto,
   CaptureLeadDto,
   ImportLeadsDto,
+  AddCollaboratorDto,
 } from './dto';
 import {
   UserRole,
@@ -34,6 +36,7 @@ import {
   JwtPayload,
   ILead,
   ILeadActivity,
+  ILeadCollaborator,
   ILeadImportResult,
   IPaginatedResponse,
 } from '@sentra-core/types';
@@ -165,6 +168,64 @@ export class LeadsController {
     @CurrentUser() user: JwtPayload,
   ): Promise<ILead> {
     return this.leadsService.assign(id, user.orgId, user.sub, dto);
+  }
+
+  @Post(':id/claim')
+  @Roles(
+    UserRole.FRONTSELL_AGENT,
+    UserRole.SALES_MANAGER,
+    UserRole.ADMIN,
+    UserRole.OWNER,
+  )
+  claim(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ILead> {
+    return this.leadsService.claim(id, user.orgId, user.sub);
+  }
+
+  @Post(':id/unclaim')
+  @Roles(
+    UserRole.FRONTSELL_AGENT,
+    UserRole.SALES_MANAGER,
+    UserRole.ADMIN,
+    UserRole.OWNER,
+  )
+  unclaim(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ILead> {
+    return this.leadsService.unclaim(id, user.orgId, user.sub, user.role);
+  }
+
+  @Post(':id/collaborators')
+  @Roles(
+    UserRole.FRONTSELL_AGENT,
+    UserRole.SALES_MANAGER,
+    UserRole.ADMIN,
+    UserRole.OWNER,
+  )
+  addCollaborator(
+    @Param('id') id: string,
+    @Body() dto: AddCollaboratorDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ILeadCollaborator> {
+    return this.leadsService.addCollaborator(id, user.orgId, user.sub, dto.userId);
+  }
+
+  @Delete(':id/collaborators/:userId')
+  @Roles(
+    UserRole.FRONTSELL_AGENT,
+    UserRole.SALES_MANAGER,
+    UserRole.ADMIN,
+    UserRole.OWNER,
+  )
+  removeCollaborator(
+    @Param('id') id: string,
+    @Param('userId') targetUserId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.leadsService.removeCollaborator(id, user.orgId, user.sub, targetUserId);
   }
 
   @Post(':id/notes')

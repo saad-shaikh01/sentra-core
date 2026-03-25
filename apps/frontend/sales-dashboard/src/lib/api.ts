@@ -516,6 +516,27 @@ class ApiClient {
     return this.fetch<any>(`/leads/teams/${teamId}/stats?period=${encodeURIComponent(period)}`);
   }
 
+  async claimLead(id: string) {
+    return this.fetch<any>(`/leads/${id}/claim`, { method: 'POST' });
+  }
+
+  async unclaimLead(id: string) {
+    return this.fetch<any>(`/leads/${id}/unclaim`, { method: 'POST' });
+  }
+
+  async addLeadCollaborator(id: string, userId: string) {
+    return this.fetch<any>(`/leads/${id}/collaborators`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async removeLeadCollaborator(id: string, userId: string) {
+    return this.fetch<{ message: string }>(`/leads/${id}/collaborators/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getFacebookIntegrations() {
     return this.fetch<any[]>('/integrations/facebook');
   }

@@ -66,6 +66,7 @@ export class ScopeService {
         managedTeamIds: [],
         brandIds: [],
         memberVisibleTeamIds: [],
+        teamLeadVisibility: [],
       };
     }
 
@@ -80,6 +81,7 @@ export class ScopeService {
           team: {
             select: {
               allowMemberVisibility: true,
+              leadVisibilityMode: true,
               teamBrands: { select: { brandId: true } },
             },
           },
@@ -95,6 +97,7 @@ export class ScopeService {
         select: {
           id: true,
           allowMemberVisibility: true,
+          leadVisibilityMode: true,
           teamBrands: { select: { brandId: true } },
         },
       }),
@@ -104,12 +107,14 @@ export class ScopeService {
     const managedTeamIds = new Set<string>();
     const brandIds = new Set<string>();
     const memberVisibleTeamIds = new Set<string>();
+    const teamLeadVisibilityMap = new Map<string, string>();
 
     for (const m of memberTeams) {
       teamIds.add(m.teamId);
       if (m.team.allowMemberVisibility) {
         memberVisibleTeamIds.add(m.teamId);
       }
+      teamLeadVisibilityMap.set(m.teamId, m.team.leadVisibilityMode);
       for (const tb of m.team.teamBrands) {
         brandIds.add(tb.brandId);
       }
@@ -121,6 +126,7 @@ export class ScopeService {
       if (t.allowMemberVisibility) {
         memberVisibleTeamIds.add(t.id);
       }
+      teamLeadVisibilityMap.set(t.id, t.leadVisibilityMode);
       for (const tb of t.teamBrands) {
         brandIds.add(tb.brandId);
       }
@@ -134,6 +140,7 @@ export class ScopeService {
       managedTeamIds: [...managedTeamIds],
       brandIds: [...brandIds],
       memberVisibleTeamIds: [...memberVisibleTeamIds],
+      teamLeadVisibility: [...teamLeadVisibilityMap.entries()].map(([teamId, mode]) => ({ teamId, mode })),
     };
   }
 }

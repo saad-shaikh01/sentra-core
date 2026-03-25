@@ -21,14 +21,32 @@ export class UserScope {
       return { ...base, brandId: { in: this.data.brandIds } };
     }
 
-    if (
-      this.data.role === UserRole.FRONTSELL_AGENT ||
-      this.data.role === UserRole.UPSELL_AGENT
-    ) {
-      return { ...base, assignedToId: this.data.userId };
+    if (this.data.role === UserRole.FRONTSELL_AGENT) {
+      const orConditions: Array<Record<string, unknown>> = [
+        { assignedToId: this.data.userId },
+        { collaborators: { some: { userId: this.data.userId } } },
+      ];
+
+      const poolTeamIds = this.data.teamLeadVisibility
+        .filter((t) => t.mode === 'TEAM_UNASSIGNED_ONLY' || t.mode === 'TEAM_ALL')
+        .map((t) => t.teamId);
+
+      if (poolTeamIds.length > 0) {
+        orConditions.push({ teamId: { in: poolTeamIds }, assignedToId: null });
+      }
+
+      const allTeamIds = this.data.teamLeadVisibility
+        .filter((t) => t.mode === 'TEAM_ALL')
+        .map((t) => t.teamId);
+
+      if (allTeamIds.length > 0) {
+        orConditions.push({ teamId: { in: allTeamIds } });
+      }
+
+      return { ...base, OR: orConditions };
     }
 
-    // PROJECT_MANAGER: no lead access — use impossible value
+    // UPSELL_AGENT and PROJECT_MANAGER: no lead access
     return { ...base, assignedToId: '__none__' };
   }
 

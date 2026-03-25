@@ -1,5 +1,5 @@
 import { IsOptional, IsString, IsEnum, IsUUID, IsDateString } from 'class-validator';
-import { LeadStatus, LeadType, LeadSource } from '@sentra-core/types';
+import { LeadStatus, LeadType, LeadSource, LeadViewTab } from '@sentra-core/types';
 import { PaginationQueryDto } from '../../../common';
 
 export class QueryLeadsDto extends PaginationQueryDto {
@@ -38,4 +38,8 @@ export class QueryLeadsDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsEnum(['my', 'collaborating', 'pool', 'team'])
+  leadView?: LeadViewTab;
 }

@@ -20,6 +20,7 @@ import {
   LEAD_STATUS_TRANSITIONS,
   ILead,
   ILeadActivity,
+  ILeadCollaborator,
   ILeadImportErrorDetail,
   ILeadImportResult,
   IPaginatedResponse,
@@ -494,11 +495,13 @@ export class LeadsService {
     const cached = await this.cache.get<IPaginatedResponse<ILead>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search, teamId } = query;
+    const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search, teamId, leadView } = query;
 
     // Get scope-based visibility filter
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const scopeWhere = scope.toLeadFilter();
+
+    const andConditions: Prisma.LeadWhereInput[] = [];
 
     const where: Prisma.LeadWhereInput = {
       ...scopeWhere,
@@ -510,16 +513,22 @@ export class LeadsService {
     if (source) where.source = source;
     if (brandId) {
       const scopeBrandIds = (scopeWhere as any).brandId?.in as string[] | undefined;
-      if (scopeBrandIds && !scopeBrandIds.includes(brandId)) {
-        where.assignedToId = '__none__'; // out-of-scope → guaranteed empty
+      if (scopeBrandIds !== undefined) {
+        // Manager scope: validate brand is within allowed set
+        if (!scopeBrandIds.includes(brandId)) {
+          where.assignedToId = '__none__';
+        } else {
+          where.brandId = brandId;
+        }
       } else {
+        // Full access or OR-based frontsell scope: just filter by brand
         where.brandId = brandId;
       }
     }
     if (teamId) where.teamId = teamId;
 
-    // Only allow assignedToId filter for roles that can see beyond own leads
-    if (assignedToId && scope.isFullAccess) {
+    // Allow assignedToId filter for full access and managers
+    if (assignedToId && (scope.isFullAccess || scope.isManager)) {
       where.assignedToId = assignedToId;
     }
 
@@ -533,13 +542,42 @@ export class LeadsService {
       }
     }
 
+    // view-based tab filter (narrows within scope via AND)
+    if (leadView) {
+      const scopeData = scope.toJSON();
+      let viewFilter: Prisma.LeadWhereInput | null = null;
+
+      if (leadView === 'my') {
+        viewFilter = { assignedToId: userId };
+      } else if (leadView === 'collaborating') {
+        viewFilter = { collaborators: { some: { userId } } };
+      } else if (leadView === 'pool') {
+        viewFilter = { assignedToId: null, teamId: { not: null } };
+      } else if (leadView === 'team') {
+        viewFilter = scopeData.teamIds.length > 0
+          ? { teamId: { in: scopeData.teamIds } }
+          : { id: { in: [] } };
+      }
+
+      if (viewFilter) {
+        andConditions.push(viewFilter);
+      }
+    }
+
+    // Search filter — use AND to avoid overriding scope OR
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { phone: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     const [leads, total] = await Promise.all([
@@ -548,6 +586,9 @@ export class LeadsService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: {
+          _count: { select: { collaborators: true } },
+        },
       }),
       this.prisma.lead.count({ where }),
     ]);
@@ -876,6 +917,152 @@ export class LeadsService {
     return this.mapToILead(updated);
   }
 
+  async claim(id: string, orgId: string, userId: string): Promise<ILead> {
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
+    if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
+    if (lead.assignedToId) throw new BadRequestException('Lead is already assigned. Use assign to reassign.');
+
+    const updated = await this.prisma.lead.update({
+      where: { id },
+      data: { assignedToId: userId },
+    });
+
+    await this.prisma.leadActivity.create({
+      data: {
+        type: LeadActivityType.CLAIMED,
+        data: { userId },
+        leadId: id,
+        userId,
+      },
+    });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+    return this.mapToILead(updated);
+  }
+
+  async unclaim(id: string, orgId: string, userId: string, role: UserRole): Promise<ILead> {
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
+    if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
+    if (!lead.assignedToId) throw new BadRequestException('Lead is not currently assigned');
+
+    const isAdminOrManager = role === UserRole.OWNER || role === UserRole.ADMIN || role === UserRole.SALES_MANAGER;
+    if (!isAdminOrManager && lead.assignedToId !== userId) {
+      throw new ForbiddenException('You can only unclaim leads assigned to you');
+    }
+
+    const updated = await this.prisma.lead.update({
+      where: { id },
+      data: { assignedToId: null },
+    });
+
+    await this.prisma.leadActivity.create({
+      data: {
+        type: LeadActivityType.UNCLAIMED,
+        data: { previousUserId: lead.assignedToId },
+        leadId: id,
+        userId,
+      },
+    });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+    return this.mapToILead(updated);
+  }
+
+  async addCollaborator(
+    id: string,
+    orgId: string,
+    userId: string,
+    targetUserId: string,
+  ): Promise<ILeadCollaborator> {
+    const [lead, target] = await Promise.all([
+      this.prisma.lead.findUnique({ where: { id } }),
+      this.prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true, name: true, avatarUrl: true, organizationId: true, role: true } }),
+    ]);
+
+    if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
+    if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
+    if (!target) throw new NotFoundException('User not found');
+    if (target.organizationId !== orgId) throw new BadRequestException('User must be in the same organization');
+
+    const allowedRoles: string[] = [UserRole.FRONTSELL_AGENT, UserRole.SALES_MANAGER, UserRole.ADMIN, UserRole.OWNER];
+    if (!allowedRoles.includes(target.role)) {
+      throw new BadRequestException('Only FRONTSELL_AGENT, SALES_MANAGER, ADMIN, or OWNER can be collaborators');
+    }
+
+    try {
+      const collaborator = await this.prisma.leadCollaborator.create({
+        data: {
+          leadId: id,
+          userId: targetUserId,
+          addedByUserId: userId,
+        },
+        include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+      });
+
+      await this.prisma.leadActivity.create({
+        data: {
+          type: LeadActivityType.COLLABORATOR_ADDED,
+          data: { userId: targetUserId, name: target.name },
+          leadId: id,
+          userId,
+        },
+      });
+
+      await this.cache.delByPrefix(`leads:${orgId}:`);
+
+      return {
+        id: collaborator.id,
+        leadId: collaborator.leadId,
+        userId: collaborator.userId,
+        addedByUserId: collaborator.addedByUserId,
+        user: collaborator.user
+          ? { id: collaborator.user.id, name: collaborator.user.name, avatarUrl: collaborator.user.avatarUrl ?? undefined }
+          : undefined,
+        createdAt: collaborator.createdAt,
+      };
+    } catch (e) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('User is already a collaborator on this lead');
+      }
+      throw e;
+    }
+  }
+
+  async removeCollaborator(
+    id: string,
+    orgId: string,
+    userId: string,
+    targetUserId: string,
+  ): Promise<{ message: string }> {
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
+    if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
+
+    const collaborator = await this.prisma.leadCollaborator.findUnique({
+      where: { leadId_userId: { leadId: id, userId: targetUserId } },
+    });
+
+    if (!collaborator) throw new NotFoundException('Collaborator not found');
+
+    await this.prisma.leadCollaborator.delete({
+      where: { leadId_userId: { leadId: id, userId: targetUserId } },
+    });
+
+    await this.prisma.leadActivity.create({
+      data: {
+        type: LeadActivityType.COLLABORATOR_REMOVED,
+        data: { userId: targetUserId },
+        leadId: id,
+        userId,
+      },
+    });
+
+    await this.cache.delByPrefix(`leads:${orgId}:`);
+    return { message: 'Collaborator removed' };
+  }
+
   async addNote(
     id: string,
     orgId: string,
@@ -1187,6 +1374,7 @@ export class LeadsService {
     followUpDate: Date | null;
     createdAt: Date;
     updatedAt: Date;
+    _count?: { collaborators: number };
   }): ILead {
     return {
       id: lead.id,
@@ -1207,6 +1395,7 @@ export class LeadsService {
       teamId: lead.teamId ?? undefined,
       convertedClientId: lead.convertedClientId ?? undefined,
       followUpDate: lead.followUpDate ?? undefined,
+      collaboratorCount: lead._count?.collaborators,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
     };

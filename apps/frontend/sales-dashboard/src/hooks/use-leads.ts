@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ILead, ILeadActivity, ILeadDetail, ILeadImportResult, IPaginatedResponse, LeadStatus } from '@sentra-core/types';
+import { ILead, ILeadActivity, ILeadCollaborator, ILeadDetail, ILeadImportResult, IPaginatedResponse, LeadStatus } from '@sentra-core/types';
 import { toast } from '@/hooks/use-toast';
 
 export const leadsKeys = {
@@ -180,5 +180,59 @@ export function useLeadActivities(id: string) {
     queryFn:  () => api.getLeadActivities(id) as Promise<ILeadActivity[]>,
     enabled:  !!id,
     staleTime: 30_000,
+  });
+}
+
+export function useClaimLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.claimLead(id) as Promise<ILead>,
+    onSuccess: (data, id) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.setQueryData(leadsKeys.detail(id), data);
+      toast.success('Lead claimed');
+    },
+    onError: (e: Error) => toast.error('Failed to claim lead', e.message),
+  });
+}
+
+export function useUnclaimLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.unclaimLead(id) as Promise<ILead>,
+    onSuccess: (data, id) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.setQueryData(leadsKeys.detail(id), data);
+      toast.success('Lead returned to pool');
+    },
+    onError: (e: Error) => toast.error('Failed to unclaim lead', e.message),
+  });
+}
+
+export function useAddLeadCollaborator() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, userId }: { leadId: string; userId: string }) =>
+      api.addLeadCollaborator(leadId, userId) as Promise<ILeadCollaborator>,
+    onSuccess: (_, { leadId }) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(leadId) });
+      toast.success('Collaborator added');
+    },
+    onError: (e: Error) => toast.error('Failed to add collaborator', e.message),
+  });
+}
+
+export function useRemoveLeadCollaborator() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, userId }: { leadId: string; userId: string }) =>
+      api.removeLeadCollaborator(leadId, userId),
+    onSuccess: (_, { leadId }) => {
+      queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(leadId) });
+      toast.success('Collaborator removed');
+    },
+    onError: (e: Error) => toast.error('Failed to remove collaborator', e.message),
   });
 }
