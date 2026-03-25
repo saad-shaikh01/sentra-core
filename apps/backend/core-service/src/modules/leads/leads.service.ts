@@ -626,6 +626,10 @@ export class LeadsService {
           include: { user: { select: { id: true, name: true, avatarUrl: true } } },
         },
         assignedTo: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        collaborators: {
+          orderBy: { createdAt: 'asc' },
+          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        },
       },
     });
 
@@ -636,6 +640,14 @@ export class LeadsService {
       ...this.mapToILead(lead),
       activities: lead.activities.map((a) => this.mapToILeadActivity(a)),
       assignedTo: lead.assignedTo ?? undefined,
+      collaborators: lead.collaborators.map((c) => ({
+        id: c.id,
+        leadId: c.leadId,
+        userId: c.userId,
+        addedByUserId: c.addedByUserId,
+        user: c.user ?? undefined,
+        createdAt: c.createdAt,
+      })),
     };
 
     await this.cache.set(cacheKey, result);

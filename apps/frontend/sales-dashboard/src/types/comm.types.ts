@@ -8,6 +8,8 @@ export interface CommAttachment {
   mimeType: string;
   size: number;
   gmailAttachmentId?: string;
+  cdnUrl?: string;
+  s3Key?: string;
 }
 
 export interface EntityLink {

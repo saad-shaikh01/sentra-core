@@ -23,6 +23,10 @@ import {
   useAddLeadNote,
   useDeleteLeadNote,
   useEditLeadNote,
+  useClaimLead,
+  useUnclaimLead,
+  useAddLeadCollaborator,
+  useRemoveLeadCollaborator,
 } from '@/hooks/use-leads';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
@@ -50,9 +54,12 @@ import {
   Pencil,
   Phone,
   RefreshCw,
+  Send,
   Trash2,
   User,
   UserCheck,
+  UserMinus,
+  UserPlus,
   X,
 } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
@@ -95,6 +102,13 @@ const activityIcons: Record<LeadActivityType, React.ReactNode> = {
   [LeadActivityType.ASSIGNMENT_CHANGE]: <UserCheck className="h-4 w-4" />,
   [LeadActivityType.CONVERSION]: <GitBranch className="h-4 w-4" />,
   [LeadActivityType.CREATED]: <ClipboardList className="h-4 w-4" />,
+  [LeadActivityType.OUTREACH_STARTED]: <Send className="h-4 w-4" />,
+  [LeadActivityType.OUTREACH_SENT]: <Send className="h-4 w-4" />,
+  [LeadActivityType.OUTREACH_REPLIED]: <MessageSquare className="h-4 w-4" />,
+  [LeadActivityType.COLLABORATOR_ADDED]: <UserPlus className="h-4 w-4" />,
+  [LeadActivityType.COLLABORATOR_REMOVED]: <UserMinus className="h-4 w-4" />,
+  [LeadActivityType.CLAIMED]: <UserCheck className="h-4 w-4" />,
+  [LeadActivityType.UNCLAIMED]: <UserMinus className="h-4 w-4" />,
 };
 
 const noteUrlPattern = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]])/gi;
@@ -206,15 +220,34 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const [lostReason, setLostReason] = useState('');
   const [teamId, setTeamId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt?: string } | null>(null);
+  const [addCollabUserId, setAddCollabUserId] = useState('');
+
+  const claimLead = useClaimLead();
+  const unclaimLead = useUnclaimLead();
+  const addCollaborator = useAddLeadCollaborator();
+  const removeCollaborator = useRemoveLeadCollaborator();
 
   const allowedTransitions = lead ? LEAD_STATUS_TRANSITIONS[lead.status] : [];
   const minFollowUpDate = new Date().toISOString().split('T')[0];
   const userRole = user?.role;
+  const isFrontsell = userRole === UserRole.FRONTSELL_AGENT;
   const canAssign = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
   const canConvert = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
   const canCreateSale = userRole ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) : false;
-  const showReadOnlyAssignee = !!userRole && !canAssign;
+  const showReadOnlyAssignee = !!userRole && !canAssign && !isFrontsell;
   const isLeadClosed = lead?.status === LeadStatus.CLOSED_WON || lead?.status === LeadStatus.CLOSED_LOST;
+  const isOwner = !!user && lead?.assignedToId === user.id;
+  const isCollaborator = !!user && (lead as any)?.collaborators?.some((c: { userId: string }) => c.userId === user.id);
+  const canClaim = isFrontsell && !lead?.assignedToId && !isLeadClosed;
+  const canUnclaim = (isOwner || canAssign) && !!lead?.assignedToId && !isLeadClosed;
+  const canManageCollaborators = isOwner || canAssign;
+
+  const existingCollabIds = new Set(
+    ((lead as any)?.collaborators ?? []).map((c: { userId: string }) => c.userId)
+  );
+  const availableForCollab = (frontSellAgents ?? []).filter(
+    (m) => m.id !== lead?.assignedToId && !existingCollabIds.has(m.id)
+  );
 
   useEffect(() => {
     setTeamId(lead?.teamId ?? null);
@@ -446,6 +479,109 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                     label="Front Sell Agent"
                     value={<span className="text-sm">{lead.assignedTo?.name ?? (lead.assignedToId ? 'Assigned' : 'Unassigned')}</span>}
                   />
+                ) : null}
+
+                {/* Claim / Unclaim */}
+                {(canClaim || canUnclaim) ? (
+                  <div className="flex gap-2">
+                    {canClaim ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-sky-500/30 text-sky-400 hover:bg-sky-500/10"
+                        disabled={claimLead.isPending}
+                        onClick={() => leadId && claimLead.mutate(leadId)}
+                      >
+                        <UserCheck className="mr-2 h-3.5 w-3.5" />
+                        Claim Lead
+                      </Button>
+                    ) : null}
+                    {canUnclaim ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                        disabled={unclaimLead.isPending}
+                        onClick={() => leadId && unclaimLead.mutate(leadId)}
+                      >
+                        <UserMinus className="mr-2 h-3.5 w-3.5" />
+                        Unclaim
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Collaborators panel */}
+                {(canManageCollaborators || isCollaborator || ((lead as any)?.collaborators?.length > 0)) ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Collaborators</h3>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {(lead as any)?.collaborators?.length ?? 0}
+                      </span>
+                    </div>
+
+                    {((lead as any)?.collaborators?.length ?? 0) > 0 ? (
+                      <div className="space-y-2">
+                        {((lead as any)?.collaborators ?? []).map((collab: { id: string; userId: string; user?: { id: string; name: string; avatarUrl?: string } }) => (
+                          <div key={collab.id} className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="h-7 w-7">
+                                <AvatarImage src={collab.user?.avatarUrl} alt={collab.user?.name} />
+                                <AvatarFallback>{getInitials(collab.user?.name ?? 'U')}</AvatarFallback>
+                              </Avatar>
+                              <p className="text-sm font-medium">{collab.user?.name ?? collab.userId}</p>
+                            </div>
+                            {canManageCollaborators ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                disabled={removeCollaborator.isPending}
+                                onClick={() => leadId && removeCollaborator.mutate({ leadId, userId: collab.userId })}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No collaborators yet.</p>
+                    )}
+
+                    {canManageCollaborators && availableForCollab.length > 0 ? (
+                      <div className="flex gap-2 pt-1">
+                        <Select value={addCollabUserId} onValueChange={setAddCollabUserId}>
+                          <SelectTrigger className="flex-1 h-8 text-xs border-white/10 bg-white/5">
+                            <SelectValue placeholder="Add collaborator…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableForCollab.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-white/10"
+                          disabled={!addCollabUserId || addCollaborator.isPending}
+                          onClick={() => {
+                            if (!leadId || !addCollabUserId) return;
+                            addCollaborator.mutate(
+                              { leadId, userId: addCollabUserId },
+                              { onSuccess: () => setAddCollabUserId('') }
+                            );
+                          }}
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 <div className="space-y-1">
@@ -904,6 +1040,56 @@ function buildActivityMeta(activity: ILeadActivity, actorName: string): Activity
         details: compactDetails([
           { label: 'Client ID', value: readString(data.clientId) },
         ]),
+        accentClassName: 'border-emerald-500/20',
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.CLAIMED:
+      return {
+        title: `${actorName} claimed this lead`,
+        description: 'Lead was picked up from the unassigned pool.',
+        accentClassName: 'border-sky-500/20',
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.UNCLAIMED:
+      return {
+        title: `${actorName} unclaimed this lead`,
+        description: 'Lead was released back to the unassigned pool.',
+        accentClassName: 'border-amber-500/20',
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.COLLABORATOR_ADDED:
+      return {
+        title: `${actorName} added a collaborator`,
+        details: compactDetails([
+          { label: 'Collaborator', value: readString(data.name) || readString(data.userId) },
+        ]),
+        accentClassName: 'border-violet-500/20',
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.COLLABORATOR_REMOVED:
+      return {
+        title: `${actorName} removed a collaborator`,
+        details: compactDetails([
+          { label: 'User ID', value: readString(data.userId) },
+        ]),
+        accentClassName: 'border-orange-500/20',
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.OUTREACH_STARTED:
+      return {
+        title: `${actorName} started outreach`,
+        description: 'Outreach sequence was initiated for this lead.',
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.OUTREACH_SENT:
+      return {
+        title: `${actorName} sent an outreach message`,
+        icon: activityIcons[activity.type],
+      };
+    case LeadActivityType.OUTREACH_REPLIED:
+      return {
+        title: `Lead replied to outreach`,
+        description: 'The lead responded to an outreach message.',
         accentClassName: 'border-emerald-500/20',
         icon: activityIcons[activity.type],
       };

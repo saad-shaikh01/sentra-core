@@ -17,7 +17,6 @@ export class OrganizationController {
   constructor(private organizationService: OrganizationService) {}
 
   @Get('members')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
   getMembers(
     @CurrentUser('orgId') orgId: string,
     @Query('role') role?: UserRole,

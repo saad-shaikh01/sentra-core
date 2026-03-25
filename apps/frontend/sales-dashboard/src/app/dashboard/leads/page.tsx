@@ -98,9 +98,9 @@ export default function LeadsPage() {
       ...l,
       brandName:    brandMap[l.brandId] ?? undefined,
       assigneeName: l.assignedToId ? (memberMap[l.assignedToId] ?? 'Assigned') : 'Unassigned',
-      assignmentState: l.assignedToId
+      assignmentState: (l.assignedToId
         ? ((l.collaboratorCount ?? 0) > 0 ? 'Shared' : 'Assigned')
-        : 'Unassigned',
+        : 'Unassigned') as 'Assigned' | 'Unassigned' | 'Shared',
     }));
   }, [data?.data, brandsData?.data, frontSellAgents]);
 

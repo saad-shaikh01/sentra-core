@@ -1,79 +1,80 @@
-Please audit my dashboard and determine whether the data currently being displayed is:
+Task: Fix Invoice Visibility and Dashboard Invoice Summary Scoping
 
-real-time/live data
-dynamically fetched data
-static/hardcoded data
-dummy/mock/placeholder data
-What I want
+Context:
+We already have role-based scope logic in the sales CRM, and `Leads` / `Sales` are mostly scoped correctly by role. But `Invoices` currently have inconsistent behavior.
 
-I do not want assumptions. I want you to inspect the actual code and tell me clearly:
+Problem to fix:
+Invoice visibility must never be broader than the related Sale visibility.
 
-What data on the dashboard is real and what is not
-which widgets/cards/charts are connected to real backend data
-which ones are static, mocked, hardcoded, or placeholder-based
-whether any section looks dynamic in UI but is not actually using live data
-Fix the dashboard data source issues
-replace dummy/static data with real data wherever possible
-connect all dashboard widgets/cards/charts to actual backend/API data
-keep logic clean and scalable
-do not break existing functionality
-Review the dashboard from a team performance perspective
-I want suggestions on how team performance can be monitored from this dashboard more effectively.
+Current issue observed in codebase:
+1. `GET /invoices` list is scoped using `scope.toInvoiceFilter()` and appears mostly correct.
+2. Dashboard invoice summary in analytics is NOT scoped by user role and can show org-wide invoice data.
+3. `GET /invoices/summary` is also NOT scoped by user role; it currently only uses `orgId` and optional `brandId`.
+4. `GET /invoices/:id` and `GET /invoices/:id/pdf` only validate `orgId`, not the requesting user’s role-based scope.
+This creates a risk where a user may not see other users’ leads/sales, but can still see invoice totals or access invoice details/PDFs that belong to other users within the same org.
 
-Please recommend:
+Goal:
+Make invoice access consistent with sale access everywhere.
 
-what team performance metrics should be shown
-how they should be visualized
-what KPIs would be useful for sales/admin/management users
-Suggest additional useful data points
-Tell me what more information can be displayed on this dashboard to make it more useful, actionable, and management-friendly.
+Required behavior:
+1. Invoice access must inherit sale scope.
+2. A user must only be able to:
+   - list invoices for sales they are allowed to access
+   - see invoice summary for sales they are allowed to access
+   - open invoice detail only if the related sale is in their scope
+   - download invoice PDF only if the related sale is in their scope
+   - pay invoice only if the related sale is in their scope, in addition to any existing role/payment restrictions
+3. Dashboard invoice summary cards must use the same scoped invoice visibility as the invoices module.
+4. Do not widen access for any role.
 
-Examples can include:
+Expected role behavior:
+- OWNER / ADMIN:
+  - full org invoice access
+- SALES_MANAGER:
+  - invoices only for their scoped brands / teams / sales
+- FRONTSELL_AGENT:
+  - invoices only for sales they are allowed to access
+- UPSELL_AGENT:
+  - invoices only for their scoped client sales
+- PROJECT_MANAGER:
+  - follow existing scope rules strictly; do not assume broader invoice access unless current sale scope explicitly allows it
 
-team-wise performance
-agent-wise performance
-leads conversion
-sales trends
-invoice/payment stats
-pending follow-ups
-top performers
-target vs achieved
-overdue invoices
-brand-wise performance
-status breakdowns
-time-based comparisons
-Deliverables
+Implementation guidance:
+1. Reuse existing scope infrastructure.
+2. Prefer using `ScopeService` + `scope.toInvoiceFilter()` or sale-scope derived filtering as the single source of truth.
+3. Fix these backend areas:
+   - analytics summary invoice cards
+   - invoices summary endpoint
+   - invoice detail endpoint
+   - invoice PDF endpoint
+   - invoice pay endpoint if needed for scope consistency
+4. If necessary, add a helper method to centralize “can current user access this invoice?” logic by checking the related sale against scope.
+5. Preserve existing non-scope business rules unless they conflict with security.
 
-Please respond in this structure:
+Files likely involved:
+- `apps/backend/core-service/src/modules/analytics/analytics.service.ts`
+- `apps/backend/core-service/src/modules/invoices/invoices.controller.ts`
+- `apps/backend/core-service/src/modules/invoices/invoices.service.ts`
+- `apps/backend/core-service/src/modules/scope/user-scope.class.ts`
+- any related tests
 
-1. Current Dashboard Audit
-which sections are real
-which sections are dummy/static
-how you verified it
-2. Data Fix Plan
-what needs to be connected or corrected
-frontend changes
-backend/API changes if needed
-3. Team Performance Monitoring Suggestions
-what metrics should be added
-how they should be displayed
-4. Recommended Dashboard Enhancements
-additional cards/charts/tables/insights that would make this dashboard more useful
-5. Implementation Plan
-safe step-by-step approach
-no unnecessary logic changes
-Important instructions
-inspect actual code, not just UI
-do not guess
-clearly separate real vs dummy data
-if any widget cannot be connected yet, mention why
-suggest practical and scalable improvements
-Goal
+Testing requirements:
+Add or update tests to verify:
+1. Invoice list remains scoped.
+2. Dashboard invoice summary is scoped by role.
+3. `/invoices/summary` is scoped by role.
+4. `/invoices/:id` blocks access to invoices outside user scope.
+5. `/invoices/:id/pdf` blocks access to invoices outside user scope.
+6. Existing allowed access still works for authorized roles.
+7. No regression for OWNER / ADMIN full access.
 
-I want this dashboard to become a truly useful operational and management dashboard, with real data and meaningful team performance visibility.
+Important constraints:
+- Do not change unrelated behavior.
+- Do not remove existing role restrictions already present on controller methods.
+- Do not assume current behavior is correct if it conflicts with scope consistency.
+- Security/correct scoping is the priority.
 
-A shorter version:
-
-Short Prompt:
-
-Audit my dashboard and identify whether the displayed data is real, dynamic, static, or dummy. Verify from code, not assumptions. Then fix any dummy/static sections by connecting them to real data where possible. Also suggest how team performance can be monitored better from this dashboard and what additional KPIs, cards, charts, and insights should be added to make it more useful for management and operations.
+Deliverables:
+1. Implement the fix.
+2. Add/update tests.
+3. Briefly summarize what was changed and any assumptions made.

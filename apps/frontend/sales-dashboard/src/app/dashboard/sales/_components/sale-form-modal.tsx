@@ -14,8 +14,8 @@ import { useMembers } from '@/hooks/use-organization';
 import { useAuth } from '@/hooks/use-auth';
 import { usePackages } from '@/hooks/use-packages';
 import { useRouter } from 'next/navigation';
-import { ISale, SaleStatus, SaleType, PaymentPlanType, DiscountType, UserRole } from '@sentra-core/types';
-import { Plus, Minus, X } from 'lucide-react';
+import { ISale, SaleStatus, SaleType, PaymentPlanType, InstallmentMode, DiscountType, UserRole } from '@sentra-core/types';
+import { Plus, Minus, X, Trash2 } from 'lucide-react';
 
 interface SaleFormModalProps {
   open: boolean;
@@ -40,13 +40,21 @@ interface ItemRow {
   customPrice: string;
 }
 
+interface CustomInstallmentRow {
+  amount: string;
+  dueDate: string;
+  note: string;
+}
+
 interface FormValues {
   clientId: string;
   brandId: string;
   saleType: SaleType | '';
   salesAgentId: string;
   paymentPlan: PaymentPlanType;
+  installmentMode: InstallmentMode;
   installmentCount: string;
+  customInstallments: CustomInstallmentRow[];
   totalAmount: string;
   currency: string;
   description: string;
@@ -95,6 +103,8 @@ export function SaleFormModal({
     useForm<FormValues>({
       defaultValues: {
         paymentPlan: PaymentPlanType.ONE_TIME,
+        installmentMode: InstallmentMode.EQUAL,
+        customInstallments: [],
         status: SaleStatus.DRAFT,
         discountEnabled: false,
         discountType: '',
@@ -112,6 +122,7 @@ export function SaleFormModal({
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const { fields: serviceFields, append: appendService, remove: removeService } = useFieldArray({ control, name: 'salePackageServices' });
+  const { fields: installmentFields, append: appendInstallment, remove: removeInstallment } = useFieldArray({ control, name: 'customInstallments' });
 
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -121,6 +132,8 @@ export function SaleFormModal({
   const watchedDiscountValue = watch('discountValue');
   const watchedTotalAmount = watch('totalAmount');
   const watchedPaymentPlan = watch('paymentPlan');
+  const watchedInstallmentMode = watch('installmentMode');
+  const watchedCustomInstallments = watch('customInstallments');
   const watchedSaleType = watch('saleType');
   const watchedClientId = watch('clientId');
   const watchedSelectedPackageId = watch('selectedPackageId');
@@ -166,7 +179,9 @@ export function SaleFormModal({
         saleType: (sale?.saleType as SaleType) ?? prefillSaleType ?? '',
         salesAgentId: sale?.salesAgentId ?? prefillSalesAgentId ?? '',
         paymentPlan: (sale?.paymentPlan as PaymentPlanType) ?? PaymentPlanType.ONE_TIME,
+        installmentMode: (sale?.installmentMode as InstallmentMode) ?? InstallmentMode.EQUAL,
         installmentCount: sale?.installmentCount?.toString() ?? '',
+        customInstallments: [],
         totalAmount: sale?.totalAmount?.toString() ?? '',
         currency: sale?.currency ?? 'USD',
         description: sale?.description ?? '',
@@ -253,6 +268,10 @@ export function SaleFormModal({
         services: values.salePackageServices.map((s, i) => ({ name: s.name, order: s.order ?? i })),
       } : undefined;
 
+      const isCustomInstallments =
+        values.paymentPlan === PaymentPlanType.INSTALLMENTS &&
+        values.installmentMode === InstallmentMode.CUSTOM;
+
       const dto: Record<string, unknown> = {
         brandId: values.brandId,
         paymentPlan: values.paymentPlan,
@@ -260,8 +279,20 @@ export function SaleFormModal({
         ...(values.saleType ? { saleType: values.saleType } : {}),
         ...(values.salesAgentId ? { salesAgentId: values.salesAgentId } : {}),
         ...(values.description ? { description: values.description } : {}),
-        ...(values.paymentPlan === PaymentPlanType.INSTALLMENTS && values.installmentCount
+        ...(values.paymentPlan === PaymentPlanType.INSTALLMENTS
+          ? { installmentMode: values.installmentMode }
+          : {}),
+        ...(!isCustomInstallments && values.paymentPlan === PaymentPlanType.INSTALLMENTS && values.installmentCount
           ? { installmentCount: parseInt(values.installmentCount, 10) }
+          : {}),
+        ...(isCustomInstallments && values.customInstallments.length > 0
+          ? {
+              customInstallments: values.customInstallments.map((ci) => ({
+                amount: parseFloat(ci.amount),
+                ...(ci.dueDate ? { dueDate: ci.dueDate } : {}),
+                ...(ci.note ? { note: ci.note } : {}),
+              })),
+            }
           : {}),
         // When package is selected: total = package price + any extra line items
         ...(hasPackage
@@ -557,18 +588,131 @@ export function SaleFormModal({
           </div>
         </div>
 
-        {/* Installment count */}
+        {/* Installment configuration */}
         {watchedPaymentPlan === PaymentPlanType.INSTALLMENTS ? (
-          <div className="space-y-1.5">
-            <Label>Number of Installments *</Label>
-            <Input
-              type="number"
-              min={2}
-              max={60}
-              placeholder="e.g. 3"
-              {...register('installmentCount', { required: 'Required for installment plans', min: { value: 2, message: 'Min 2' }, max: { value: 60, message: 'Max 60' } })}
-            />
-            {errors.installmentCount ? <p className="text-xs text-destructive">{errors.installmentCount.message}</p> : null}
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Installment Schedule</p>
+
+            {/* Mode toggle */}
+            <div className="flex gap-2">
+              {[
+                { value: InstallmentMode.EQUAL, label: 'Equal Split' },
+                { value: InstallmentMode.CUSTOM, label: 'Custom Amounts' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setValue('installmentMode', opt.value);
+                    if (opt.value === InstallmentMode.CUSTOM && installmentFields.length === 0) {
+                      appendInstallment({ amount: '', dueDate: '', note: '' });
+                      appendInstallment({ amount: '', dueDate: '', note: '' });
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    watchedInstallmentMode === opt.value
+                      ? 'bg-primary/20 border-primary/50 text-primary'
+                      : 'border-white/10 text-muted-foreground hover:text-foreground hover:border-white/20'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Equal mode: count input */}
+            {watchedInstallmentMode === InstallmentMode.EQUAL ? (
+              <div className="space-y-1.5">
+                <Label>Number of Installments *</Label>
+                <Input
+                  type="number"
+                  min={2}
+                  max={60}
+                  placeholder="e.g. 3"
+                  {...register('installmentCount', {
+                    required: 'Required',
+                    min: { value: 2, message: 'Min 2' },
+                    max: { value: 60, message: 'Max 60' },
+                  })}
+                />
+                {errors.installmentCount ? <p className="text-xs text-destructive">{errors.installmentCount.message}</p> : null}
+                {liveTotal > 0 && watch('installmentCount') && parseInt(watch('installmentCount'), 10) >= 2 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {parseInt(watch('installmentCount'), 10)} × {formatCurrency(liveTotal / parseInt(watch('installmentCount'), 10))} each
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Custom mode: installment builder */}
+            {watchedInstallmentMode === InstallmentMode.CUSTOM ? (() => {
+              const customSum = watchedCustomInstallments.reduce((s, ci) => s + (parseFloat(ci.amount) || 0), 0);
+              const remaining = Math.round((liveTotal - customSum) * 100) / 100;
+              const isBalanced = Math.abs(remaining) <= 0.01;
+              return (
+                <div className="space-y-3">
+                  {installmentFields.map((field, index) => (
+                    <div key={field.id} className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">Installment {index + 1}</span>
+                        {installmentFields.length > 2 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeInstallment(index)}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Amount *</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            {...register(`customInstallments.${index}.amount`, { required: true, min: 0.01 })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Due Date (optional)</Label>
+                          <Input
+                            type="date"
+                            {...register(`customInstallments.${index}.dueDate`)}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Note (optional)</Label>
+                        <Input placeholder="e.g. First payment" {...register(`customInstallments.${index}.note`)} />
+                      </div>
+                    </div>
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => appendInstallment({ amount: '', dueDate: '', note: '' })}
+                  >
+                    <Plus className="h-3 w-3" /> Add Installment
+                  </Button>
+
+                  {/* Balance indicator */}
+                  <div className={`rounded-lg p-2.5 text-xs flex justify-between items-center ${
+                    isBalanced ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'
+                  }`}>
+                    <span>Sum of installments</span>
+                    <span className="font-semibold">
+                      {formatCurrency(customSum)} / {formatCurrency(liveTotal)}
+                      {!isBalanced ? ` · ${remaining > 0 ? '+' : ''}${formatCurrency(remaining)} remaining` : ' ✓'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })() : null}
           </div>
         ) : null}
 

@@ -113,8 +113,14 @@ export class AttachmentsService {
       const url = `data:${attachment.mimeType};base64,${buffer.toString('base64')}`;
       return { url, filename: attachment.filename };
     } catch (error) {
-      this.logger.error(`Failed to fetch attachment from Gmail: ${error}`);
-      throw new GoneException({ error: 'ATTACHMENT_UNAVAILABLE', filename: attachment.filename });
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to fetch attachment from Gmail for message ${message.gmailMessageId}: ${msg}`, error instanceof Error ? error.stack : undefined);
+      const isTokenError = msg.toLowerCase().includes('token') || msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('401') || msg.toLowerCase().includes('403');
+      throw new GoneException({
+        error: 'ATTACHMENT_UNAVAILABLE',
+        filename: attachment.filename,
+        reason: isTokenError ? 'TOKEN_EXPIRED' : 'FETCH_FAILED',
+      });
     }
   }
 

@@ -23,12 +23,14 @@ import {
   ISaleItem,
   ISalePackage,
   IClientCollisionWarning,
+  ICustomInstallment,
   IPaginatedResponse,
   SaleStatus,
   UserRole,
   TransactionType,
   TransactionStatus,
   PaymentPlanType,
+  InstallmentMode,
   DiscountType,
   SaleActivityType,
   LeadActivityType,
@@ -101,6 +103,9 @@ export class SalesService {
     }
 
     const paymentPlan = dto.paymentPlan ?? PaymentPlanType.ONE_TIME;
+    const installmentMode = paymentPlan === PaymentPlanType.INSTALLMENTS
+      ? (dto.installmentMode ?? InstallmentMode.EQUAL)
+      : undefined;
 
     // Calculate totalAmount from items if not provided
     let totalAmount = dto.totalAmount;
@@ -130,6 +135,22 @@ export class SalesService {
       );
     }
 
+    // Validate custom installments if applicable
+    if (installmentMode === InstallmentMode.CUSTOM) {
+      if (!dto.customInstallments || dto.customInstallments.length < 2) {
+        throw new BadRequestException('Custom installment plan requires at least 2 installments');
+      }
+      const effectiveTotal = discountedTotal ?? totalAmount;
+      const customSum = Math.round(
+        dto.customInstallments.reduce((s, i) => s + i.amount, 0) * 100,
+      ) / 100;
+      if (Math.abs(customSum - effectiveTotal) > 0.01) {
+        throw new BadRequestException(
+          `Custom installment amounts (${customSum}) must equal the sale total (${effectiveTotal})`,
+        );
+      }
+    }
+
     const { clientId, collisionWarning } = dto.leadId
       ? await this.resolveClientIdFromLead(orgId, actorId, dto.leadId)
       : { clientId: await this.resolveClientId(orgId, dto.clientId), collisionWarning: undefined };
@@ -156,7 +177,10 @@ export class SalesService {
           discountValue: dto.discountValue ?? null,
           discountedTotal: discountedTotal ?? null,
           paymentPlan,
-          installmentCount: paymentPlan === PaymentPlanType.INSTALLMENTS ? (dto.installmentCount ?? 2) : null,
+          installmentCount: paymentPlan === PaymentPlanType.INSTALLMENTS && installmentMode === InstallmentMode.EQUAL
+            ? (dto.installmentCount ?? 2)
+            : null,
+          installmentMode: installmentMode ?? null,
           clientId,
           brandId: dto.brandId,
           organizationId: orgId,
@@ -185,6 +209,8 @@ export class SalesService {
         createdSale.installmentCount,
         createdSale.currency,
         createdSale.brandId,
+        installmentMode,
+        dto.customInstallments,
       );
 
       await this.logActivity(tx, createdSale.id, actorId, SaleActivityType.CREATED, {
@@ -378,6 +404,8 @@ export class SalesService {
     installmentCount: number | null,
     currency: string,
     brandId: string,
+    installmentMode?: InstallmentMode,
+    customInstallments?: ICustomInstallment[],
   ): Promise<Array<{ id: string; invoiceNumber: string; amount: any; dueDate: Date }>> {
     const now = new Date();
 
@@ -397,31 +425,59 @@ export class SalesService {
       return [invoice];
     }
 
-    if (plan === PaymentPlanType.INSTALLMENTS && installmentCount) {
-      const installmentAmount = Math.round((totalAmount / installmentCount) * 100) / 100;
-      const invoices: Array<{ id: string; invoiceNumber: string; amount: any; dueDate: Date }> = [];
-      for (let i = 0; i < installmentCount; i++) {
-        const dueDate = new Date(now);
-        dueDate.setMonth(dueDate.getMonth() + i + 1);
-        // Last installment absorbs rounding difference
-        const amount =
-          i === installmentCount - 1
-            ? Math.round((totalAmount - installmentAmount * (installmentCount - 1)) * 100) / 100
-            : installmentAmount;
-        const invoice = await tx.invoice.create({
-          data: {
-            invoiceNumber: await this.getNextInvoiceNumber(tx, brandId),
-            amount,
-            dueDate,
-            saleId,
-            paymentToken: crypto.randomBytes(32).toString('hex'),
-            notes: `Installment ${i + 1} of ${installmentCount}`,
-          },
-        });
-        invoices.push(invoice);
+    if (plan === PaymentPlanType.INSTALLMENTS) {
+      // Custom schedule
+      if (installmentMode === InstallmentMode.CUSTOM && customInstallments?.length) {
+        const invoices: Array<{ id: string; invoiceNumber: string; amount: any; dueDate: Date }> = [];
+        const total = customInstallments.length;
+        for (let i = 0; i < total; i++) {
+          const item = customInstallments[i];
+          const dueDate = item.dueDate
+            ? new Date(item.dueDate)
+            : (() => { const d = new Date(now); d.setMonth(d.getMonth() + i + 1); return d; })();
+          const invoice = await tx.invoice.create({
+            data: {
+              invoiceNumber: await this.getNextInvoiceNumber(tx, brandId),
+              amount: item.amount,
+              dueDate,
+              saleId,
+              paymentToken: crypto.randomBytes(32).toString('hex'),
+              notes: item.note ?? `Installment ${i + 1} of ${total}`,
+            },
+          });
+          invoices.push(invoice);
+        }
+        return invoices;
       }
-      return invoices;
+
+      // Equal split (existing behavior)
+      if (installmentCount) {
+        const installmentAmount = Math.round((totalAmount / installmentCount) * 100) / 100;
+        const invoices: Array<{ id: string; invoiceNumber: string; amount: any; dueDate: Date }> = [];
+        for (let i = 0; i < installmentCount; i++) {
+          const dueDate = new Date(now);
+          dueDate.setMonth(dueDate.getMonth() + i + 1);
+          // Last installment absorbs rounding difference
+          const amount =
+            i === installmentCount - 1
+              ? Math.round((totalAmount - installmentAmount * (installmentCount - 1)) * 100) / 100
+              : installmentAmount;
+          const invoice = await tx.invoice.create({
+            data: {
+              invoiceNumber: await this.getNextInvoiceNumber(tx, brandId),
+              amount,
+              dueDate,
+              saleId,
+              paymentToken: crypto.randomBytes(32).toString('hex'),
+              notes: `Installment ${i + 1} of ${installmentCount}`,
+            },
+          });
+          invoices.push(invoice);
+        }
+        return invoices;
+      }
     }
+
     // SUBSCRIPTION plan: no invoices generated upfront — ARB handles billing
     return [];
   }
@@ -1078,6 +1134,19 @@ export class SalesService {
       });
     }
 
+    if (sale.status === SaleStatus.PENDING) {
+      await this.prisma.sale.update({
+        where: { id },
+        data: { status: SaleStatus.ACTIVE },
+      });
+      await this.logActivity(this.prisma, id, actorId, SaleActivityType.STATUS_CHANGE, {
+        from: SaleStatus.PENDING,
+        to: SaleStatus.ACTIVE,
+        trigger: 'gateway_payment_received',
+        gateway: gatewayType,
+      });
+    }
+
     await this.cache.del(`sales:${orgId}:${id}`);
 
     return { transaction, gatewayResponse: result };
@@ -1421,6 +1490,7 @@ export class SalesService {
       contractUrl: sale.contractUrl ?? undefined,
       paymentPlan: sale.paymentPlan as PaymentPlanType,
       installmentCount: sale.installmentCount ?? undefined,
+      installmentMode: (sale.installmentMode as InstallmentMode | null) ?? undefined,
       discountType: sale.discountType ?? undefined,
       discountValue: sale.discountValue != null ? Number(sale.discountValue) : undefined,
       discountedTotal: sale.discountedTotal != null ? Number(sale.discountedTotal) : undefined,

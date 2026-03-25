@@ -501,6 +501,7 @@ export interface ILeadAssignee {
 export interface ILeadDetail extends ILead {
   activities: ILeadActivity[];
   assignedTo?: ILeadAssignee;
+  collaborators?: ILeadCollaborator[];
 }
 
 export interface ILeadActivity {
