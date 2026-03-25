@@ -9,4 +9,4 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
-} from '@sentra-core/frontend-ui';
+} from '../../src/components/ui/dialog';

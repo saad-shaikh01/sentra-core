@@ -25,6 +25,7 @@ function AcceptInviteForm() {
     bundles?: Array<{ appCode: string }>;
   } | null>(null);
   const [formData, setFormData] = useState({
+    name: '',
     password: '',
     confirmPassword: '',
   });
@@ -61,6 +62,11 @@ function AcceptInviteForm() {
     e.preventDefault();
     setError('');
 
+    if (!formData.name.trim()) {
+      setError('Name is required');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -73,6 +79,7 @@ function AcceptInviteForm() {
 
     acceptMutation.mutate({
       token: token!,
+      name: formData.name.trim(),
       password: formData.password,
       confirmPassword: formData.confirmPassword,
     });
@@ -202,6 +209,18 @@ function AcceptInviteForm() {
                     {error || acceptMutation.error?.message}
                   </motion.div>
                 )}
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    type="text"
+                    placeholder="Enter your full name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input

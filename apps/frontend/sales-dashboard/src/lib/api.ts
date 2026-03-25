@@ -256,7 +256,7 @@ class ApiClient {
     }>(`/auth/invite?token=${token}`, { skipAuth: true });
   }
 
-  async acceptInvitation(data: { token: string; password: string; confirmPassword: string }) {
+  async acceptInvitation(data: { token: string; name: string; password: string; confirmPassword: string }) {
     return this.fetch<{
       accessToken: string;
       refreshToken: string;

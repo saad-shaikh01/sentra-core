@@ -176,7 +176,7 @@ export function useAcceptInvitation() {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: async (data: { token: string; password: string; confirmPassword: string }) => {
+    mutationFn: async (data: { token: string; name: string; password: string; confirmPassword: string }) => {
       const response = await api.acceptInvitation(data);
       api.setTokens(response.accessToken, response.refreshToken);
       const appAccess = response.appAccess ?? (await api.getMyApps().catch(() => []));
