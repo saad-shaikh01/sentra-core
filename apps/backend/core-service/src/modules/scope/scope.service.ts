@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { UserRole } from '@sentra-core/types';
-import { CacheService } from '../../common';
+import { CacheService, PermissionsService } from '../../common';
 import { UserScope } from './user-scope.class';
-import { ScopeData } from './scope.types';
+import { ScopeBehavior, ScopeData } from './scope.types';
 
 const SCOPE_TTL_MS = 900_000; // 15 minutes in milliseconds
 const SCOPE_KEY_PREFIX = 'scope:';
@@ -13,6 +13,7 @@ export class ScopeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   async getUserScope(userId: string, orgId: string, role: UserRole): Promise<UserScope> {
@@ -56,12 +57,30 @@ export class ScopeService {
     );
   }
 
+  private deriveScopeBehavior(role: UserRole, permissions: string[]): ScopeBehavior {
+    const has = (p: string) => this.permissionsService.matchesAnyPermission(permissions, p);
+
+    if (has('*:*:*') || has('sales:*:*')) return 'full';
+    if (has('sales:leads:view_all')) return 'manager';
+    if (has('sales:leads:create') || has('sales:leads:view_own')) return 'frontsell';
+    if (has('sales:sales:create') || has('sales:sales:view_own')) return 'upsell';
+
+    // Fallback to legacy role names for users with no app-role assignments
+    if (role === UserRole.OWNER || role === UserRole.ADMIN) return 'full';
+    if (role === UserRole.SALES_MANAGER) return 'manager';
+    if (role === UserRole.FRONTSELL_AGENT) return 'frontsell';
+    if (role === UserRole.UPSELL_AGENT) return 'upsell';
+    if (role === UserRole.PROJECT_MANAGER) return 'pm';
+    return 'restricted';
+  }
+
   private async computeScope(userId: string, orgId: string, role: UserRole): Promise<ScopeData> {
     if (role === UserRole.OWNER || role === UserRole.ADMIN) {
       return {
         userId,
         orgId,
         role,
+        scopeBehavior: 'full',
         teamIds: [],
         managedTeamIds: [],
         brandIds: [],
@@ -69,6 +88,10 @@ export class ScopeService {
         teamLeadVisibility: [],
       };
     }
+
+    // Derive scope behavior from DB permissions (with legacy role fallback inside getUserPermissions)
+    const permissions = await this.permissionsService.getUserPermissions(userId, orgId);
+    const scopeBehavior = this.deriveScopeBehavior(role, permissions);
 
     const [memberTeams, managedTeams] = await Promise.all([
       this.prisma.teamMember.findMany({
@@ -136,6 +159,7 @@ export class ScopeService {
       userId,
       orgId,
       role,
+      scopeBehavior,
       teamIds: [...teamIds],
       managedTeamIds: [...managedTeamIds],
       brandIds: [...brandIds],

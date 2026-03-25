@@ -306,7 +306,7 @@ class ApiClient {
   }
 
   // Organization endpoints
-  async getMembers(params?: { role?: string }) {
+  async getMembers(params?: { role?: string; permission?: string }) {
     const qs = buildQueryString(params);
     return this.fetch<any[]>(`/organization/members${qs}`);
   }

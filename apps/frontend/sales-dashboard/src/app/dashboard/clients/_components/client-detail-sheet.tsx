@@ -21,18 +21,16 @@ import {
   useGrantPortalAccess,
   useRevokePortalAccess,
 } from '@/hooks/use-clients';
-import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
+import { usePermissions } from '@/hooks/use-permissions';
 import { timeAgo } from '@/lib/format-date';
 import { useUIStore } from '@/stores/ui-store';
 import {
   ClientActivityType,
-  hasMinimumRole,
   IClient,
   IClientActivity,
   IOrganizationMember,
   ISale,
-  UserRole,
 } from '@sentra-core/types';
 import {
   AlertCircle,
@@ -144,10 +142,10 @@ function ClientNoteContent({
 
 export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps) {
   const { data: client, isLoading, isError } = useClient(clientId ?? '');
-  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const { data: allMembers } = useMembers();
-  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
-  const { data: projectManagers } = useMembers(UserRole.PROJECT_MANAGER);
+  const { data: upsellAgents } = useMembers({ permission: 'sales:sales:view_own' });
+  const { data: projectManagers } = useMembers({ permission: 'sales:invoices:create' });
   const assignClient = useAssignClient();
   const addClientNote = useAddClientNote();
   const grantPortalAccess = useGrantPortalAccess();
@@ -187,7 +185,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
     [activities],
   );
 
-  const canManageClient = user?.role ? hasMinimumRole(user.role, UserRole.SALES_MANAGER) : false;
+  const canManageClient = hasPermission('sales:leads:assign');
   const portalState = detailClient ? getPortalState(detailClient) : null;
 
   const handleAddNote = async (content: string, mentionedUserIds: string[]) => {

@@ -9,19 +9,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ISaleWithRelations, SaleStatus, UserRole } from '@sentra-core/types';
+import { ISaleWithRelations, SaleStatus } from '@sentra-core/types';
 import { useCancelSubscription } from '@/hooks/use-sales';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface SaleSubscriptionSectionProps {
   sale: ISaleWithRelations;
-  userRole?: UserRole;
 }
 
-export function SaleSubscriptionSection({ sale, userRole }: SaleSubscriptionSectionProps) {
+export function SaleSubscriptionSection({ sale }: SaleSubscriptionSectionProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const cancelSubscription = useCancelSubscription();
+  const { hasPermission } = usePermissions();
 
-  const isOwnerAdmin = userRole === UserRole.OWNER || userRole === UserRole.ADMIN;
+  const isOwnerAdmin = hasPermission('sales:sales:charge');
   const isCancelled = [SaleStatus.CANCELLED, SaleStatus.REFUNDED].includes(sale.status as SaleStatus);
 
   const handleCancel = async () => {

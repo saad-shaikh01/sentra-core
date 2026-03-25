@@ -12,16 +12,17 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { InvoicesService } from './invoices.service';
-import { Roles, CurrentUser, Public } from '../auth/decorators';
+import { CurrentUser, Public } from '../auth/decorators';
+import { Permissions } from '../../common';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
-import { UserRole, IInvoice, IPaginatedResponse, SALES_AGENT_ROLES } from '@sentra-core/types';
+import { UserRole, IInvoice, IPaginatedResponse } from '@sentra-core/types';
 
 @Controller('invoices')
 export class InvoicesController {
   constructor(private invoicesService: InvoicesService) {}
 
   @Get('summary')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, UserRole.PROJECT_MANAGER)
+  @Permissions('sales:reports:view')
   getSummary(
     @CurrentUser('orgId') orgId: string,
     @Query('brandId') brandId?: string,
@@ -36,7 +37,7 @@ export class InvoicesController {
   }
 
   @Post()
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+  @Permissions('sales:invoices:create')
   create(@Body() dto: CreateInvoiceDto, @CurrentUser('orgId') orgId: string): Promise<IInvoice> {
     return this.invoicesService.create(orgId, dto);
   }
@@ -57,13 +58,13 @@ export class InvoicesController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.PROJECT_MANAGER)
+  @Permissions('sales:invoices:edit')
   update(@Param('id') id: string, @Body() dto: UpdateInvoiceDto, @CurrentUser('orgId') orgId: string): Promise<IInvoice> {
     return this.invoicesService.update(id, orgId, dto);
   }
 
   @Delete(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:invoices:delete')
   remove(@Param('id') id: string, @CurrentUser('orgId') orgId: string): Promise<{ message: string }> {
     return this.invoicesService.remove(id, orgId);
   }
@@ -85,18 +86,17 @@ export class InvoicesController {
 
   @Post(':id/pay')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, ...SALES_AGENT_ROLES)
+  @Permissions('sales:invoices:pay')
   pay(
     @Param('id') id: string,
     @CurrentUser('orgId') orgId: string,
     @CurrentUser('sub') userId: string,
-    @CurrentUser('role') role: UserRole,
   ) {
-    return this.invoicesService.pay(id, orgId, userId, role);
+    return this.invoicesService.pay(id, orgId, userId);
   }
 
   @Post(':id/regenerate-token')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:invoices:edit')
   async regenerateToken(
     @Param('id') id: string,
     @CurrentUser('orgId') orgId: string,

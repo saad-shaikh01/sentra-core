@@ -11,8 +11,8 @@ import { useLeads } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { useTeams } from '@/hooks/use-teams';
-import { useAuth } from '@/hooks/use-auth';
-import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, LeadViewTab, UserRole } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
+import { ILead, ILeadDetail, IOrganizationMember, LeadSource, LeadStatus, LeadType, LeadViewTab } from '@sentra-core/types';
 import { LeadsKanban } from './_components/leads-kanban';
 import { LeadsTable } from './_components/leads-table';
 import { LeadFormModal } from './_components/lead-form-modal';
@@ -71,8 +71,8 @@ export default function LeadsPage() {
   const { data, isLoading, isError } = useLeads(queryParams);
   const { data: brandsData }  = useBrands({ limit: 100 });
   const { data: teamsData } = useTeams({ limit: 100 });
-  const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
-  const { user } = useAuth();
+  const { data: frontSellAgents } = useMembers({ permission: 'sales:leads:view_own' });
+  const { hasPermission } = usePermissions();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -151,7 +151,7 @@ export default function LeadsPage() {
     });
   };
 
-  const isFrontsell = user?.role === UserRole.FRONTSELL_AGENT;
+  const isFrontsell = hasPermission('sales:leads:view_own');
 
   const leadViewTabs: Array<{ value: LeadViewTab; label: string }> = [
     { value: 'my', label: 'My Leads' },
@@ -315,7 +315,7 @@ export default function LeadsPage() {
             </Select>
           </FilterLabel>
 
-          {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN) && (
+          {hasPermission('sales:teams:view') && (
             <FilterLabel label="Team">
               <Select
                 value={params.teamId ?? 'all'}
@@ -334,7 +334,7 @@ export default function LeadsPage() {
             </FilterLabel>
           )}
 
-          {(user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN || user?.role === UserRole.SALES_MANAGER) && (
+          {hasPermission('sales:leads:view_all') && (
             <FilterLabel label="Assignee">
               <Select
                 value={params.assignedToId ?? 'all'}

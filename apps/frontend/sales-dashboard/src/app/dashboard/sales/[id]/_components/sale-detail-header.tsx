@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Copy, Check, ArrowLeft, Pencil, RotateCcw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared';
-import { ISaleWithRelations, SaleStatus, UserRole, DiscountType, PaymentPlanType } from '@sentra-core/types';
+import { ISaleWithRelations, SaleStatus, DiscountType, PaymentPlanType } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface SaleDetailHeaderProps {
   sale: ISaleWithRelations;
-  userRole?: UserRole;
   onEdit?: () => void;
   onRefund?: () => void;
   onChargeback?: () => void;
@@ -25,15 +25,14 @@ function formatCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
 }
 
-export function SaleDetailHeader({ sale, userRole, onEdit, onRefund, onChargeback }: SaleDetailHeaderProps) {
+export function SaleDetailHeader({ sale, onEdit, onRefund, onChargeback }: SaleDetailHeaderProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const { hasPermission } = usePermissions();
 
-  const isOwnerAdmin = userRole === UserRole.OWNER || userRole === UserRole.ADMIN;
-  const canEdit = userRole && [UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER,
-    UserRole.FRONTSELL_AGENT, UserRole.UPSELL_AGENT].includes(userRole);
-  const canRefund = isOwnerAdmin && [SaleStatus.ACTIVE, SaleStatus.COMPLETED].includes(sale.status as SaleStatus);
-  const canChargeback = isOwnerAdmin && sale.status !== SaleStatus.DRAFT;
+  const canEdit = hasPermission('sales:sales:edit_own');
+  const canRefund = hasPermission('sales:sales:charge') && [SaleStatus.ACTIVE, SaleStatus.COMPLETED].includes(sale.status as SaleStatus);
+  const canChargeback = hasPermission('sales:sales:charge') && sale.status !== SaleStatus.DRAFT;
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(sale.id);

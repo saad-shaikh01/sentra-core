@@ -27,7 +27,7 @@ import {
   useDisconnectGSuite,
   useInviteUser,
 } from '@/hooks/use-comm';
-import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { gsuiteKeys } from '@/hooks/use-comm';
@@ -42,10 +42,10 @@ export default function GSuiteSettingsPageWrapper() {
 }
 
 function GSuiteSettingsPage() {
-  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const isAdminOrOwner = user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN;
+  const isAdminOrOwner = hasPermission('sales:settings:view');
 
   const { data: connection, isLoading: connectionLoading } = useGSuiteConnection();
   const isConnected = connection?.connected === true;

@@ -14,8 +14,9 @@ import { useClients } from '@/hooks/use-clients';
 import { useBrands } from '@/hooks/use-brands';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useUIStore } from '@/stores/ui-store';
-import { hasMinimumRole, ISale, InstallmentMode, SaleStatus, SaleType, UserRole } from '@sentra-core/types';
+import { ISale, InstallmentMode, SaleStatus, SaleType } from '@sentra-core/types';
 import { SaleFormModal } from './_components/sale-form-modal';
 import { SaleDetailSheet } from './_components/sale-detail-sheet';
 import { QuickSaleModal } from './_components/quick-sale-modal';
@@ -63,13 +64,10 @@ export default function SalesPage() {
   const { data, isLoading, isError } = useSales(queryParams);
   const { data: clientsData }    = useClients({ limit: 100 });
   const { data: brandsData }     = useBrands({ limit: 100 });
-  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
-  const { data: upsellAgents }    = useMembers(UserRole.UPSELL_AGENT);
-  const allAgents = useMemo(
-    () => [...(frontsellAgents ?? []), ...(upsellAgents ?? [])],
-    [frontsellAgents, upsellAgents],
-  );
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { data: allAgentsData } = useMembers();
+  const allAgents = allAgentsData ?? [];
+  const { isLoading: isAuthLoading } = useAuth();
+  const { hasPermission } = usePermissions();
   const deleteSale               = useDeleteSale();
   const openConfirmDialog        = useUIStore((s) => s.openConfirmDialog);
 
@@ -77,12 +75,8 @@ export default function SalesPage() {
   const [quickSaleOpen, setQuickSaleOpen] = useState(false);
   const [editSale, setEditSale]           = useState<ISale | null>(null);
   const [detailSaleId, setDetailSaleId]   = useState<string | null>(null);
-  const userRole = user?.role;
-  // OWNER, ADMIN, SALES_MANAGER, PROJECT_MANAGER, and UPSELL_AGENT can create/edit sales
-  const canCreateEdit = userRole
-    ? hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) || userRole === UserRole.UPSELL_AGENT
-    : false;
-  const canDelete = userRole ? hasMinimumRole(userRole, UserRole.ADMIN) : false;
+  const canCreateEdit = hasPermission('sales:sales:create');
+  const canDelete = hasPermission('sales:sales:delete');
 
   // Build lookup maps for human-readable names
   const clientMap = useMemo(

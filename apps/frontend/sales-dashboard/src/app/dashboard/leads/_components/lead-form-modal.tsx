@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAuth } from '@/hooks/use-auth';
 import { useCreateLead, useUpdateLead } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { useTeams } from '@/hooks/use-teams';
-import { hasMinimumRole, ILeadDetail, LeadSource, LeadType, UserRole } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
+import { ILeadDetail, LeadSource, LeadType } from '@sentra-core/types';
 
 const LEAD_TYPE_OPTIONS: Array<{ value: LeadType; label: string }> = [
   { value: LeadType.CHAT, label: 'Chat' },
@@ -91,13 +91,13 @@ const defaultValues: FormValues = {
 
 export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) {
   const isEdit = !!lead;
-  const { user } = useAuth();
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const { data: brandsData } = useBrands({ limit: 100 });
-  const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: frontSellAgents } = useMembers({ permission: 'sales:leads:view_own' });
   const { data: teamsData } = useTeams({ limit: 100 });
-  const canManageAssignment = user?.role ? hasMinimumRole(user.role, UserRole.SALES_MANAGER) : false;
+  const { hasPermission } = usePermissions();
+  const canManageAssignment = hasPermission('sales:leads:assign');
 
   const {
     register,

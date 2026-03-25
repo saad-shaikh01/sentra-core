@@ -12,7 +12,7 @@ import { useClients } from '@/hooks/use-clients';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { usePackages } from '@/hooks/use-packages';
-import { PaymentPlanType, SaleType, UserRole, PackageCategory } from '@sentra-core/types';
+import { PaymentPlanType, SaleType, PackageCategory } from '@sentra-core/types';
 
 interface LineItem {
   name: string;
@@ -86,8 +86,8 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
 
   const { data: clientsData }    = useClients({ limit: 100 });
   const { data: brandsData }     = useBrands({ limit: 100 });
-  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
-  const { data: upsellAgents }    = useMembers(UserRole.UPSELL_AGENT);
+  const { data: frontsellAgents } = useMembers({ permission: 'sales:leads:view_own' });
+  const { data: upsellAgents }    = useMembers({ permission: 'sales:sales:view_own' });
   const { data: packages }        = usePackages();
   const createSale      = useCreateSale();
   const uploadContract  = useUploadContract();

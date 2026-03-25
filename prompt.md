@@ -1,34 +1,85 @@
-Fix the role-based visibility issue for action buttons on **Lead Detail**.
+Good. Now do the **final functional validation** of the completed permission-migration work.
 
-### Problem
+### Goal
 
-On **Lead Detail**, action buttons such as **New Sale** (and related sale/action buttons) are visible for **Admin** and **Manager**, but they are **not visible for Frontsell Agents**.
+Do not summarize code changes again.
+Instead, verify that the app now behaves correctly for both legacy roles and newly created custom roles.
 
-This needs to be investigated and fixed.
+### Validate These Scenarios End-to-End
 
-### Current Issue
+#### 1. Custom Role Compatibility
 
-* **Admin** can see the button(s)
-* **Manager** can see the button(s)
-* **Frontsell Agent** cannot see the same button(s)
+Create at least:
 
-Because of this, Frontsell Agents are unable to access the expected sales flow from Lead Detail.
+* one custom role with sales-agent style permissions
+* one custom role with manager-style permissions
+* one limited view-only custom role
 
-### Expected Behavior
+Then verify that these roles behave correctly without needing hardcoded role names.
 
-* If Frontsell Agents are supposed to have permission for this action, then the same button(s) should also be visible to them on **Lead Detail**.
-* Button visibility should be aligned with actual permissions and allowed actions.
-* UI role checks and backend permission logic should remain consistent.
-* A role should not be blocked at UI level if that role is allowed to perform the action.
+#### 2. Leads Module
 
-### What to Check
+Validate:
 
-* frontend role-based conditional rendering on Lead Detail
-* permission constants / role mapping for Frontsell Agent
-* whether visibility is based on wrong role name or missing role case
-* whether the button is hidden by UI only, even though API/action is allowed
-* whether Lead Detail action permissions differ incorrectly from other modules/pages
+* lead list access
+* lead detail actions
+* assign / unassign / claim / unclaim
+* collaborator selection
+* team visibility
+* unassigned pool
+* team-assigned but user-unassigned lead visibility
+* conversion / new sale action visibility
 
-### Fix Requirement
+#### 3. Sales Module
 
-Make sure **Frontsell Agents** can see the relevant Lead Detail action button(s), including **New Sale**, wherever their role is supposed to have access, and keep the UI + permission behavior consistent across the module.
+Validate:
+
+* sales page access
+* sales table action visibility
+* sale detail actions
+* create sale
+* update sale
+* mark active
+* charge / record payment
+* agent display
+* client ownership checks
+* dropdown/member selectors
+
+#### 4. Invoices Module
+
+Validate:
+
+* invoice page access
+* invoice detail access
+* pay action
+* agent/brand filters
+* payment flow permissions
+
+#### 5. Navigation / Settings / Other Frontend Areas
+
+Validate:
+
+* sidebar visibility
+* inbox access
+* packages/settings access
+* client detail/client page management actions
+
+### Special Check
+
+There is still one `UserRole.FRONTSELL_AGENT` usage kept as a **data value** for an invite API call.
+Confirm whether this is:
+
+* safe and purely informational
+* or still a hidden blocker for future custom roles
+
+### Required Output
+
+Provide:
+
+1. passed scenarios
+2. failed scenarios
+3. any remaining hidden role assumptions
+4. any custom-role limitations still left
+5. final verdict: **is the app now truly custom-role compatible or not?**
+
+Do not provide another implementation summary. Provide behavioral validation results only.

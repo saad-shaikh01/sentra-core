@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared';
-import { IInvoice, InvoiceStatus, ISaleWithRelations, UserRole } from '@sentra-core/types';
+import { IInvoice, InvoiceStatus, ISaleWithRelations } from '@sentra-core/types';
 import { ChargePaymentModal } from '@/components/payment/charge-payment-modal';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface SaleInvoicesSectionProps {
   sale: ISaleWithRelations;
-  userRole?: UserRole;
 }
 
 function formatCurrency(amount: number) {
@@ -23,8 +23,9 @@ function isOverdue(invoice: IInvoice): boolean {
   );
 }
 
-export function SaleInvoicesSection({ sale, userRole }: SaleInvoicesSectionProps) {
-  const canCharge = userRole === UserRole.OWNER || userRole === UserRole.ADMIN || userRole === UserRole.SALES_MANAGER;
+export function SaleInvoicesSection({ sale }: SaleInvoicesSectionProps) {
+  const { hasPermission } = usePermissions();
+  const canCharge = hasPermission('sales:sales:charge');
   const [payModal, setPayModal] = useState<{ id: string; invoiceNumber: string; amount: number } | null>(null);
 
   const invoices = sale.invoices ?? [];

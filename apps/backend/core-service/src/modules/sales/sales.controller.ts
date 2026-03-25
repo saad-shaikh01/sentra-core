@@ -10,12 +10,12 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { SalesService } from './sales.service';
-import { Roles, CurrentUser, AppAccess } from '../auth/decorators';
+import { CurrentUser, AppAccess } from '../auth/decorators';
+import { Permissions } from '../../common';
 import {
   CreateSaleDto,
   UpdateSaleDto,
@@ -27,7 +27,7 @@ import {
   CreateChargebackDto,
   RecordManualPaymentDto,
 } from './dto';
-import { UserRole, AppCode, JwtPayload, ISale, ISaleCreateResponse, IPaginatedResponse } from '@sentra-core/types';
+import { AppCode, JwtPayload, ISale, ISaleCreateResponse, IPaginatedResponse } from '@sentra-core/types';
 import { StorageService } from '../../common';
 
 const ALLOWED_CONTRACT_TYPES = ['application/pdf', 'application/msword',
@@ -43,23 +43,13 @@ export class SalesController {
   ) {}
 
   @Post()
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-    UserRole.UPSELL_AGENT,
-  )
+  @Permissions('sales:sales:create')
   create(@Body() dto: CreateSaleDto, @CurrentUser() user: JwtPayload): Promise<ISaleCreateResponse> {
-    if (user.role === UserRole.PROJECT_MANAGER) {
-      throw new ForbiddenException('Project managers do not have permission to create sales');
-    }
-
     return this.salesService.create(user.orgId, user.sub, user.role, dto);
   }
 
   @Get('summary')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, UserRole.PROJECT_MANAGER)
+  @Permissions('sales:reports:view')
   getSummary(
     @Query('brandId') brandId: string | undefined,
     @Query('dateFrom') dateFrom: string | undefined,
@@ -70,55 +60,31 @@ export class SalesController {
   }
 
   @Get()
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.PROJECT_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-    UserRole.UPSELL_AGENT,
-  )
+  @Permissions('sales:sales:view_own')
   findAll(@Query() query: QuerySalesDto, @CurrentUser() user: JwtPayload): Promise<IPaginatedResponse<ISale>> {
     return this.salesService.findAll(user.orgId, query, user.sub, user.role);
   }
 
   @Get(':id')
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.PROJECT_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-    UserRole.UPSELL_AGENT,
-  )
+  @Permissions('sales:sales:view_own')
   findOne(@Param('id') id: string, @CurrentUser('orgId') orgId: string) {
     return this.salesService.findOne(id, orgId);
   }
 
   @Patch(':id')
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-    UserRole.UPSELL_AGENT,
-  )
+  @Permissions('sales:sales:edit_own')
   update(@Param('id') id: string, @Body() dto: UpdateSaleDto, @CurrentUser() user: JwtPayload): Promise<ISale> {
-    if (user.role === UserRole.PROJECT_MANAGER) {
-      throw new ForbiddenException('Project managers do not have permission to update sales');
-    }
-
     return this.salesService.update(id, user.orgId, user.sub, user.role, dto);
   }
 
   @Delete(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:delete')
   remove(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<{ message: string }> {
     return this.salesService.remove(id, user.orgId, user.sub);
   }
 
   @Post('upload/contract')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER, UserRole.PROJECT_MANAGER)
+  @Permissions('sales:sales:contract')
   @UseInterceptors(FileInterceptor('file'))
   async uploadContract(
     @UploadedFile() file: any,
@@ -143,13 +109,13 @@ export class SalesController {
 
   @Post(':id/charge')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:charge')
   charge(@Param('id') id: string, @Body() dto: ChargeSaleDto, @CurrentUser() user: JwtPayload) {
     return this.salesService.charge(id, user.orgId, user.sub, dto);
   }
 
   @Post(':id/record-payment')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:charge')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   recordPayment(
     @Param('id') id: string,
@@ -161,20 +127,13 @@ export class SalesController {
 
   @Post(':id/subscribe')
   @Throttle({ default: { ttl: 60000, limit: 10 } })
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:charge')
   subscribe(@Param('id') id: string, @Body() dto: CreateSubscriptionDto, @CurrentUser() user: JwtPayload) {
     return this.salesService.subscribe(id, user.orgId, user.sub, dto);
   }
 
   @Post(':id/note')
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-    UserRole.UPSELL_AGENT,
-    UserRole.PROJECT_MANAGER,
-  )
+  @Permissions('sales:sales:note')
   addNote(
     @Param('id') id: string,
     @Body() dto: AddNoteDto,
@@ -184,19 +143,19 @@ export class SalesController {
   }
 
   @Post(':id/refund')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:charge')
   refund(@Param('id') id: string, @Body() dto: CreateRefundDto, @CurrentUser() user: JwtPayload) {
     return this.salesService.refund(id, user.orgId, user.sub, dto);
   }
 
   @Post(':id/chargeback')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:charge')
   recordChargeback(@Param('id') id: string, @Body() dto: CreateChargebackDto, @CurrentUser() user: JwtPayload) {
     return this.salesService.recordChargeback(id, user.orgId, user.sub, dto);
   }
 
   @Post(':id/cancel-subscription')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:sales:charge')
   cancelSubscription(@Param('id') id: string, @CurrentUser('orgId') orgId: string) {
     return this.salesService.cancelSubscription(id, orgId);
   }

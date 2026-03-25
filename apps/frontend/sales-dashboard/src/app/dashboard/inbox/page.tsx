@@ -19,7 +19,7 @@ import {
   useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities,
 } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
-import { UserRole } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
 import { Button } from '@/components/ui/button';
@@ -171,8 +171,9 @@ function InboxContent() {
   const debouncedSearch = useDebounce(search, 300);
   const { data: identities } = useIdentities();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
 
-  const isPrivileged = user?.role === UserRole.ADMIN || user?.role === UserRole.OWNER;
+  const isPrivileged = hasPermission('sales:settings:view');
   const ownIdentities = identities?.filter((id) => id.userId === user?.id) ?? [];
   const teamIdentities = identities?.filter((id) => id.userId !== user?.id) ?? [];
 

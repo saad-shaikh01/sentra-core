@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useConvertLead } from '@/hooks/use-leads';
 import { useMembers } from '@/hooks/use-organization';
-import { ILead, UserRole } from '@sentra-core/types';
+import { ILead } from '@sentra-core/types';
 
 interface ConvertLeadModalProps {
   open: boolean;
@@ -28,8 +28,8 @@ interface FormValues {
 
 export function ConvertLeadModal({ open, onOpenChange, lead, onSuccess }: ConvertLeadModalProps) {
   const convertLead = useConvertLead();
-  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
-  const { data: projectManagers } = useMembers(UserRole.PROJECT_MANAGER);
+  const { data: upsellAgents } = useMembers({ permission: 'sales:sales:view_own' });
+  const { data: projectManagers } = useMembers({ permission: 'sales:invoices:create' });
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormValues>();
   const upsellAgentId = watch('upsellAgentId');
   const projectManagerId = watch('projectManagerId');

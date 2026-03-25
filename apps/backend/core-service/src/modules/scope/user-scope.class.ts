@@ -1,15 +1,14 @@
-import { UserRole } from '@sentra-core/types';
 import { ScopeData, LeadScopeFilter, ClientScopeFilter, SaleScopeFilter, InvoiceScopeFilter } from './scope.types';
 
 export class UserScope {
   constructor(private readonly data: ScopeData) {}
 
   get isFullAccess(): boolean {
-    return this.data.role === UserRole.OWNER || this.data.role === UserRole.ADMIN;
+    return this.data.scopeBehavior === 'full';
   }
 
   get isManager(): boolean {
-    return this.data.role === UserRole.SALES_MANAGER;
+    return this.data.scopeBehavior === 'manager';
   }
 
   toLeadFilter(): LeadScopeFilter {
@@ -21,7 +20,7 @@ export class UserScope {
       return { ...base, brandId: { in: this.data.brandIds } };
     }
 
-    if (this.data.role === UserRole.FRONTSELL_AGENT) {
+    if (this.data.scopeBehavior === 'frontsell') {
       const orConditions: Array<Record<string, unknown>> = [
         { assignedToId: this.data.userId },
         { collaborators: { some: { userId: this.data.userId } } },
@@ -46,7 +45,7 @@ export class UserScope {
       return { ...base, OR: orConditions };
     }
 
-    // UPSELL_AGENT and PROJECT_MANAGER: no lead access
+    // upsell, pm, restricted: no lead access
     return { ...base, assignedToId: '__none__' };
   }
 
@@ -59,7 +58,7 @@ export class UserScope {
       return { ...base, brandId: { in: this.data.brandIds } };
     }
 
-    if (this.data.role === UserRole.FRONTSELL_AGENT) {
+    if (this.data.scopeBehavior === 'frontsell') {
       if (
         this.data.memberVisibleTeamIds.length > 0 &&
         this.data.brandIds.length > 0
@@ -69,11 +68,11 @@ export class UserScope {
       return { ...base, brandId: { in: [] } };
     }
 
-    if (this.data.role === UserRole.UPSELL_AGENT) {
+    if (this.data.scopeBehavior === 'upsell') {
       return { ...base, upsellAgentId: this.data.userId };
     }
 
-    // PROJECT_MANAGER
+    // pm: scoped to assigned projects
     return { ...base, projectManagerId: this.data.userId };
   }
 
@@ -86,23 +85,21 @@ export class UserScope {
       return { ...base, brandId: { in: this.data.brandIds } };
     }
 
-    if (this.data.role === UserRole.FRONTSELL_AGENT) {
+    if (this.data.scopeBehavior === 'frontsell') {
       if (
         this.data.memberVisibleTeamIds.length > 0 &&
         this.data.brandIds.length > 0
       ) {
         return { ...base, brandId: { in: this.data.brandIds } };
       }
-      // Frontsell with no visible team: no sale access
       return { ...base, id: { in: [] } };
     }
 
-    if (this.data.role === UserRole.UPSELL_AGENT) {
-      // Upsell agents see sales for clients assigned to them
+    if (this.data.scopeBehavior === 'upsell') {
       return { ...base, client: { is: { upsellAgentId: this.data.userId } } };
     }
 
-    // PROJECT_MANAGER: no sale access
+    // pm, restricted: no sale access
     return { ...base, id: { in: [] } };
   }
 

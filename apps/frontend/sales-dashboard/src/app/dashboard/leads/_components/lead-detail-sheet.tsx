@@ -30,8 +30,8 @@ import {
 } from '@/hooks/use-leads';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
+import { usePermissions } from '@/hooks/use-permissions';
 import {
-  hasMinimumRole,
   ILeadActivity,
   ILeadDetail,
   IOrganizationMember,
@@ -39,7 +39,6 @@ import {
   LEAD_STATUS_TRANSITIONS,
   LeadStatus,
   SaleType,
-  UserRole,
 } from '@sentra-core/types';
 import { ConvertLeadModal } from './convert-lead-modal';
 import { SaleFormModal } from '@/app/dashboard/sales/_components/sale-form-modal';
@@ -202,8 +201,9 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const { data: lead, isLoading, isError } = useLead(leadId ?? '');
   const { data: activities } = useLeadActivities(leadId ?? '');
   const { data: members } = useMembers();
-  const { data: frontSellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
+  const { data: frontSellAgents } = useMembers({ permission: 'sales:leads:view_own' });
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const changeStatus = useChangeLeadStatus();
   const assignLead = useAssignLead();
   const addNote = useAddLeadNote();
@@ -229,16 +229,15 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
   const allowedTransitions = lead ? LEAD_STATUS_TRANSITIONS[lead.status] : [];
   const minFollowUpDate = new Date().toISOString().split('T')[0];
-  const userRole = user?.role;
-  const isFrontsell = userRole === UserRole.FRONTSELL_AGENT;
-  const canAssign = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
-  const canConvert = userRole ? hasMinimumRole(userRole, UserRole.SALES_MANAGER) : false;
-  const canCreateSale = userRole ? (hasMinimumRole(userRole, UserRole.PROJECT_MANAGER) || isFrontsell) : false;
-  const showReadOnlyAssignee = !!userRole && !canAssign && !isFrontsell;
+  const canAssign = hasPermission('sales:leads:assign');
+  const canConvert = hasPermission('sales:leads:convert');
+  const canCreateSale = hasPermission('sales:sales:create');
+  const isFrontsell = hasPermission('sales:leads:view_own');
+  const showReadOnlyAssignee = !canAssign && !isFrontsell;
   const isLeadClosed = lead?.status === LeadStatus.CLOSED_WON || lead?.status === LeadStatus.CLOSED_LOST;
   const isOwner = !!user && lead?.assignedToId === user.id;
   const isCollaborator = !!user && (lead as any)?.collaborators?.some((c: { userId: string }) => c.userId === user.id);
-  const canClaim = isFrontsell && !lead?.assignedToId && !isLeadClosed;
+  const canClaim = hasPermission('sales:leads:claim') && !lead?.assignedToId && !isLeadClosed;
   const canUnclaim = (isOwner || canAssign) && !!lead?.assignedToId && !isLeadClosed;
   const canManageCollaborators = isOwner || canAssign;
 

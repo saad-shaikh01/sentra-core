@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useSale } from '@/hooks/use-sales';
-import { useAuth } from '@/hooks/use-auth';
-import { PaymentPlanType, UserRole } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
+import { PaymentPlanType } from '@sentra-core/types';
 import { SaleDetailHeader } from './_components/sale-detail-header';
 import { SaleClientSection } from './_components/sale-client-section';
 import { SaleStatusControls } from './_components/sale-status-controls';
@@ -26,8 +26,7 @@ import { CreditCard } from 'lucide-react';
 export default function SaleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: sale, isLoading, isError } = useSale(id);
-  const { user } = useAuth();
-  const userRole = user?.role;
+  const { hasPermission } = usePermissions();
 
   const [editOpen, setEditOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
@@ -70,7 +69,7 @@ export default function SaleDetailPage() {
     );
   }
 
-  const canCharge = userRole === UserRole.OWNER || userRole === UserRole.ADMIN || userRole === UserRole.SALES_MANAGER;
+  const canCharge = hasPermission('sales:sales:charge');
   const isSubscription = sale.paymentPlan === PaymentPlanType.SUBSCRIPTION;
   const hasSubscription = !!(sale as any).subscriptionId || !!(sale as any).gatewaySubscriptionId;
 
@@ -78,7 +77,6 @@ export default function SaleDetailPage() {
     <div className="max-w-4xl">
       <SaleDetailHeader
         sale={sale}
-        userRole={userRole}
         onEdit={() => setEditOpen(true)}
         onRefund={() => setRefundOpen(true)}
         onChargeback={() => setChargebackOpen(true)}
@@ -116,10 +114,10 @@ export default function SaleDetailPage() {
         <div className="lg:col-span-1 space-y-4">
           <SaleClientSection sale={sale} collisionWarning={collisionWarning} />
           {sale.salePackage && <SalePackageSection salePackage={sale.salePackage} currency={sale.currency} />}
-          <SaleStatusControls sale={sale} userRole={userRole} />
+          <SaleStatusControls sale={sale} />
           <SaleContractSection saleId={sale.id} contractUrl={sale.contractUrl} />
           {isSubscription ? (
-            <SaleSubscriptionSection sale={sale} userRole={userRole} />
+            <SaleSubscriptionSection sale={sale} />
           ) : null}
         </div>
 
@@ -132,15 +130,11 @@ export default function SaleDetailPage() {
             discountValue={sale.discountValue}
             discountedTotal={sale.discountedTotal}
           />
-          <SaleInvoicesSection
-            sale={sale}
-            userRole={userRole}
-          />
+          <SaleInvoicesSection sale={sale} />
           <SaleTransactionsSection transactions={sale.transactions ?? []} />
           <SaleActivityTimeline
             activities={sale.activities ?? []}
             saleId={sale.id}
-            userRole={userRole}
           />
         </div>
       </div>

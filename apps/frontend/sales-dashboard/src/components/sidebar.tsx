@@ -29,9 +29,8 @@ import { useAuth, useLogout } from '@/hooks/use-auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RoleGuard } from '@/components/role-guard';
+import { PermissionGuard } from '@/components/permission-guard';
 import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
-import { UserRole } from '@sentra-core/types';
 import { COMM_ENABLED } from '@/lib/feature-flags';
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
@@ -53,10 +52,10 @@ const settingsNavigation = [
     name: 'Sales Teams',
     href: '/dashboard/teams',
     icon: UsersRound,
-    roles: [UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER] as UserRole[],
+    permission: 'sales:teams:view',
   },
   ...(COMM_ENABLED ? [{ name: 'Gmail', href: '/dashboard/settings/gmail', icon: Mail }] : []),
-  ...(COMM_ENABLED ? [{ name: 'G Suite', href: '/dashboard/settings/gsuite', icon: Building2, roles: [UserRole.OWNER, UserRole.ADMIN] as UserRole[] }] : []),
+  ...(COMM_ENABLED ? [{ name: 'G Suite', href: '/dashboard/settings/gsuite', icon: Building2, permission: 'sales:settings:manage' }] : []),
 ];
 
 export function Sidebar() {
@@ -259,11 +258,11 @@ export function Sidebar() {
                   </Link>
                 );
 
-                if (item.roles) {
+                if (item.permission) {
                   return (
-                    <RoleGuard key={item.name} allowed={item.roles}>
+                    <PermissionGuard key={item.name} permission={item.permission}>
                       {navItem}
-                    </RoleGuard>
+                    </PermissionGuard>
                   );
                 }
 

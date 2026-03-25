@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType, isSalesAgentRole } from '@sentra-core/types';
-import { buildPaginationResponse, CacheService } from '../../common';
+import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
+import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
 import { InvoicePdfService } from './pdf/invoice-pdf.service';
@@ -21,6 +21,7 @@ export class InvoicesService {
     private pdfService: InvoicePdfService,
     private cache: CacheService,
     private readonly scopeService: ScopeService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   private async generateInvoiceNumber(): Promise<string> {
@@ -321,7 +322,7 @@ export class InvoicesService {
     });
   }
 
-  async pay(id: string, orgId: string, userId?: string, role?: UserRole) {
+  async pay(id: string, orgId: string, userId?: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: { sale: true },
@@ -332,13 +333,16 @@ export class InvoicesService {
 
     const sale = invoice.sale;
 
-    // Agent-level roles: must be the assigned agent on this sale, and only allowed on MANUAL gateway
-    if (role && isSalesAgentRole(role)) {
-      if (sale.salesAgentId !== userId) {
-        throw new ForbiddenException('You are not the assigned agent for this sale');
-      }
-      if ((sale.gateway ?? GatewayType.MANUAL) !== GatewayType.MANUAL) {
-        throw new ForbiddenException('Sales agents can only mark manual payments as paid');
+    // Users without elevated access (no view_all = agent-level): restricted to their own sales, manual gateway only
+    if (userId) {
+      const hasElevatedAccess = await this.permissionsService.userHasPermission(userId, orgId, 'sales:invoices:edit');
+      if (!hasElevatedAccess) {
+        if (sale.salesAgentId !== userId) {
+          throw new ForbiddenException('You are not the assigned agent for this sale');
+        }
+        if ((sale.gateway ?? GatewayType.MANUAL) !== GatewayType.MANUAL) {
+          throw new ForbiddenException('Sales agents can only mark manual payments as paid');
+        }
       }
     }
 

@@ -20,8 +20,9 @@ export class OrganizationController {
   getMembers(
     @CurrentUser('orgId') orgId: string,
     @Query('role') role?: UserRole,
+    @Query('permission') permission?: string,
   ): Promise<IOrganizationMember[]> {
-    return this.organizationService.getMembers(orgId, role);
+    return this.organizationService.getMembers(orgId, role, permission);
   }
 
   @Patch('members/:userId/role')

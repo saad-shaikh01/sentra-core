@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { useSale, useCancelSubscription } from '@/hooks/use-sales';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useUIStore } from '@/stores/ui-store';
-import { hasMinimumRole, ISaleWithRelations, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
+import { ISaleWithRelations, TransactionStatus, GatewayType } from '@sentra-core/types';
 import { ChargePaymentModal } from '@/components/payment/charge-payment-modal';
 import { SubscribeModal } from './subscribe-modal';
 import { CreditCard, RefreshCw, AlertCircle, FileText } from 'lucide-react';
@@ -24,22 +25,19 @@ type SaleTransactionWithGateway = ISaleWithRelations['transactions'][number] & {
 
 export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
   const { data: sale, isLoading, isError } = useSale(saleId ?? '');
-  const { user, isLoading: isAuthLoading } = useAuth();
-  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
-  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
+  const { isLoading: isAuthLoading } = useAuth();
+  const { data: allAgentsData } = useMembers({ permission: 'sales:sales:view_own' });
+  const { hasPermission } = usePermissions();
   const cancelSubscription = useCancelSubscription();
 
-  const allAgents = [...(frontsellAgents ?? []), ...(upsellAgents ?? [])];
   const agentName = sale?.salesAgentId
-    ? (allAgents.find((a) => a.id === sale.salesAgentId)?.name ?? null)
+    ? ((allAgentsData ?? []).find((a) => a.id === sale.salesAgentId)?.name ?? null)
     : null;
   const openConfirmDialog = useUIStore((s) => s.openConfirmDialog);
 
   const [chargeOpen, setChargeOpen] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const userRole = user?.role;
-  const canChargeOrSubscribe =
-    !isAuthLoading && !!userRole && hasMinimumRole(userRole, UserRole.ADMIN);
+  const canChargeOrSubscribe = !isAuthLoading && hasPermission('sales:sales:charge');
   const hasPaymentProfile = !!(
     (sale?.customerProfileId && sale?.paymentProfileId) ||
     (sale?.gatewayCustomerId && sale?.gatewayPaymentMethodId)

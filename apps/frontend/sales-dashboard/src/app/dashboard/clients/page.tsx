@@ -12,10 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBrands } from '@/hooks/use-brands';
 import { useClients, useDeleteClient } from '@/hooks/use-clients';
 import { useDebounce } from '@/hooks/use-debounce';
-import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organization';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useUIStore } from '@/stores/ui-store';
-import { ClientStatus, IClient, IOrganizationMember, SaleType, UserRole } from '@sentra-core/types';
+import { ClientStatus, IClient, IOrganizationMember, SaleType } from '@sentra-core/types';
 import { ClientDetailSheet } from './_components/client-detail-sheet';
 import { ClientFormModal } from './_components/client-form-modal';
 import { SaleFormModal } from '../sales/_components/sale-form-modal';
@@ -54,15 +54,12 @@ export default function ClientsPage() {
   const debouncedSearch = useDebounce(searchInput, 300);
   const deleteClient = useDeleteClient();
   const openConfirmDialog = useUIStore((state) => state.openConfirmDialog);
-  const { user } = useAuth();
-  const canManageClients =
-    user?.role === UserRole.OWNER ||
-    user?.role === UserRole.ADMIN ||
-    user?.role === UserRole.SALES_MANAGER;
+  const { hasPermission } = usePermissions();
+  const canManageClients = hasPermission('sales:leads:assign');
 
   const { data: brandsData } = useBrands({ limit: 100 });
-  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
-  const { data: projectManagers } = useMembers(UserRole.PROJECT_MANAGER);
+  const { data: upsellAgents } = useMembers({ permission: 'sales:sales:view_own' });
+  const { data: projectManagers } = useMembers({ permission: 'sales:invoices:create' });
 
   const queryParams = useMemo(
     () => ({

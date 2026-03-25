@@ -6,13 +6,17 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { UserRole, IOrganizationMember, JwtPayload } from '@sentra-core/types';
+import { PermissionsService } from '../../common';
 import { UpdateRoleDto } from './dto';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly permissionsService: PermissionsService,
+  ) {}
 
-  async getMembers(orgId: string, role?: UserRole): Promise<IOrganizationMember[]> {
+  async getMembers(orgId: string, role?: UserRole, permission?: string): Promise<IOrganizationMember[]> {
     const users = await this.prisma.user.findMany({
       where: {
         organizationId: orgId,
@@ -22,7 +26,7 @@ export class OrganizationService {
       orderBy: { createdAt: 'asc' },
     });
 
-    return users.map((user) => ({
+    const members: IOrganizationMember[] = users.map((user) => ({
       id: user.id,
       email: user.email,
       name: user.name,
@@ -32,6 +36,13 @@ export class OrganizationService {
       isActive: user.isActive,
       createdAt: user.createdAt,
     }));
+
+    if (!permission) return members;
+
+    const checks = await Promise.all(
+      members.map((m) => this.permissionsService.userHasPermission(m.id, orgId, permission)),
+    );
+    return members.filter((_, i) => checks[i]);
   }
 
   async updateMemberRole(

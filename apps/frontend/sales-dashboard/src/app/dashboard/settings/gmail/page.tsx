@@ -3,12 +3,12 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, CheckCircle2, AlertCircle, Clock, Wifi, Trash2, Star } from 'lucide-react';
-import { UserRole } from '@sentra-core/types';
 import { PageHeader } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useIdentities, useDisconnectIdentity, useInitiateOAuth } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -32,6 +32,7 @@ export default function GmailSettingsPageWrapper() {
 
 function GmailSettingsPage() {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const { data: identities, isLoading, isError, error, refetch } = useIdentities();
   const disconnectMutation = useDisconnectIdentity();
   const oauthMutation = useInitiateOAuth();
@@ -47,7 +48,7 @@ function GmailSettingsPage() {
   const [brandsError, setBrandsError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
-  const canViewOrgIdentities = user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN;
+  const canViewOrgIdentities = hasPermission('sales:settings:view');
 
   // Handle OAuth return
   useEffect(() => {

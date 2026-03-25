@@ -11,10 +11,10 @@ import { useBrands } from '@/hooks/use-brands';
 import { useClients } from '@/hooks/use-clients';
 import { useCreateSale, useUpdateSale } from '@/hooks/use-sales';
 import { useMembers } from '@/hooks/use-organization';
-import { useAuth } from '@/hooks/use-auth';
 import { usePackages } from '@/hooks/use-packages';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useRouter } from 'next/navigation';
-import { ISale, SaleStatus, SaleType, PaymentPlanType, InstallmentMode, DiscountType, UserRole } from '@sentra-core/types';
+import { ISale, SaleStatus, SaleType, PaymentPlanType, InstallmentMode, DiscountType } from '@sentra-core/types';
 import { Plus, Minus, X, Trash2 } from 'lucide-react';
 
 interface SaleFormModalProps {
@@ -87,16 +87,15 @@ export function SaleFormModal({
   const isLeadMode = !isEdit && !!prefillLeadId;
   const isClientMode = !isEdit && !isLeadMode && !!prefillClientId;
   const router = useRouter();
-  const { user } = useAuth();
-  const userRole = user?.role;
-  const isAgent = userRole === UserRole.FRONTSELL_AGENT || userRole === UserRole.UPSELL_AGENT;
+  const { hasPermission } = usePermissions();
+  const isAgent = hasPermission('sales:sales:create') && !hasPermission('sales:sales:edit_all');
 
   const createSale = useCreateSale();
   const updateSale = useUpdateSale();
   const { data: clientsData } = useClients({ limit: 100 });
   const { data: brandsData } = useBrands({ limit: 100 });
-  const { data: frontsellAgents } = useMembers(UserRole.FRONTSELL_AGENT);
-  const { data: upsellAgents } = useMembers(UserRole.UPSELL_AGENT);
+  const { data: frontsellAgents } = useMembers({ permission: 'sales:leads:view_own' });
+  const { data: upsellAgents } = useMembers({ permission: 'sales:sales:view_own' });
   const { data: packages } = usePackages();
 
   const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } =

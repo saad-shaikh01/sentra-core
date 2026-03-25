@@ -11,11 +11,21 @@ export const organizationKeys = {
   invitations: () => [...organizationKeys.all, 'invitations'] as const,
 };
 
+type MembersFilter = { role?: UserRole; permission?: string };
+
 // Hook to get organization members
-export function useMembers(role?: UserRole) {
+export function useMembers(filter?: UserRole | MembersFilter) {
+  const normalizedFilter: MembersFilter | undefined =
+    typeof filter === 'string' ? { role: filter } : filter;
+
   return useQuery({
-    queryKey: [...organizationKeys.members(), role ?? 'all'],
-    queryFn: (): Promise<IOrganizationMember[]> => api.getMembers(role ? { role } : undefined),
+    queryKey: [...organizationKeys.members(), normalizedFilter ?? 'all'],
+    queryFn: (): Promise<IOrganizationMember[]> => {
+      const params: Record<string, string> = {};
+      if (normalizedFilter?.role) params['role'] = normalizedFilter.role;
+      if (normalizedFilter?.permission) params['permission'] = normalizedFilter.permission;
+      return api.getMembers(Object.keys(params).length > 0 ? params : undefined);
+    },
     retry: false,
   });
 }

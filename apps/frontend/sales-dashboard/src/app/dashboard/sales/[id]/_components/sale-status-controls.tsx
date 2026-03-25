@@ -10,7 +10,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ISaleWithRelations, SaleStatus, UserRole } from '@sentra-core/types';
+import { ISaleWithRelations, SaleStatus } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // Backend-aligned transitions (overrides shared types which has DRAFT: [])
 const ALLOWED_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
@@ -26,11 +27,11 @@ import { useUpdateSale, salesKeys } from '@/hooks/use-sales';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 
-// Role restrictions for transitions
-const ROLE_REQUIRED: Partial<Record<string, UserRole[]>> = {
-  [`${SaleStatus.ACTIVE}→${SaleStatus.REFUNDED}`]: [UserRole.OWNER, UserRole.ADMIN],
-  [`${SaleStatus.COMPLETED}→${SaleStatus.REFUNDED}`]: [UserRole.OWNER, UserRole.ADMIN],
-};
+// Transitions that require elevated charge permission (refund capability)
+const CHARGE_REQUIRED_TRANSITIONS = new Set([
+  `${SaleStatus.ACTIVE}→${SaleStatus.REFUNDED}`,
+  `${SaleStatus.COMPLETED}→${SaleStatus.REFUNDED}`,
+]);
 
 const TRANSITION_LABELS: Record<string, string> = {
   [`→${SaleStatus.PENDING}`]: 'Submit for Processing',
@@ -45,24 +46,25 @@ const DANGER_TRANSITIONS = [SaleStatus.CANCELLED, SaleStatus.REFUNDED];
 
 interface SaleStatusControlsProps {
   sale: ISaleWithRelations;
-  userRole?: UserRole;
 }
 
-export function SaleStatusControls({ sale, userRole }: SaleStatusControlsProps) {
+export function SaleStatusControls({ sale }: SaleStatusControlsProps) {
   const [pendingStatus, setPendingStatus] = useState<SaleStatus | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const updateSale = useUpdateSale();
+  const { hasPermission } = usePermissions();
+
+  const canCharge = hasPermission('sales:sales:charge');
 
   const currentStatus = sale.status as SaleStatus;
   const allowedTransitions = ALLOWED_TRANSITIONS[currentStatus] ?? [];
 
   const filteredTransitions = allowedTransitions.filter((to) => {
     const key = `${currentStatus}→${to}`;
-    const requiredRoles = ROLE_REQUIRED[key];
-    if (!requiredRoles) return true;
-    return userRole ? requiredRoles.includes(userRole) : false;
+    if (CHARGE_REQUIRED_TRANSITIONS.has(key)) return canCharge;
+    return true;
   });
 
   const handleConfirm = async () => {

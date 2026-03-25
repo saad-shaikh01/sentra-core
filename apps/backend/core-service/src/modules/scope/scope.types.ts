@@ -1,5 +1,7 @@
 import { UserRole } from '@sentra-core/types';
 
+export type ScopeBehavior = 'full' | 'manager' | 'frontsell' | 'upsell' | 'pm' | 'restricted';
+
 export interface TeamLeadVisibility {
   teamId: string;
   mode: string; // LeadVisibilityMode value
@@ -9,6 +11,8 @@ export interface ScopeData {
   userId: string;
   orgId: string;
   role: UserRole;
+  /** Permission-derived behavior — drives all filter logic in UserScope */
+  scopeBehavior: ScopeBehavior;
   teamIds: string[];
   managedTeamIds: string[];
   brandIds: string[];

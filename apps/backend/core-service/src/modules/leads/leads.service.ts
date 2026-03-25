@@ -27,7 +27,7 @@ import {
 } from '@sentra-core/types';
 import { isEmail, isURL } from 'class-validator';
 import * as XLSX from 'xlsx';
-import { buildPaginationResponse, CacheService } from '../../common';
+import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 import { TeamBrandHelper } from '../scope/team-brand.helper';
 import {
@@ -80,6 +80,7 @@ export class LeadsService {
     private cache: CacheService,
     private readonly scopeService: ScopeService,
     private readonly teamBrandHelper: TeamBrandHelper,
+    private readonly permissionsService: PermissionsService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -260,8 +261,9 @@ export class LeadsService {
       source: dto.source,
     });
 
+    const creatorHasViewOwn = await this.permissionsService.userHasPermission(userId, orgId, 'sales:leads:view_own');
     const shouldAutoAssignToCreator =
-      userRole === UserRole.FRONTSELL_AGENT && !dto.assignedToId;
+      creatorHasViewOwn && !dto.assignedToId;
     const assignedToId = shouldAutoAssignToCreator ? userId : dto.assignedToId;
     const creatorTeamId = shouldAutoAssignToCreator
       ? await this.resolveCreatorTeamId(orgId, userId)
@@ -904,9 +906,14 @@ export class LeadsService {
     if (!assignee) throw new NotFoundException('Assignee not found');
     if (assignee.organizationId !== orgId) throw new BadRequestException('Assignee must be in the same organization');
 
-    // Lead assignment is FrontSell only
-    if (assignee.role !== 'FRONTSELL_AGENT' && assignee.role !== 'SALES_MANAGER' && assignee.role !== 'ADMIN' && assignee.role !== 'OWNER') {
-      throw new BadRequestException('Lead can only be assigned to FRONTSELL_AGENT, SALES_MANAGER, ADMIN, or OWNER');
+    // Assignee must have lead visibility permissions (or a qualifying legacy role)
+    const assigneeCanHandleLeads = await this.permissionsService.userHasPermission(
+      assignee.id,
+      orgId,
+      'sales:leads:view_own',
+    );
+    if (!assigneeCanHandleLeads) {
+      throw new BadRequestException('The selected user does not have permission to handle leads');
     }
 
     // Fetch previous assignee name for activity log
@@ -967,14 +974,14 @@ export class LeadsService {
     return this.mapToILead(updated);
   }
 
-  async unclaim(id: string, orgId: string, userId: string, role: UserRole): Promise<ILead> {
+  async unclaim(id: string, orgId: string, userId: string): Promise<ILead> {
     const lead = await this.prisma.lead.findUnique({ where: { id } });
     if (!lead || lead.deletedAt) throw new NotFoundException('Lead not found');
     if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
     if (!lead.assignedToId) throw new BadRequestException('Lead is not currently assigned');
 
-    const isAdminOrManager = role === UserRole.OWNER || role === UserRole.ADMIN || role === UserRole.SALES_MANAGER;
-    if (!isAdminOrManager && lead.assignedToId !== userId) {
+    const canUnclaimOthers = await this.permissionsService.userHasPermission(userId, orgId, 'sales:leads:assign');
+    if (!canUnclaimOthers && lead.assignedToId !== userId) {
       throw new ForbiddenException('You can only unclaim leads assigned to you');
     }
 
@@ -1012,9 +1019,13 @@ export class LeadsService {
     if (!target) throw new NotFoundException('User not found');
     if (target.organizationId !== orgId) throw new BadRequestException('User must be in the same organization');
 
-    const allowedRoles: string[] = [UserRole.FRONTSELL_AGENT, UserRole.SALES_MANAGER, UserRole.ADMIN, UserRole.OWNER];
-    if (!allowedRoles.includes(target.role)) {
-      throw new BadRequestException('Only FRONTSELL_AGENT, SALES_MANAGER, ADMIN, or OWNER can be collaborators');
+    const targetCanCollaborate = await this.permissionsService.userHasPermission(
+      target.id,
+      orgId,
+      'sales:leads:view_own',
+    );
+    if (!targetCanCollaborate) {
+      throw new BadRequestException('The selected user does not have permission to collaborate on leads');
     }
 
     try {
@@ -1188,8 +1199,16 @@ export class LeadsService {
             select: { name: true, role: true, organizationId: true },
           });
 
-          if (!upsellUser || upsellUser.organizationId !== orgId || upsellUser.role !== UserRole.UPSELL_AGENT) {
-            throw new BadRequestException('Upsell agent must be a UPSELL_AGENT in the same organization');
+          if (!upsellUser || upsellUser.organizationId !== orgId) {
+            throw new BadRequestException('Upsell agent must belong to the same organization');
+          }
+          const upsellHasPermission = await this.permissionsService.userHasPermission(
+            dto.upsellAgentId,
+            orgId,
+            'sales:sales:view_own',
+          );
+          if (!upsellHasPermission) {
+            throw new BadRequestException('The selected upsell agent does not have permission to manage sales');
           }
 
           await tx.clientActivity.create({
@@ -1213,8 +1232,16 @@ export class LeadsService {
             select: { name: true, role: true, organizationId: true },
           });
 
-          if (!projectManager || projectManager.organizationId !== orgId || projectManager.role !== UserRole.PROJECT_MANAGER) {
-            throw new BadRequestException('Project manager must be a PROJECT_MANAGER in the same organization');
+          if (!projectManager || projectManager.organizationId !== orgId) {
+            throw new BadRequestException('Project manager must belong to the same organization');
+          }
+          const pmHasPermission = await this.permissionsService.userHasPermission(
+            dto.projectManagerId,
+            orgId,
+            'sales:invoices:view',
+          );
+          if (!pmHasPermission) {
+            throw new BadRequestException('The selected project manager does not have permission for this role');
           }
 
           await tx.clientActivity.create({

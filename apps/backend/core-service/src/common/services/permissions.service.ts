@@ -4,6 +4,38 @@ import { CacheService } from '../cache/cache.service';
 
 const PERMISSIONS_CACHE_TTL_MS = 300_000;
 
+// Permissions granted to legacy roles that have no UserAppRole records.
+// This ensures backward compatibility while the system migrates to permission-based access.
+const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
+  OWNER:  ['*:*:*'],
+  ADMIN:  ['*:*:*'],
+  SALES_MANAGER: [
+    'sales:leads:view_own', 'sales:leads:view_all', 'sales:leads:create', 'sales:leads:edit_all',
+    'sales:leads:delete', 'sales:leads:assign', 'sales:leads:export',
+    'sales:leads:claim', 'sales:leads:collaborate', 'sales:leads:convert', 'sales:leads:import',
+    'sales:sales:view_own', 'sales:sales:view_all', 'sales:sales:create', 'sales:sales:edit_all',
+    'sales:sales:note', 'sales:sales:contract',
+    'sales:invoices:view', 'sales:invoices:create', 'sales:invoices:edit', 'sales:invoices:pay',
+    'sales:reports:view', 'sales:reports:export', 'sales:teams:view', 'sales:settings:view',
+  ],
+  PROJECT_MANAGER: [
+    'sales:sales:view_all', 'sales:sales:create', 'sales:sales:note', 'sales:sales:contract',
+    'sales:invoices:view', 'sales:invoices:create', 'sales:invoices:edit', 'sales:invoices:pay',
+    'sales:reports:view',
+  ],
+  FRONTSELL_AGENT: [
+    'sales:leads:view_own', 'sales:leads:create', 'sales:leads:edit_own',
+    'sales:leads:claim', 'sales:leads:collaborate',
+    'sales:sales:view_own', 'sales:sales:create', 'sales:sales:edit_own',
+    'sales:sales:note', 'sales:invoices:view', 'sales:invoices:pay',
+  ],
+  UPSELL_AGENT: [
+    'sales:leads:view_own',
+    'sales:sales:view_own', 'sales:sales:create', 'sales:sales:edit_own',
+    'sales:sales:note', 'sales:invoices:view', 'sales:invoices:pay',
+  ],
+};
+
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -43,6 +75,17 @@ export class PermissionsService {
       for (const link of assignment.appRole.permissions) {
         permissions.add(link.permission.key);
       }
+    }
+
+    // No explicit app-role assignments — fall back to legacy system-role permissions
+    if (permissions.size === 0) {
+      const user = await this.prisma.user.findFirst({
+        where: { id: userId, organizationId: orgId },
+        select: { role: true },
+      });
+      const legacyPerms = user?.role ? (LEGACY_ROLE_PERMISSIONS[user.role] ?? []) : [];
+      await this.cacheService.set(cacheKey, legacyPerms, PERMISSIONS_CACHE_TTL_MS);
+      return legacyPerms;
     }
 
     const resolved = [...permissions].sort((left, right) => left.localeCompare(right));

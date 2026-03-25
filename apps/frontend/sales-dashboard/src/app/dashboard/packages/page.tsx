@@ -18,9 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { usePackages, useDeletePackage } from '@/hooks/use-packages';
-import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useUIStore } from '@/stores/ui-store';
-import { IProductPackage, PackageCategory, UserRole } from '@sentra-core/types';
+import { IProductPackage, PackageCategory } from '@sentra-core/types';
 import { PackageFormModal } from './_components/package-form-modal';
 import { cn } from '@/lib/utils';
 
@@ -139,12 +139,9 @@ export default function PackagesPage() {
   const { data: packages, isLoading, isError } = usePackages();
   const deletePackage   = useDeletePackage();
   const openConfirmDialog = useUIStore((state) => state.openConfirmDialog);
-  const { user }        = useAuth();
+  const { hasPermission } = usePermissions();
 
-  const canManage =
-    user?.role === UserRole.OWNER ||
-    user?.role === UserRole.ADMIN ||
-    user?.role === UserRole.SALES_MANAGER;
+  const canManage = hasPermission('sales:settings:view');
 
   // Filter by category
   const filtered = useMemo(() => {

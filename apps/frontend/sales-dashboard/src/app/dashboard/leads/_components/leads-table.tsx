@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import { DataTable, Column, StatusBadge } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
-import { hasMinimumRole, ILead, UserRole } from '@sentra-core/types';
-import { useAuth } from '@/hooks/use-auth';
+import { ILead } from '@sentra-core/types';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useDeleteLead } from '@/hooks/use-leads';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -26,8 +26,8 @@ interface LeadsTableProps {
 export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTableProps) {
   const deleteLead = useDeleteLead();
   const openConfirmDialog = useUIStore((s) => s.openConfirmDialog);
-  const { user } = useAuth();
-  const canDelete = user?.role ? hasMinimumRole(user.role, UserRole.ADMIN) : false;
+  const { hasPermission } = usePermissions();
+  const canDelete = hasPermission('sales:leads:delete');
 
   const columns = useMemo<Column<EnrichedLead>[]>(() => {
     const baseColumns: Column<EnrichedLead>[] = [

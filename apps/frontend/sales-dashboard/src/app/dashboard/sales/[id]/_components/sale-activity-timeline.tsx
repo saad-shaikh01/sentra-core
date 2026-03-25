@@ -10,14 +10,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ISaleActivity, SaleActivityType, UserRole } from '@sentra-core/types';
+import { ISaleActivity, SaleActivityType } from '@sentra-core/types';
 import { useAddSaleNote } from '@/hooks/use-sales';
 import { MessageSquarePlus } from 'lucide-react';
 
 interface SaleActivityTimelineProps {
   activities: ISaleActivity[];
   saleId: string;
-  userRole?: UserRole;
 }
 
 const ACTIVITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
@@ -97,7 +96,7 @@ function ActivityEntry({ activity }: { activity: ISaleActivity }) {
   );
 }
 
-export function SaleActivityTimeline({ activities, saleId, userRole: _userRole }: SaleActivityTimelineProps) {
+export function SaleActivityTimeline({ activities, saleId }: SaleActivityTimelineProps) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const addNote = useAddSaleNote();

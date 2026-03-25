@@ -16,7 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { LeadsService } from './leads.service';
-import { Roles, CurrentUser, Public, AppAccess } from '../auth/decorators';
+import { CurrentUser, Public, AppAccess } from '../auth/decorators';
 import { Permissions } from '../../common';
 import {
   CreateLeadDto,
@@ -31,7 +31,6 @@ import {
   AddCollaboratorDto,
 } from './dto';
 import {
-  UserRole,
   AppCode,
   JwtPayload,
   ILead,
@@ -71,7 +70,7 @@ export class LeadsController {
   }
 
   @Post('import')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:leads:import')
   @UseInterceptors(FileInterceptor('file'))
   async importLeads(
     @UploadedFile() file: LeadImportFile | undefined,
@@ -145,13 +144,7 @@ export class LeadsController {
   }
 
   @Patch(':id/status')
-  @Roles(
-    UserRole.OWNER,
-    UserRole.ADMIN,
-    UserRole.SALES_MANAGER,
-    UserRole.PROJECT_MANAGER,
-    UserRole.FRONTSELL_AGENT,
-  )
+  @Permissions('sales:leads:edit_own')
   changeStatus(
     @Param('id') id: string,
     @Body() dto: ChangeStatusDto,
@@ -171,12 +164,7 @@ export class LeadsController {
   }
 
   @Post(':id/claim')
-  @Roles(
-    UserRole.FRONTSELL_AGENT,
-    UserRole.SALES_MANAGER,
-    UserRole.ADMIN,
-    UserRole.OWNER,
-  )
+  @Permissions('sales:leads:claim')
   claim(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -185,26 +173,16 @@ export class LeadsController {
   }
 
   @Post(':id/unclaim')
-  @Roles(
-    UserRole.FRONTSELL_AGENT,
-    UserRole.SALES_MANAGER,
-    UserRole.ADMIN,
-    UserRole.OWNER,
-  )
+  @Permissions('sales:leads:claim')
   unclaim(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<ILead> {
-    return this.leadsService.unclaim(id, user.orgId, user.sub, user.role);
+    return this.leadsService.unclaim(id, user.orgId, user.sub);
   }
 
   @Post(':id/collaborators')
-  @Roles(
-    UserRole.FRONTSELL_AGENT,
-    UserRole.SALES_MANAGER,
-    UserRole.ADMIN,
-    UserRole.OWNER,
-  )
+  @Permissions('sales:leads:collaborate')
   addCollaborator(
     @Param('id') id: string,
     @Body() dto: AddCollaboratorDto,
@@ -214,12 +192,7 @@ export class LeadsController {
   }
 
   @Delete(':id/collaborators/:userId')
-  @Roles(
-    UserRole.FRONTSELL_AGENT,
-    UserRole.SALES_MANAGER,
-    UserRole.ADMIN,
-    UserRole.OWNER,
-  )
+  @Permissions('sales:leads:collaborate')
   removeCollaborator(
     @Param('id') id: string,
     @Param('userId') targetUserId: string,
@@ -238,7 +211,7 @@ export class LeadsController {
   }
 
   @Post(':id/convert')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:leads:convert')
   convert(
     @Param('id') id: string,
     @Body() dto: ConvertLeadDto,
