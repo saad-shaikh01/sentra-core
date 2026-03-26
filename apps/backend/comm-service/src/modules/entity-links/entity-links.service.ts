@@ -265,12 +265,15 @@ export class EntityLinksService {
     if (normalizedEmails.length === 0) return;
 
     try {
-      // Find all threads where any participant email matches
+      // Find all threads where any participant email matches.
+      // collation strength:2 = case-insensitive, accent-sensitive — guards against
+      // threads synced before the lowercase normalization was applied.
       const threads = await this.threadModel
         .find({
           organizationId,
           'participants.email': { $in: normalizedEmails },
         })
+        .collation({ locale: 'en', strength: 2 })
         .select('_id gmailThreadId')
         .lean()
         .exec();
@@ -314,6 +317,11 @@ export class EntityLinksService {
           },
         );
       }
+
+      // Notify connected frontend clients so they refetch the entity's email timeline
+      // without waiting for a manual page refresh. Without this, the race condition
+      // between lead creation and backfill completion causes "No emails yet" to persist.
+      this.gateway?.emitToOrg(organizationId, 'link:created', { entityType, entityId });
     } catch (err) {
       // Non-blocking — log but do not propagate
       console.error('[EntityLinksService] backfillByEmail failed', err);

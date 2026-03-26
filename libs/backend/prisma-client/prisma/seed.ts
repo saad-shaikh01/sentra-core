@@ -244,9 +244,9 @@ async function main() {
   // ── 6. Brands ─────────────────────────────────────────────────────────────
   const pulpHouse = await prisma.brand.create({
     data: {
-      name: 'The Pulp House',
-      domain: 'thepulphouse.com',
-      logoUrl: 'https://cdn.bunny.net/sentra/pulphouse-logo.png',
+      name: 'The Pulp House Publishing',
+      domain: 'thepulphousepublishing.com',
+      logoUrl: 'sentra/pulphouse-logo.png',
       primaryColor: '#6366F1',
       secondaryColor: '#4F46E5',
       organizationId: org.id,
@@ -255,9 +255,9 @@ async function main() {
 
   const urbanQuill = await prisma.brand.create({
     data: {
-      name: 'Urban Quill',
-      domain: 'urbanquill.com',
-      logoUrl: 'https://cdn.bunny.net/sentra/urbanquill-logo.png',
+      name: 'Urban Quill Publishing',
+      domain: 'urbanquillpublishing.com',
+      logoUrl: '',
       primaryColor: '#F59E0B',
       secondaryColor: '#D97706',
       organizationId: org.id,
@@ -267,17 +267,17 @@ async function main() {
   console.log('✅  Brands: 2 brands created.');
 
   // ── 7. Sales Teams (legacy SalesTeam model) ───────────────────────────────
-  await prisma.salesTeam.create({
-    data: {
-      name: 'North America Frontsell',
-      description: 'Acquisition team for US/Canada region',
-      organizationId: org.id,
-      managers: { create: [{ userId: owner.id }, { userId: manager.id }] },
-      members:  { create: [{ userId: agentFront.id }] },
-    },
-  });
+  // await prisma.salesTeam.create({
+  //   data: {
+  //     name: 'North America Frontsell',
+  //     description: 'Acquisition team for US/Canada region',
+  //     organizationId: org.id,
+  //     managers: { create: [{ userId: owner.id }, { userId: manager.id }] },
+  //     members:  { create: [{ userId: agentFront.id }] },
+  //   },
+  // });
 
-  console.log('✅  Sales Teams: legacy team structure created.');
+  // console.log('✅  Sales Teams: legacy team structure created.');
 
   // ── 8. Product Catalog ────────────────────────────────────────────────────
   await prisma.productPackage.create({
@@ -313,85 +313,85 @@ async function main() {
   console.log('✅  Packages: product catalog created.');
 
   // ── 9. Leads ──────────────────────────────────────────────────────────────
-  const activeLead = await prisma.lead.create({
-    data: {
-      title: 'Interested in Ghostwriting',
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-      phone: '+1-555-9000',
-      website: 'https://johndoe.com',
-      status: LeadStatus.FOLLOW_UP,
-      leadType: 'INBOUND',
-      source: 'PPC',
-      leadDate: daysAgo(2),
-      brandId: pulpHouse.id,
-      organizationId: org.id,
-      assignedToId: agentFront.id,
-      followUpDate: daysFromNow(2),
-      data: { clientGoal: 'Publish by Q4', budget: 5000 },
-    },
-  });
+  // const activeLead = await prisma.lead.create({
+  //   data: {
+  //     title: 'Interested in Ghostwriting',
+  //     name: 'John Doe',
+  //     email: 'john.doe@example.com',
+  //     phone: '+1-555-9000',
+  //     website: 'https://johndoe.com',
+  //     status: LeadStatus.FOLLOW_UP,
+  //     leadType: 'INBOUND',
+  //     source: 'PPC',
+  //     leadDate: daysAgo(2),
+  //     brandId: pulpHouse.id,
+  //     organizationId: org.id,
+  //     assignedToId: agentFront.id,
+  //     followUpDate: daysFromNow(2),
+  //     data: { clientGoal: 'Publish by Q4', budget: 5000 },
+  //   },
+  // });
 
-  const convertedLead = await prisma.lead.create({
-    data: {
-      title: 'Inquiry - Full Publishing',
-      name: 'Jane Smith',
-      email: 'jane.smith@example.com',
-      phone: '+1-555-8000',
-      status: LeadStatus.WON,
-      leadType: 'REFERRAL',
-      source: 'COLD_REFERRAL',
-      leadDate: daysAgo(10),
-      brandId: urbanQuill.id,
-      organizationId: org.id,
-      assignedToId: agentUp.id,
-    },
-  });
+  // const convertedLead = await prisma.lead.create({
+  //   data: {
+  //     title: 'Inquiry - Full Publishing',
+  //     name: 'Jane Smith',
+  //     email: 'jane.smith@example.com',
+  //     phone: '+1-555-8000',
+  //     status: LeadStatus.WON,
+  //     leadType: 'REFERRAL',
+  //     source: 'COLD_REFERRAL',
+  //     leadDate: daysAgo(10),
+  //     brandId: urbanQuill.id,
+  //     organizationId: org.id,
+  //     assignedToId: agentUp.id,
+  //   },
+  // });
 
   // Suppress unused var warning
-  void activeLead;
+  // void activeLead;
 
-  console.log('✅  Leads: 2 leads created.');
+  // console.log('✅  Leads: 2 leads created.');
 
   // ── 10. Clients & Sales ───────────────────────────────────────────────────
-  const client = await prisma.client.create({
-    data: {
-      email: 'john.author@example.com',
-      contactName: 'John Doe',
-      brandId: urbanQuill.id,
-      organizationId: org.id,
-    },
-  });
+  // const client = await prisma.client.create({
+  //   data: {
+  //     email: 'john.author@example.com',
+  //     contactName: 'John Doe',
+  //     brandId: urbanQuill.id,
+  //     organizationId: org.id,
+  //   },
+  // });
 
-  await prisma.lead.update({
-    where: { id: convertedLead.id },
-    data: { convertedClientId: client.id },
-  });
+  // await prisma.lead.update({
+  //   where: { id: convertedLead.id },
+  //   data: { convertedClientId: client.id },
+  // });
 
-  const sale = await prisma.sale.create({
-    data: {
-      totalAmount: 1200,
-      currency: 'USD',
-      status: SaleStatus.ACTIVE,
-      paymentPlan: PaymentPlanType.INSTALLMENTS,
-      installmentCount: 3,
-      clientId: client.id,
-      brandId: urbanQuill.id,
-      organizationId: org.id,
-      description: '3-month installment plan for full publishing bundle',
-      items: { create: [{ name: 'Full Publishing Bundle', quantity: 1, unitPrice: 1200 }] },
-    },
-  });
+  // const sale = await prisma.sale.create({
+  //   data: {
+  //     totalAmount: 1200,
+  //     currency: 'USD',
+  //     status: SaleStatus.ACTIVE,
+  //     paymentPlan: PaymentPlanType.INSTALLMENTS,
+  //     installmentCount: 3,
+  //     clientId: client.id,
+  //     brandId: urbanQuill.id,
+  //     organizationId: org.id,
+  //     description: '3-month installment plan for full publishing bundle',
+  //     items: { create: [{ name: 'Full Publishing Bundle', quantity: 1, unitPrice: 1200 }] },
+  //   },
+  // });
 
-  await prisma.invoice.createMany({
-    data: [
-      { invoiceNumber: 'INV-SEED-001', amount: 400, dueDate: daysAgo(1),     status: InvoiceStatus.PAID,   saleId: sale.id },
-      { invoiceNumber: 'INV-SEED-002', amount: 400, dueDate: daysFromNow(29), status: InvoiceStatus.UNPAID, saleId: sale.id },
-      { invoiceNumber: 'INV-SEED-003', amount: 400, dueDate: daysFromNow(59), status: InvoiceStatus.UNPAID, saleId: sale.id },
-    ],
-  });
+  // await prisma.invoice.createMany({
+  //   data: [
+  //     { invoiceNumber: 'INV-SEED-001', amount: 400, dueDate: daysAgo(1),     status: InvoiceStatus.PAID,   saleId: sale.id },
+  //     { invoiceNumber: 'INV-SEED-002', amount: 400, dueDate: daysFromNow(29), status: InvoiceStatus.UNPAID, saleId: sale.id },
+  //     { invoiceNumber: 'INV-SEED-003', amount: 400, dueDate: daysFromNow(59), status: InvoiceStatus.UNPAID, saleId: sale.id },
+  //   ],
+  // });
 
-  console.log('✅  Sales: client, sale, and installment invoices created.\n');
+  // console.log('✅  Sales: client, sale, and installment invoices created.\n');
 
   // ── Summary ───────────────────────────────────────────────────────────────
   console.log('🔐  TEST ACCOUNTS');

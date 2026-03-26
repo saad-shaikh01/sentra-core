@@ -488,7 +488,11 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
       parsed.from,
       ...(parsed.to ?? []),
       ...(parsed.cc ?? []),
-    ].filter((p): p is { email: string; name?: string } => Boolean(p?.email));
+    ]
+      .filter((p): p is { email: string; name?: string } => Boolean(p?.email))
+      // Normalize emails to lowercase so backfill queries always match regardless of
+      // how Gmail headers cased the address (e.g. John.Doe@Gmail.com → john.doe@gmail.com).
+      .map((p) => ({ ...p, email: p.email.toLowerCase().trim() }));
 
     return (await this.threadModel.findOneAndUpdate(
       { organizationId: identity.organizationId, gmailThreadId: raw.threadId! },

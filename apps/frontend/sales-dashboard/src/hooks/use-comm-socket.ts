@@ -237,12 +237,24 @@ export function useCommSocket() {
         queryClient.invalidateQueries({ queryKey: commKeys.identities() });
       });
 
-      socket.on('link:created', () => {
+      socket.on('link:created', (data: any) => {
         queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        // When backfill completes after lead/client creation, the event carries
+        // entityType + entityId so we can invalidate that entity's timeline precisely.
+        if (data?.entityType && data?.entityId) {
+          queryClient.invalidateQueries({
+            queryKey: commKeys.timeline(data.entityType as string, data.entityId as string),
+          });
+        }
       });
 
-      socket.on('link:removed', () => {
+      socket.on('link:removed', (data: any) => {
         queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        if (data?.entityType && data?.entityId) {
+          queryClient.invalidateQueries({
+            queryKey: commKeys.timeline(data.entityType as string, data.entityId as string),
+          });
+        }
       });
     };
 
