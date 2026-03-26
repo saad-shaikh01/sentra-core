@@ -61,9 +61,9 @@ export class ScopeService {
     const has = (p: string) => this.permissionsService.matchesAnyPermission(permissions, p);
 
     if (has('*:*:*') || has('sales:*:*')) return 'full';
-    if (has('sales:leads:view_all')) return 'manager';
+    if (has('sales:leads:view_all') || has('sales:clients:view_all')) return 'manager';
     if (has('sales:leads:create') || has('sales:leads:view_own')) return 'frontsell';
-    if (has('sales:sales:create') || has('sales:sales:view_own')) return 'upsell';
+    if (has('sales:sales:create') || has('sales:sales:view_own') || has('sales:clients:view_own')) return 'upsell';
 
     // Fallback to legacy role names for users with no app-role assignments
     if (role === UserRole.OWNER || role === UserRole.ADMIN) return 'full';

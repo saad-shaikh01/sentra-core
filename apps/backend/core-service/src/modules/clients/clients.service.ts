@@ -24,7 +24,7 @@ import {
   QueryClientsDto,
   AssignClientDto,
 } from './dto';
-import { buildPaginationResponse, CacheService } from '../../common';
+import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 
 @Injectable()
@@ -37,6 +37,7 @@ export class ClientsService {
     private cache: CacheService,
     private mailService: MailClientService,
     private readonly scopeService: ScopeService,
+    private readonly permissionsService: PermissionsService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -272,10 +273,10 @@ export class ClientsService {
         ? this.prisma.user.findUnique({ where: { id: client.projectManagerId }, select: { name: true } })
         : Promise.resolve(null),
       dto.upsellAgentId
-        ? this.validateAssignee(dto.upsellAgentId, orgId, UserRole.UPSELL_AGENT, 'Upsell agent')
+        ? this.validateAssignee(dto.upsellAgentId, orgId, 'sales:clients:view_own', 'Upsell agent')
         : Promise.resolve(null),
       dto.projectManagerId
-        ? this.validateAssignee(dto.projectManagerId, orgId, UserRole.PROJECT_MANAGER, 'Project manager')
+        ? this.validateAssignee(dto.projectManagerId, orgId, 'sales:invoices:create', 'Project manager')
         : Promise.resolve(null),
     ]);
 
@@ -528,20 +529,21 @@ export class ClientsService {
   private async validateAssignee(
     userId: string,
     orgId: string,
-    expectedRole: UserRole,
+    requiredPermission: string,
     label: string,
   ): Promise<{ name: string } | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, organizationId: true, role: true },
+      select: { name: true, organizationId: true },
     });
 
     if (!user || user.organizationId !== orgId) {
       throw new BadRequestException(`${label} not found in this organization`);
     }
 
-    if (user.role !== expectedRole) {
-      throw new BadRequestException(`User must have ${expectedRole} role`);
+    const hasPermission = await this.permissionsService.userHasPermission(userId, orgId, requiredPermission);
+    if (!hasPermission) {
+      throw new BadRequestException(`Selected user does not have the required permissions for ${label.toLowerCase()}`);
     }
 
     return { name: user.name };

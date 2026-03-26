@@ -1556,6 +1556,8 @@ export class SalesService {
       id: sale.id,
       totalAmount: Number(sale.totalAmount),
       status: sale.status as SaleStatus,
+      saleType: sale.saleType ?? undefined,
+      salesAgentId: sale.salesAgentId ?? undefined,
       currency: sale.currency,
       description: sale.description ?? undefined,
       contractUrl: sale.contractUrl ?? undefined,

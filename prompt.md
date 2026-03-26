@@ -1,85 +1,62 @@
-Good. Now do the **final functional validation** of the completed permission-migration work.
+Do a **quick audit and fix of sidebar visibility** so all sidebar links are shown strictly according to permissions.
 
-### Goal
+### Problem
 
-Do not summarize code changes again.
-Instead, verify that the app now behaves correctly for both legacy roles and newly created custom roles.
+Previously, **Admin** had sidebar links for:
 
-### Validate These Scenarios End-to-End
+* **GSuite**
+* **Sales Teams**
 
-#### 1. Custom Role Compatibility
+Now these links are no longer showing in the sidebar for Admin.
 
-Create at least:
+This indicates the sidebar visibility logic may have been affected during the permission migration and needs to be reviewed carefully.
 
-* one custom role with sales-agent style permissions
-* one custom role with manager-style permissions
-* one limited view-only custom role
+### Expected Behavior
 
-Then verify that these roles behave correctly without needing hardcoded role names.
+Sidebar links should be displayed based on the user’s **actual permissions**, not on outdated role assumptions and not on broken/missing mapping logic.
 
-#### 2. Leads Module
+### Required Check
 
-Validate:
+Review the entire sidebar and verify for each sidebar item:
 
-* lead list access
-* lead detail actions
-* assign / unassign / claim / unclaim
-* collaborator selection
-* team visibility
-* unassigned pool
-* team-assigned but user-unassigned lead visibility
-* conversion / new sale action visibility
+* which permission controls its visibility
+* which roles currently have that permission
+* whether Admin/Manager/Agent/custom roles are seeing the correct links
+* whether any links disappeared incorrectly after the migration
 
-#### 3. Sales Module
+### Focus Especially On
 
-Validate:
+Check sidebar visibility for pages such as:
 
-* sales page access
-* sales table action visibility
-* sale detail actions
-* create sale
-* update sale
-* mark active
-* charge / record payment
-* agent display
-* client ownership checks
-* dropdown/member selectors
+* GSuite
+* Sales Teams
+* Leads
+* Clients
+* Sales
+* Invoices
+* Packages
+* Settings-related pages
+* Inbox
+* any other dashboard navigation item
 
-#### 4. Invoices Module
+### What to Fix
 
-Validate:
+* If Admin has the required permission, the link must appear.
+* If a role does not have the permission, the link should stay hidden.
+* Sidebar rendering must stay fully aligned with backend permission model.
+* Remove any broken assumptions, mismatched permission keys, or incorrect `PermissionGuard` usage.
+* Verify both legacy roles and custom roles behave correctly.
 
-* invoice page access
-* invoice detail access
-* pay action
-* agent/brand filters
-* payment flow permissions
+### Expected Output
 
-#### 5. Navigation / Settings / Other Frontend Areas
+Please:
 
-Validate:
+1. identify the permission used by each sidebar link
+2. confirm which links are incorrectly hidden/shown
+3. fix sidebar rendering to be fully permission-driven
+4. verify Admin can see GSuite and Sales Teams again if their permissions allow it
 
-* sidebar visibility
-* inbox access
-* packages/settings access
-* client detail/client page management actions
+### Important
 
-### Special Check
-
-There is still one `UserRole.FRONTSELL_AGENT` usage kept as a **data value** for an invite API call.
-Confirm whether this is:
-
-* safe and purely informational
-* or still a hidden blocker for future custom roles
-
-### Required Output
-
-Provide:
-
-1. passed scenarios
-2. failed scenarios
-3. any remaining hidden role assumptions
-4. any custom-role limitations still left
-5. final verdict: **is the app now truly custom-role compatible or not?**
-
-Do not provide another implementation summary. Provide behavioral validation results only.
+This is a **quick check/fix first** before continuing with other module tasks.
+The sidebar should be treated as part of the permission system and must remain consistent with actual access rights.

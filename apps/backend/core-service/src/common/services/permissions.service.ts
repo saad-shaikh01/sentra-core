@@ -17,22 +17,31 @@ const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
     'sales:sales:note', 'sales:sales:contract',
     'sales:invoices:view', 'sales:invoices:create', 'sales:invoices:edit', 'sales:invoices:pay',
     'sales:reports:view', 'sales:reports:export', 'sales:teams:view', 'sales:settings:view',
+    'sales:clients:view_own', 'sales:clients:view_all', 'sales:clients:create', 'sales:clients:edit',
+    'sales:clients:delete', 'sales:clients:assign', 'sales:clients:note', 'sales:clients:portal',
+    'sales:clients:status',
+    'sales:page:leads', 'sales:page:clients', 'sales:page:sales', 'sales:page:invoices',
+    'sales:page:packages', 'sales:page:teams', 'sales:page:settings',
   ],
   PROJECT_MANAGER: [
     'sales:sales:view_all', 'sales:sales:create', 'sales:sales:note', 'sales:sales:contract',
     'sales:invoices:view', 'sales:invoices:create', 'sales:invoices:edit', 'sales:invoices:pay',
     'sales:reports:view',
+    'sales:clients:view_all', 'sales:clients:note',
+    'sales:page:clients', 'sales:page:sales', 'sales:page:invoices',
   ],
   FRONTSELL_AGENT: [
     'sales:leads:view_own', 'sales:leads:create', 'sales:leads:edit_own',
     'sales:leads:claim', 'sales:leads:collaborate',
     'sales:sales:view_own', 'sales:sales:create', 'sales:sales:edit_own',
     'sales:sales:note', 'sales:invoices:view', 'sales:invoices:pay',
+    'sales:page:leads', 'sales:page:sales', 'sales:page:invoices',
   ],
   UPSELL_AGENT: [
-    'sales:leads:view_own',
     'sales:sales:view_own', 'sales:sales:create', 'sales:sales:edit_own',
     'sales:sales:note', 'sales:invoices:view', 'sales:invoices:pay',
+    'sales:clients:view_own', 'sales:clients:edit', 'sales:clients:note', 'sales:clients:status',
+    'sales:page:clients', 'sales:page:sales', 'sales:page:invoices',
   ],
 };
 

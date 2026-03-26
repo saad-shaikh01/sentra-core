@@ -144,7 +144,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
   const { data: client, isLoading, isError } = useClient(clientId ?? '');
   const { hasPermission } = usePermissions();
   const { data: allMembers } = useMembers();
-  const { data: upsellAgents } = useMembers({ permission: 'sales:sales:view_own' });
+  const { data: upsellAgents } = useMembers({ permission: 'sales:clients:view_own' });
   const { data: projectManagers } = useMembers({ permission: 'sales:invoices:create' });
   const assignClient = useAssignClient();
   const addClientNote = useAddClientNote();
@@ -185,7 +185,8 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
     [activities],
   );
 
-  const canManageClient = hasPermission('sales:leads:assign');
+  const canAssignClient = hasPermission('sales:clients:assign');
+  const canManagePortal = hasPermission('sales:clients:portal');
   const portalState = detailClient ? getPortalState(detailClient) : null;
 
   const handleAddNote = async (content: string, mentionedUserIds: string[]) => {
@@ -325,7 +326,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
                     assignee={detailClient.upsellAgent}
                     assignedAt={latestUpsellActivity?.createdAt}
                     options={upsellAgents ?? []}
-                    canManage={canManageClient}
+                    canManage={canAssignClient}
                     isPending={assignClient.isPending}
                     onAssign={(value) =>
                       assignClient.mutate({
@@ -340,7 +341,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
                     assignee={detailClient.projectManager}
                     assignedAt={latestProjectManagerActivity?.createdAt}
                     options={projectManagers ?? []}
-                    canManage={canManageClient}
+                    canManage={canAssignClient}
                     isPending={assignClient.isPending}
                     onAssign={(value) =>
                       assignClient.mutate({
@@ -391,7 +392,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
                   </p>
                 </div>
 
-                {canManageClient ? (
+                {canManagePortal ? (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {detailClient.portalAccess ? (
                       <Button

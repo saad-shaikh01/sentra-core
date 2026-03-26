@@ -400,6 +400,13 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                   <InfoCard label="Lead Date" value={<span className="text-sm">{formatDateValue(lead.leadDate ?? lead.createdAt)}</span>} />
                 </div>
 
+                {lead.status === LeadStatus.FOLLOW_UP ? (
+                  <InfoCard
+                    label="Follow-up Date"
+                    value={<span className="text-sm">{lead.followUpDate ? formatDateValue(lead.followUpDate) : '-'}</span>}
+                  />
+                ) : null}
+
                 {lead.lostReason ? (
                   <InfoCard label="Lost Reason" value={<span className="text-sm">{lead.lostReason}</span>} />
                 ) : null}

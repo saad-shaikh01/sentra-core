@@ -55,10 +55,10 @@ export default function ClientsPage() {
   const deleteClient = useDeleteClient();
   const openConfirmDialog = useUIStore((state) => state.openConfirmDialog);
   const { hasPermission } = usePermissions();
-  const canManageClients = hasPermission('sales:leads:assign');
+  const canManageClients = hasPermission('sales:clients:create');
 
   const { data: brandsData } = useBrands({ limit: 100 });
-  const { data: upsellAgents } = useMembers({ permission: 'sales:sales:view_own' });
+  const { data: upsellAgents } = useMembers({ permission: 'sales:clients:view_own' });
   const { data: projectManagers } = useMembers({ permission: 'sales:invoices:create' });
 
   const queryParams = useMemo(

@@ -21,6 +21,44 @@ export interface PushNotificationsConfig {
   onForegroundMessage?: (payload: { title?: string; body?: string; data?: Record<string, string> }) => void;
 }
 
+const VAPID_PLACEHOLDER_PATTERN = /(your-vapid-key|replace[-_]?me)/i;
+
+export function normalizeVapidKey(rawKey: string | null | undefined): string | null {
+  if (!rawKey) return null;
+
+  const trimmedKey = rawKey.trim();
+  const unwrappedKey =
+    (trimmedKey.startsWith('"') && trimmedKey.endsWith('"')) ||
+    (trimmedKey.startsWith("'") && trimmedKey.endsWith("'")) ||
+    (trimmedKey.startsWith('`') && trimmedKey.endsWith('`'))
+      ? trimmedKey.slice(1, -1)
+      : trimmedKey;
+
+  const condensedKey = unwrappedKey.replace(/\s+/g, '');
+  if (!condensedKey || VAPID_PLACEHOLDER_PATTERN.test(condensedKey)) {
+    return null;
+  }
+
+  const standardBase64Key = condensedKey.replace(/-/g, '+').replace(/_/g, '/');
+  const paddedBase64Key = standardBase64Key.padEnd(
+    Math.ceil(standardBase64Key.length / 4) * 4,
+    '='
+  );
+
+  try {
+    const decodedKey = Uint8Array.from(atob(paddedBase64Key), (char) => char.charCodeAt(0));
+
+    // VAPID public keys are uncompressed P-256 points: 65 bytes, starting with 0x04.
+    if (decodedKey.length !== 65 || decodedKey[0] !== 0x04) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  return condensedKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 export function usePushNotifications(config: PushNotificationsConfig | null) {
   const [isSupported, setIsSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
@@ -41,6 +79,14 @@ export function usePushNotifications(config: PushNotificationsConfig | null) {
   const requestPermission = useCallback(async () => {
     if (!isSupported || !config) return;
 
+    const vapidKey = normalizeVapidKey(config.vapidKey);
+    if (!vapidKey) {
+      console.warn(
+        '[usePushNotifications] Skipping registration because NEXT_PUBLIC_FIREBASE_VAPID_KEY is missing or invalid.'
+      );
+      return;
+    }
+
     const perm = await Notification.requestPermission();
     setPermission(perm);
     if (perm !== 'granted') return;
@@ -58,7 +104,7 @@ export function usePushNotifications(config: PushNotificationsConfig | null) {
 
       // Get FCM token
       const token = await getToken(messaging, {
-        vapidKey: config.vapidKey,
+        vapidKey,
         serviceWorkerRegistration: swRegistration,
       });
 

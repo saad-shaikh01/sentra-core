@@ -39,23 +39,18 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   ...(COMM_ENABLED ? [{ name: 'Inbox', href: '/dashboard/inbox', icon: Inbox }] : []),
   { name: 'Brands',    href: '/dashboard/brands',   icon: Layers },
-  { name: 'Leads',     href: '/dashboard/leads',    icon: Users },
-  { name: 'Clients',   href: '/dashboard/clients',  icon: Building2 },
-  { name: 'Sales',     href: '/dashboard/sales',    icon: DollarSign },
-  { name: 'Packages',  href: '/dashboard/packages', icon: Package },
-  { name: 'Invoices',  href: '/dashboard/invoices', icon: FileText },
+  { name: 'Leads',     href: '/dashboard/leads',    icon: Users,       permission: 'sales:page:leads' },
+  { name: 'Clients',   href: '/dashboard/clients',  icon: Building2,   permission: 'sales:page:clients' },
+  { name: 'Sales',     href: '/dashboard/sales',    icon: DollarSign,  permission: 'sales:page:sales' },
+  { name: 'Packages',  href: '/dashboard/packages', icon: Package,     permission: 'sales:page:packages' },
+  { name: 'Invoices',  href: '/dashboard/invoices', icon: FileText,    permission: 'sales:page:invoices' },
 ];
 
 const settingsNavigation = [
   { name: 'Profile', href: '/dashboard/settings/profile', icon: UserCircle },
-  {
-    name: 'Sales Teams',
-    href: '/dashboard/teams',
-    icon: UsersRound,
-    permission: 'sales:teams:view',
-  },
-  ...(COMM_ENABLED ? [{ name: 'Gmail', href: '/dashboard/settings/gmail', icon: Mail }] : []),
-  ...(COMM_ENABLED ? [{ name: 'G Suite', href: '/dashboard/settings/gsuite', icon: Building2, permission: 'sales:settings:manage' }] : []),
+  { name: 'Sales Teams', href: '/dashboard/teams', icon: UsersRound, permission: 'sales:page:teams' },
+  ...(COMM_ENABLED ? [{ name: 'Gmail',   href: '/dashboard/settings/gmail',  icon: Mail,      permission: 'sales:page:settings' }] : []),
+  ...(COMM_ENABLED ? [{ name: 'G Suite', href: '/dashboard/settings/gsuite', icon: Building2, permission: 'sales:page:settings' }] : []),
 ];
 
 export function Sidebar() {
@@ -178,7 +173,7 @@ export function Sidebar() {
               const isActive = item.href === '/dashboard'
                 ? pathname === item.href
                 : pathname === item.href || pathname.startsWith(item.href + '/');
-              return (
+              const navItem = (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -213,6 +208,16 @@ export function Sidebar() {
                   )}
                 </Link>
               );
+
+              if (item.permission) {
+                return (
+                  <PermissionGuard key={item.name} permission={item.permission}>
+                    {navItem}
+                  </PermissionGuard>
+                );
+              }
+
+              return navItem;
             })}
           </div>
 

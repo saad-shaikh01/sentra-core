@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePushNotifications } from '../hooks/use-push-notifications';
+import { normalizeVapidKey, usePushNotifications } from '../hooks/use-push-notifications';
 import { createNotificationApi } from '../lib/notification-api';
 import type { NotificationApiFetcher } from '../lib/notification-api';
 
@@ -18,7 +18,16 @@ interface NotificationPushInitProps {
  */
 export function NotificationPushInit({ fetcher, autoRequest = false }: NotificationPushInitProps) {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+  const rawVapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+  const vapidKey = normalizeVapidKey(rawVapidKey);
+
+  useEffect(() => {
+    if (rawVapidKey && !vapidKey) {
+      console.warn(
+        '[NotificationPushInit] Ignoring invalid NEXT_PUBLIC_FIREBASE_VAPID_KEY. Expected a Firebase web push certificate key.'
+      );
+    }
+  }, [rawVapidKey, vapidKey]);
 
   const config =
     apiKey && vapidKey
@@ -47,9 +56,9 @@ export function NotificationPushInit({ fetcher, autoRequest = false }: Notificat
 
   useEffect(() => {
     if (autoRequest && config && isSupported) {
-      requestPermission();
+      void requestPermission();
     }
-  }, [autoRequest, isSupported]);  // re-fires once isSupported becomes true
+  }, [autoRequest, config, isSupported, requestPermission]); // re-fires once isSupported becomes true
 
   return null;
 }

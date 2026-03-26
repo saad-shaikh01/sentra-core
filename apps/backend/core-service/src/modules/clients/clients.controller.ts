@@ -9,7 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { ClientsService } from './clients.service';
-import { Roles, CurrentUser } from '../auth/decorators';
+import { CurrentUser } from '../auth/decorators';
+import { Permissions } from '../../common';
 import {
   CreateClientDto,
   UpdateClientDto,
@@ -19,7 +20,6 @@ import {
   AddClientNoteDto,
 } from './dto';
 import {
-  UserRole,
   IClient,
   IClientActivity,
   IPaginatedResponse,
@@ -31,7 +31,7 @@ export class ClientsController {
   constructor(private clientsService: ClientsService) {}
 
   @Post()
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:clients:create')
   create(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateClientDto,
@@ -40,6 +40,7 @@ export class ClientsController {
   }
 
   @Get()
+  @Permissions('sales:clients:view_own')
   findAll(
     @CurrentUser() user: JwtPayload,
     @Query() query: QueryClientsDto,
@@ -48,6 +49,7 @@ export class ClientsController {
   }
 
   @Get(':id')
+  @Permissions('sales:clients:view_own')
   findOne(
     @Param('id') id: string,
     @CurrentUser('orgId') orgId: string,
@@ -56,7 +58,7 @@ export class ClientsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:clients:edit')
   update(
     @Param('id') id: string,
     @CurrentUser('orgId') orgId: string,
@@ -66,7 +68,7 @@ export class ClientsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Permissions('sales:clients:delete')
   remove(
     @Param('id') id: string,
     @CurrentUser('orgId') orgId: string,
@@ -75,7 +77,7 @@ export class ClientsController {
   }
 
   @Patch(':id/assign')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:clients:assign')
   assign(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -85,7 +87,7 @@ export class ClientsController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:clients:status')
   updateStatus(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -95,6 +97,7 @@ export class ClientsController {
   }
 
   @Post(':id/notes')
+  @Permissions('sales:clients:note')
   addNote(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -104,7 +107,7 @@ export class ClientsController {
   }
 
   @Post(':id/grant-portal-access')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:clients:portal')
   grantPortalAccess(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -113,7 +116,7 @@ export class ClientsController {
   }
 
   @Post(':id/revoke-portal-access')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER)
+  @Permissions('sales:clients:portal')
   revokePortalAccess(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
