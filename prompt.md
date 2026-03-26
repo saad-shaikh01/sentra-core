@@ -1,62 +1,106 @@
-Do a **quick audit and fix of sidebar visibility** so all sidebar links are shown strictly according to permissions.
+Continue from the completed fixes and final state already implemented.
 
-### Problem
+Now perform a strict verification pass focused on correctness, regression safety, and send-permission behavior. Do not provide coding suggestions, optional ideas, or architectural recommendations. Only verify actual behavior and report confirmed findings.
 
-Previously, **Admin** had sidebar links for:
+## Verification goals
 
-* **GSuite**
-* **Sales Teams**
+Validate that the current implementation now behaves correctly in all of these cases:
 
-Now these links are no longer showing in the sidebar for Admin.
+### 1. Lead Email tab visibility after reassignment
 
-This indicates the sidebar visibility logic may have been affected during the permission migration and needs to be reviewed carefully.
+Verify this exact scenario:
 
-### Expected Behavior
+1. Agent A communicates with a client
+2. Emails are visible in the lead/client Email tab
+3. The lead/client is reassigned to Agent B
+4. Agent B opens the same Email tab
 
-Sidebar links should be displayed based on the user’s **actual permissions**, not on outdated role assumptions and not on broken/missing mapping logic.
+Confirm:
 
-### Required Check
+* whether Agent B can see the full prior communication history
+* whether thread list and message list both work
+* whether access works only because the thread is entity-linked
+* whether any org member can see entity-linked history or only users with access to that entity
+* whether backend permission checks still apply correctly
 
-Review the entire sidebar and verify for each sidebar item:
+### 2. Inbox isolation still remains intact
 
-* which permission controls its visibility
-* which roles currently have that permission
-* whether Admin/Manager/Agent/custom roles are seeing the correct links
-* whether any links disappeared incorrectly after the migration
+Verify that `/dashboard/inbox` still behaves as a personal mailbox view.
 
-### Focus Especially On
+Confirm:
 
-Check sidebar visibility for pages such as:
+* Agent A only sees their own Gmail/inbox content there
+* Agent B does not suddenly see Agent A’s personal inbox threads in inbox view
+* the identity filter is still applied for non-entity-linked queries
+* no regression has been introduced in personal inbox behavior
 
-* GSuite
-* Sales Teams
-* Leads
-* Clients
-* Sales
-* Invoices
-* Packages
-* Settings-related pages
-* Inbox
-* any other dashboard navigation item
+### 3. Message-level visibility in entity-linked threads
 
-### What to Fix
+Verify that:
 
-* If Admin has the required permission, the link must appear.
-* If a role does not have the permission, the link should stay hidden.
-* Sidebar rendering must stay fully aligned with backend permission model.
-* Remove any broken assumptions, mismatched permission keys, or incorrect `PermissionGuard` usage.
-* Verify both legacy roles and custom roles behave correctly.
+* all messages inside an entity-linked thread are visible in the lead/client Email tab
+* no messages are hidden because of identity filtering
+* replies and historical messages are included correctly
 
-### Expected Output
+### 4. Send/reply permission behavior
 
-Please:
+This is critical and must be verified separately from visibility.
 
-1. identify the permission used by each sidebar link
-2. confirm which links are incorrectly hidden/shown
-3. fix sidebar rendering to be fully permission-driven
-4. verify Admin can see GSuite and Sales Teams again if their permissions allow it
+Confirm:
 
-### Important
+* whether Agent B can only view prior communication or also reply from the lead Email tab
+* if reply/send is possible, which mailbox/identity is used
+* whether sending is correctly restricted to connected/authorized identities
+* whether a user without ownership of the original Gmail identity can incorrectly send as another agent
+* whether compose/reply behavior is safe after reassignment
 
-This is a **quick check/fix first** before continuing with other module tasks.
-The sidebar should be treated as part of the permission system and must remain consistent with actual access rights.
+### 5. Historical and auto-linked threads
+
+Verify that the reassignment visibility behavior is correct for:
+
+* new outgoing emails
+* replies in existing threads
+* historical backfilled emails
+* incoming synced emails
+
+---
+
+## Strict report format
+
+Return only this structure:
+
+### A. Verified behavior
+
+List the exact confirmed behaviors that now work correctly.
+
+### B. Regression check
+
+State whether inbox isolation is still preserved and whether any regression was found.
+
+### C. Reassignment visibility result
+
+Answer clearly:
+
+* Can Agent B see prior communication in the lead/client Email tab?
+* Under what exact conditions?
+* What access scope controls this?
+
+### D. Send/reply permission result
+
+Answer clearly:
+
+* Can Agent B reply to or send from the reassigned lead/client context?
+* Under what mailbox/identity rules?
+* Is anything unsafe or incorrect?
+
+### E. Remaining verified issues
+
+Only include real, confirmed issues if any still exist.
+
+## Important rules
+
+* Do not suggest code changes unless a real verified issue remains.
+* Do not provide implementation ideas.
+* Do not speculate.
+* Do not modify working logic unless you find a confirmed bug.
+* Focus on verification only.

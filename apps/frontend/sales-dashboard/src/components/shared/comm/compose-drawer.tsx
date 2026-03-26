@@ -196,8 +196,11 @@ interface ComposeDrawerProps {
   open: boolean;
   onClose: () => void;
   defaultTo?: string;
+  initialTo?: string[];        // pre-fill recipients array (takes precedence over defaultTo when open)
   defaultEntityType?: string;
   defaultEntityId?: string;
+  entityType?: string;         // alias for defaultEntityType
+  entityId?: string;           // alias for defaultEntityId
   defaultSubject?: string;
   defaultBrandId?: string;
   defaultBodyHtml?: string;
@@ -209,14 +212,20 @@ export function ComposeDrawer({
   open,
   onClose,
   defaultTo = '',
+  initialTo,
   defaultEntityType,
   defaultEntityId,
+  entityType,
+  entityId,
   defaultSubject = '',
   defaultBrandId,
   defaultBodyHtml,
   mode = 'compose',
   forwardMessageId,
 }: ComposeDrawerProps) {
+  // Resolve entity context — allow shorthand entityType/entityId as well as the default* variants
+  const resolvedEntityType = entityType ?? defaultEntityType;
+  const resolvedEntityId = entityId ?? defaultEntityId;
   const { data: identities } = useIdentities();
   const { user } = useAuth();
   const sendMessage = useSendMessage();
@@ -390,10 +399,14 @@ export function ComposeDrawer({
   };
 
   useEffect(() => {
-    setToRecipients(splitEmailCandidates(defaultTo));
+    if (open && initialTo && initialTo.length > 0) {
+      setToRecipients(initialTo);
+    } else {
+      setToRecipients(splitEmailCandidates(defaultTo));
+    }
     setToInput('');
     setSubject(defaultSubject);
-  }, [defaultTo, defaultSubject]);
+  }, [open, initialTo, defaultTo, defaultSubject]);
 
   useEffect(() => {
     editor?.commands.setContent(defaultBodyHtml ?? '', { emitUpdate: false });
@@ -505,8 +518,8 @@ export function ComposeDrawer({
           bodyText,
           bodyHtml,
           attachmentS3Keys,
-          entityType: defaultEntityType,
-          entityId: defaultEntityId,
+          entityType: resolvedEntityType,
+          entityId: resolvedEntityId,
         });
       }
       setToRecipients([]);

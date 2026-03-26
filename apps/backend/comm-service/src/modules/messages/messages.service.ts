@@ -37,6 +37,7 @@ import { MetricsService } from '../../common/metrics/metrics.service';
 import { buildCommPaginationResponse, toMongoosePagination } from '../../common/helpers/pagination.helper';
 import { ListMessagesQueryDto } from './dto/list-messages.dto';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { EntityLinksService } from '../entity-links/entity-links.service';
 
 @Injectable()
 export class MessagesService {
@@ -57,6 +58,7 @@ export class MessagesService {
     private readonly audit: AuditService,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly metrics?: MetricsService,
+    @Optional() private readonly entityLinksService?: EntityLinksService,
   ) {}
 
   async listMessages(
@@ -83,14 +85,14 @@ export class MessagesService {
     }
 
     if (entityType && entityId) {
+      // No identity filter for entity-linked queries: the entity link is the
+      // access control. Any org member (e.g. Agent B after reassignment) can
+      // see all emails linked to the entity they have access to.
       const linkedThreads = await this.threadModel
         .find({
           organizationId,
           'entityLinks.entityType': entityType,
           'entityLinks.entityId': entityId,
-          ...(this.identitiesService.isPrivileged(role)
-            ? {}
-            : { identityId: { $in: userIdentityIds } }),
         })
         .select('gmailThreadId')
         .lean()
@@ -209,6 +211,11 @@ export class MessagesService {
       await this.linkThreadToEntity(organizationId, userId, gmailThreadId, dto.entityType, dto.entityId);
     }
 
+    // Auto-link by recipient email — matches thread participants against leads/clients
+    if (gmailThreadId) {
+      void this.entityLinksService?.autoLinkThreads(organizationId, [gmailThreadId]);
+    }
+
     await this.audit.log({
       organizationId,
       actorUserId: userId,
@@ -315,6 +322,11 @@ export class MessagesService {
       metadata: { originalMessageId: messageId },
     });
 
+    // Auto-link by recipient email
+    if (original.gmailThreadId) {
+      void this.entityLinksService?.autoLinkThreads(organizationId, [original.gmailThreadId]);
+    }
+
     this.gateway?.emitToOrg(organizationId, 'message:sent', {
       threadId: await this.getThreadIdForGmailThread(organizationId, original.gmailThreadId),
       gmailThreadId: original.gmailThreadId,
@@ -413,6 +425,11 @@ export class MessagesService {
       entityId: gmailMessageId,
       metadata: { originalMessageId: messageId, to: dto.to },
     });
+
+    // Auto-link by recipient email
+    if (gmailThreadId) {
+      void this.entityLinksService?.autoLinkThreads(organizationId, [gmailThreadId]);
+    }
 
     const thread = await this.threadModel.findOne({ organizationId, gmailThreadId }).exec();
     this.gateway?.emitToOrg(organizationId, 'message:sent', {

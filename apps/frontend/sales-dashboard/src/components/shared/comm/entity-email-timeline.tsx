@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Paperclip, ArrowRight, ArrowLeft, Mail, AlertCircle, RefreshCw } from 'lucide-react';
+import { Paperclip, ArrowRight, ArrowLeft, Mail, AlertCircle, RefreshCw, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEntityTimeline } from '@/hooks/use-comm';
 import { timeAgo } from '@/lib/format-date';
 import { ThreadViewDrawer } from './thread-view-drawer';
+import { ComposeDrawer } from './compose-drawer';
 import type { CommMessageSummary } from '@/types/comm.types';
 import Link from 'next/link';
 import { COMM_ENABLED } from '@/lib/feature-flags';
@@ -13,14 +14,17 @@ import { COMM_ENABLED } from '@/lib/feature-flags';
 interface EntityEmailTimelineProps {
   entityType: 'lead' | 'client' | 'project';
   entityId: string;
+  recipientEmail?: string;   // pre-fill compose with this address
+  entityLabel?: string;      // e.g. "this lead" — used in empty state
 }
 
-export function EntityEmailTimeline({ entityType, entityId }: EntityEmailTimelineProps) {
+export function EntityEmailTimeline({ entityType, entityId, recipientEmail, entityLabel }: EntityEmailTimelineProps) {
   const { data: messages, isLoading, isError, refetch } = useEntityTimeline(
     COMM_ENABLED ? entityType : '',
     COMM_ENABLED ? entityId : '',
   );
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
 
   if (!COMM_ENABLED) {
     return (
@@ -59,22 +63,70 @@ export function EntityEmailTimeline({ entityType, entityId }: EntityEmailTimelin
 
   if (!messages || messages.length === 0) {
     return (
-      <div className="py-10 text-center space-y-3">
-        <Mail className="h-8 w-8 mx-auto text-muted-foreground/30" />
-        <p className="text-sm text-muted-foreground">No emails yet.</p>
-        <p className="text-xs text-muted-foreground/60">
-          Connect a Gmail account in{' '}
-          <Link href="/dashboard/settings/gmail" className="underline hover:text-foreground">
-            Settings
-          </Link>{' '}
-          to start syncing emails.
-        </p>
-      </div>
+      <>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-muted-foreground font-medium">Email History</p>
+          {COMM_ENABLED && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 h-7 px-2.5 text-xs"
+              onClick={() => setComposeOpen(true)}
+            >
+              <SquarePen className="h-3.5 w-3.5" />
+              Compose
+            </Button>
+          )}
+        </div>
+
+        <div className="py-8 text-center space-y-2">
+          <Mail className="h-7 w-7 mx-auto text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">No emails yet</p>
+          {COMM_ENABLED && (
+            <p className="text-xs text-muted-foreground/60">
+              Compose an email above, or link one from your{' '}
+              <span className="text-primary/70">inbox</span>
+            </p>
+          )}
+          {!COMM_ENABLED && (
+            <p className="text-xs text-muted-foreground/60">
+              Connect a Gmail account in{' '}
+              <Link href="/dashboard/settings/gmail" className="underline hover:text-foreground">
+                Settings
+              </Link>{' '}
+              to start syncing emails.
+            </p>
+          )}
+        </div>
+
+        <ComposeDrawer
+          open={composeOpen}
+          onClose={() => setComposeOpen(false)}
+          initialTo={recipientEmail ? [recipientEmail] : undefined}
+          entityType={entityType}
+          entityId={entityId}
+        />
+      </>
     );
   }
 
   return (
     <>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-muted-foreground font-medium">Email History</p>
+        {COMM_ENABLED && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-7 px-2.5 text-xs"
+            onClick={() => setComposeOpen(true)}
+          >
+            <SquarePen className="h-3.5 w-3.5" />
+            Compose
+          </Button>
+        )}
+      </div>
+
       <div className="space-y-2">
         {messages.map((msg) => (
           <EmailCard
@@ -88,6 +140,14 @@ export function EntityEmailTimeline({ entityType, entityId }: EntityEmailTimelin
       <ThreadViewDrawer
         threadId={openThreadId}
         onClose={() => setOpenThreadId(null)}
+        entityType={entityType}
+        entityId={entityId}
+      />
+
+      <ComposeDrawer
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        initialTo={recipientEmail ? [recipientEmail] : undefined}
         entityType={entityType}
         entityId={entityId}
       />

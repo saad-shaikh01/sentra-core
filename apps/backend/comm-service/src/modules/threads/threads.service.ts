@@ -38,7 +38,12 @@ export class ThreadsService {
       ? []
       : await this.resolveUserIdentityIds(organizationId, userId);
 
-    if (entityType && entityId) {
+    // Entity-linked queries (lead/client Email tab) bypass identity scoping.
+    // The entity link itself is the access control — any org member can see
+    // all threads linked to an entity they have access to (e.g. after reassignment).
+    const isEntityLinkedQuery = !!(entityType && entityId);
+
+    if (isEntityLinkedQuery) {
       mongoFilter['entityLinks.entityType'] = entityType;
       mongoFilter['entityLinks.entityId'] = entityId;
     }
@@ -48,8 +53,9 @@ export class ThreadsService {
       mongoFilter.identityId = this.isPrivileged(role)
         ? identityId
         : { $in: userIdentityIds.filter((candidateId) => candidateId === identityId) };
-    } else if (!isAdminViewAll) {
-      // Non-admin and admin-without-scope=all: scope to own identities only
+    } else if (!isAdminViewAll && !isEntityLinkedQuery) {
+      // Non-admin and admin-without-scope=all: scope to own identities only.
+      // Skip if querying by entity link — entity link is the access control.
       mongoFilter.identityId = { $in: userIdentityIds };
       // isAdminViewAll + no identityId: no identity filter → sees all threads in org
     }
@@ -102,7 +108,8 @@ export class ThreadsService {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
 
-    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId);
+    const isEntityLinked = (thread.entityLinks?.length ?? 0) > 0;
+    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId, isEntityLinked);
 
     // Fetch messages embedded in the response
     const messages = await this.messageModel
@@ -126,7 +133,8 @@ export class ThreadsService {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
 
-    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId);
+    const isEntityLinked = (thread.entityLinks?.length ?? 0) > 0;
+    await this.assertThreadAccess(organizationId, thread.identityId, userId, role, threadId, isEntityLinked);
 
     const { page = 1, limit = 20 } = query;
     const { skip } = toMongoosePagination(page, limit);
@@ -329,8 +337,16 @@ export class ThreadsService {
     userId: string,
     role: UserRole,
     threadId: string,
+    isEntityLinked?: boolean,
   ): Promise<void> {
     if (this.isPrivileged(role)) {
+      return;
+    }
+
+    // Entity-linked threads are accessible to all org members regardless of
+    // which identity synced the email. This preserves history visibility after
+    // lead/client reassignment between agents.
+    if (isEntityLinked) {
       return;
     }
 

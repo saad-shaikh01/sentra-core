@@ -356,7 +356,12 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
             </div>
 
             {activeTab === 'emails' && leadId ? (
-              <EntityEmailTimeline entityType="lead" entityId={leadId} />
+              <EntityEmailTimeline
+                entityType="lead"
+                entityId={leadId}
+                recipientEmail={lead?.email ?? undefined}
+                entityLabel={lead?.name ?? 'this lead'}
+              />
             ) : null}
 
             {activeTab === 'details' ? (

@@ -39,24 +39,25 @@ export class InternalContactsService {
     const leadEmails = emails.filter((e) => !foundClientEmails.has(e));
 
     if (leadEmails.length > 0) {
-      const leads = await this.prisma.$queryRaw<
-        Array<{ id: string; email: string; name: string | null }>
-      >`
-        SELECT id,
-               data->>'email' AS email,
-               COALESCE(data->>'name', data->>'contactName', title) AS name
-        FROM "Lead"
-        WHERE "organizationId" = ${organizationId}
-          AND data->>'email' = ANY(${leadEmails}::text[])
-      `;
+      const leads = await this.prisma.lead.findMany({
+        where: {
+          organizationId,
+          email: { in: leadEmails },
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
 
       for (const lead of leads) {
         if (lead.email) {
           results.push({
-            email: lead.email,
+            email: lead.email!,
             id: lead.id,
-            entityType: 'lead',
-            name: lead.name ?? lead.email,
+            entityType: 'lead' as const,
+            name: lead.name ?? lead.email ?? '',
           });
         }
       }

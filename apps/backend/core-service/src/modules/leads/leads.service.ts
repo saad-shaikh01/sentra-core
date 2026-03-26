@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Prisma, PrismaService, NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
@@ -81,6 +82,7 @@ export class LeadsService {
     private readonly scopeService: ScopeService,
     private readonly teamBrandHelper: TeamBrandHelper,
     private readonly permissionsService: PermissionsService,
+    private readonly configService: ConfigService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -300,7 +302,35 @@ export class LeadsService {
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
+    if (lead.email) {
+      void this.triggerCommBackfill(orgId, 'lead', lead.id, [lead.email]);
+    }
+
     return this.mapToILead(lead);
+  }
+
+  private async triggerCommBackfill(
+    organizationId: string,
+    entityType: string,
+    entityId: string,
+    emails: string[],
+  ): Promise<void> {
+    const commServiceUrl = this.configService.get<string>('COMM_SERVICE_URL');
+    const serviceSecret = this.configService.get<string>('INTERNAL_SERVICE_KEY');
+    if (!commServiceUrl || !serviceSecret || emails.length === 0) return;
+
+    try {
+      await fetch(`${commServiceUrl}/api/comm/entity-links/backfill`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-service-secret': serviceSecret,
+        },
+        body: JSON.stringify({ organizationId, entityType, entityId, emails }),
+      });
+    } catch {
+      // Non-blocking — backfill failure must not break lead creation
+    }
   }
 
   private async resolveCreatorTeamId(

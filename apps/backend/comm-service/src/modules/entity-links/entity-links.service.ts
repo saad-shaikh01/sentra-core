@@ -248,6 +248,78 @@ export class EntityLinksService {
     }
   }
 
+  /**
+   * Retroactively link all existing threads that have the given emails
+   * as participants to the specified entity.
+   * Called when a new lead/client is created after sync has already run.
+   */
+  async backfillByEmail(
+    organizationId: string,
+    entityType: string,
+    entityId: string,
+    emails: string[],
+  ): Promise<void> {
+    if (emails.length === 0) return;
+
+    const normalizedEmails = emails.map((e) => e.toLowerCase().trim()).filter(Boolean);
+    if (normalizedEmails.length === 0) return;
+
+    try {
+      // Find all threads where any participant email matches
+      const threads = await this.threadModel
+        .find({
+          organizationId,
+          'participants.email': { $in: normalizedEmails },
+        })
+        .select('_id gmailThreadId')
+        .lean()
+        .exec();
+
+      if (threads.length === 0) return;
+
+      // Create entity links for all matched threads using the same upsert pattern as autoLinkThreads
+      for (const thread of threads) {
+        await this.entityLinkModel.findOneAndUpdate(
+          {
+            organizationId,
+            gmailThreadId: thread.gmailThreadId,
+            entityType,
+            entityId,
+          },
+          {
+            $setOnInsert: {
+              organizationId,
+              entityType,
+              entityId,
+              gmailThreadId: thread.gmailThreadId,
+              linkedBy: 'AUTO',
+              linkedByUserId: 'system',
+            },
+          },
+          { upsert: true },
+        );
+
+        // Sync to thread document
+        await this.threadModel.findOneAndUpdate(
+          { organizationId, gmailThreadId: thread.gmailThreadId },
+          {
+            $addToSet: {
+              entityLinks: {
+                entityType,
+                entityId,
+                linkedBy: 'AUTO',
+                linkedAt: new Date(),
+              },
+            },
+          },
+        );
+      }
+    } catch (err) {
+      // Non-blocking — log but do not propagate
+      console.error('[EntityLinksService] backfillByEmail failed', err);
+    }
+  }
+
   private async resolveGmailThreadId(
     organizationId: string,
     dto: CreateEntityLinkDto,
