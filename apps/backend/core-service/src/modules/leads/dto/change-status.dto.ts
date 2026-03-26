@@ -10,8 +10,8 @@ export class ChangeStatusDto {
   @IsDateString()
   followUpDate?: string;
 
-  /** Required when status is CLOSED_LOST; ignored otherwise. */
-  @ValidateIf((o: ChangeStatusDto) => o.status === LeadStatus.CLOSED_LOST)
+  /** Required when status is LOST; ignored otherwise. */
+  @ValidateIf((o: ChangeStatusDto) => o.status === LeadStatus.LOST)
   @IsString()
   @MaxLength(500)
   lostReason?: string;

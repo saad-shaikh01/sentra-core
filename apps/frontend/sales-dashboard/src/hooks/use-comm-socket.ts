@@ -165,7 +165,16 @@ export function useCommSocket() {
           queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
           queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
         }
-        useUIStore.getState().incrementCommUnread(1);
+        // Only increment unread count for messages from identities owned by the current user.
+        // The broadcast is org-wide so Agent B would otherwise increment even with no Gmail.
+        const cachedIdentities = queryClient.getQueryData<Array<{ id?: string; _id?: string }>>(commKeys.identities());
+        const userIdentityIds = new Set(
+          (cachedIdentities ?? []).map((i) => i.id ?? (i as any)._id ?? '').filter(Boolean),
+        );
+        const incomingIdentityId: string | undefined = data?.message?.identityId ?? data?.identityId;
+        if (incomingIdentityId && userIdentityIds.has(incomingIdentityId)) {
+          useUIStore.getState().incrementCommUnread(1);
+        }
       });
 
       socket.on('message:sent', (data: any) => {
@@ -186,6 +195,13 @@ export function useCommSocket() {
       });
 
       socket.on('sync:progress', (data: any) => {
+        // Progress UI is personal — skip entirely for other users' identity syncs.
+        const cachedIdentities = queryClient.getQueryData<Array<{ id?: string; _id?: string }>>(commKeys.identities());
+        const userIdentityIds = new Set(
+          (cachedIdentities ?? []).map((i) => i.id ?? (i as any)._id ?? '').filter(Boolean),
+        );
+        if (!userIdentityIds.has(data?.identityId)) return;
+
         const synced = data?.synced ?? data?.processed ?? 0;
         const total = data?.total ?? 0;
         useUIStore.getState().setCommSyncProgress(data.identityId, synced, total);
@@ -197,7 +213,17 @@ export function useCommSocket() {
       });
 
       socket.on('sync:complete', (data: any) => {
+        // Always clear progress state (safe no-op if identity isn't in the user's list).
         useUIStore.getState().clearCommSyncProgress(data.identityId);
+
+        // Only toast + invalidate for identities owned by the current user.
+        // The sync:complete event is broadcast org-wide so all users receive it.
+        const cachedIdentities = queryClient.getQueryData<Array<{ id?: string; _id?: string }>>(commKeys.identities());
+        const userIdentityIds = new Set(
+          (cachedIdentities ?? []).map((i) => i.id ?? (i as any)._id ?? '').filter(Boolean),
+        );
+        if (!userIdentityIds.has(data?.identityId)) return;
+
         queryClient.invalidateQueries({ queryKey: commKeys.identities() });
         queryClient.invalidateQueries({ queryKey: commKeys.threads() });
         toast.success(

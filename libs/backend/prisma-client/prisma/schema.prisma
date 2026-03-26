@@ -41,8 +41,10 @@ enum LeadStatus {
   CONTACTED
   PROPOSAL
   FOLLOW_UP
-  CLOSED_WON
-  CLOSED_LOST
+  WON
+  LOST
+  NCE
+  INVALID
 }
 
 enum LeadType {
@@ -1069,7 +1071,7 @@ model Lead {
   leadType LeadType? // CHAT, SIGNUP, SOCIAL, REFERRAL, INBOUND
   source   LeadSource? // PPC, SMM, COLD_REFERRAL
   leadDate DateTime? // When the lead was originally captured
-  lostReason String? // Reason when status = CLOSED_LOST
+  lostReason String? // Reason when status = LOST
   data     Json? // Flexible Form Data (Extra fields)
 
   brandId String
@@ -2125,11 +2127,17 @@ model PmClientPortalAccess {
 
 enum GlobalNotificationType {
   // Sales domain
+  SALE_CREATED
   SALE_STATUS_CHANGED
   PAYMENT_RECEIVED
   PAYMENT_FAILED
   INVOICE_OVERDUE
   CHARGEBACK_FILED
+  LEAD_CREATED
+  LEAD_ASSIGNED
+  LEAD_CONTRIBUTOR_ADDED
+  CLIENT_ASSIGNED
+  CLIENT_PM_ASSIGNED
   // PM domain
   TASK_ASSIGNED
   TASK_DUE_SOON

@@ -3,11 +3,17 @@
 // ============================================================
 
 export type GlobalNotificationType =
+  | 'SALE_CREATED'
   | 'SALE_STATUS_CHANGED'
   | 'PAYMENT_RECEIVED'
   | 'PAYMENT_FAILED'
   | 'INVOICE_OVERDUE'
   | 'CHARGEBACK_FILED'
+  | 'LEAD_CREATED'
+  | 'LEAD_ASSIGNED'
+  | 'LEAD_CONTRIBUTOR_ADDED'
+  | 'CLIENT_ASSIGNED'
+  | 'CLIENT_PM_ASSIGNED'
   | 'TASK_ASSIGNED'
   | 'TASK_DUE_SOON'
   | 'COMMENT_ADDED'

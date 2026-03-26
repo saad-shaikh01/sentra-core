@@ -130,8 +130,10 @@ const LEAD_STATUS_COLORS: Record<string, string> = {
   CONTACTED:   'bg-violet-500',
   PROPOSAL:    'bg-amber-500',
   FOLLOW_UP:   'bg-orange-500',
-  CLOSED_WON:  'bg-emerald-500',
-  CLOSED_LOST: 'bg-red-500',
+  WON:         'bg-emerald-500',
+  LOST:        'bg-red-500',
+  NCE:         'bg-slate-500',
+  INVALID:     'bg-rose-500',
 };
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
@@ -139,14 +141,16 @@ const LEAD_STATUS_LABELS: Record<string, string> = {
   CONTACTED:   'Contacted',
   PROPOSAL:    'Proposal',
   FOLLOW_UP:   'Follow-up',
-  CLOSED_WON:  'Closed Won',
-  CLOSED_LOST: 'Closed Lost',
+  WON:         'Won',
+  LOST:        'Lost',
+  NCE:         'NCE',
+  INVALID:     'Invalid',
 };
 
 function LeadPipeline({ data }: { data: { status: string; count: number }[] }) {
   if (!data.length) return <div className="text-sm text-muted-foreground py-6 text-center">No lead data</div>;
   const total = data.reduce((s, d) => s + d.count, 0);
-  const STATUS_ORDER = ['NEW', 'CONTACTED', 'PROPOSAL', 'FOLLOW_UP', 'CLOSED_WON', 'CLOSED_LOST'];
+  const STATUS_ORDER = ['NEW', 'CONTACTED', 'PROPOSAL', 'FOLLOW_UP', 'WON', 'LOST', 'NCE', 'INVALID'];
   const sorted = [...data].sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status));
   return (
     <div className="space-y-2">

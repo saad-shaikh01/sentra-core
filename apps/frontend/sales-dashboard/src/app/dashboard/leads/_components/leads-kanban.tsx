@@ -23,8 +23,10 @@ const COLUMNS: { status: LeadStatus; label: string }[] = [
   { status: LeadStatus.CONTACTED, label: 'Contacted' },
   { status: LeadStatus.PROPOSAL, label: 'Proposal' },
   { status: LeadStatus.FOLLOW_UP, label: 'Follow Up' },
-  { status: LeadStatus.CLOSED_WON, label: 'Won' },
-  { status: LeadStatus.CLOSED_LOST, label: 'Lost' },
+  { status: LeadStatus.WON, label: 'Won' },
+  { status: LeadStatus.LOST, label: 'Lost' },
+  { status: LeadStatus.NCE, label: 'NCE' },
+  { status: LeadStatus.INVALID, label: 'Invalid' },
 ];
 
 const COLUMN_COLORS: Record<LeadStatus, string> = {
@@ -32,8 +34,10 @@ const COLUMN_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.CONTACTED]: 'border-t-amber-500/60',
   [LeadStatus.PROPOSAL]: 'border-t-purple-500/60',
   [LeadStatus.FOLLOW_UP]: 'border-t-orange-500/60',
-  [LeadStatus.CLOSED_WON]: 'border-t-emerald-500/60',
-  [LeadStatus.CLOSED_LOST]: 'border-t-red-500/60',
+  [LeadStatus.WON]: 'border-t-emerald-500/60',
+  [LeadStatus.LOST]: 'border-t-red-500/60',
+  [LeadStatus.NCE]: 'border-t-slate-500/60',
+  [LeadStatus.INVALID]: 'border-t-rose-500/60',
 };
 
 interface LeadsKanbanProps {
@@ -101,7 +105,7 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
       return;
     }
 
-    if (newStatus === LeadStatus.CLOSED_LOST) {
+    if (newStatus === LeadStatus.LOST) {
       setPendingLost({ leadId: lead.id });
       return;
     }
@@ -143,7 +147,7 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
           ref={scrollContainerRef}
           onScroll={handleScroll}
           className={cn(
-            "flex gap-4 md:grid md:grid-cols-2 xl:grid-cols-6",
+            "flex gap-4 md:grid md:grid-cols-2 xl:grid-cols-8",
             "overflow-x-auto md:overflow-x-visible pb-6 -mx-4 px-4 md:mx-0 md:px-0",
             "snap-x snap-mandatory md:snap-none no-scrollbar"
           )}
@@ -272,7 +276,7 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
 
                 changeStatus.mutate({
                   id: pendingLost.leadId,
-                  status: LeadStatus.CLOSED_LOST,
+                  status: LeadStatus.LOST,
                   lostReason: lostReason.trim(),
                 });
                 setPendingLost(null);

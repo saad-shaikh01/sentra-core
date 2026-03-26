@@ -42,15 +42,21 @@ export function timeAgo(dateString: string): string {
 }
 
 // -------------------------------------------------------
-// TYPE_ICONS — Record ensures all 12 types are covered
+// TYPE_ICONS — Record ensures all notification types are covered
 // -------------------------------------------------------
 type IconComponent = React.ComponentType<{ className?: string }>;
 
 const TYPE_ICONS: Record<GlobalNotificationType, IconComponent> = {
+  SALE_CREATED: CreditCard,
   PAYMENT_FAILED: AlertCircle,
   INVOICE_OVERDUE: FileText,
   SALE_STATUS_CHANGED: ArrowRightLeft,
   CHARGEBACK_FILED: AlertTriangle,
+  LEAD_CREATED: FileText,
+  LEAD_ASSIGNED: UserCheck,
+  LEAD_CONTRIBUTOR_ADDED: UserCheck,
+  CLIENT_ASSIGNED: UserCheck,
+  CLIENT_PM_ASSIGNED: UserCheck,
   PAYMENT_RECEIVED: CheckCircle,
   TASK_ASSIGNED: Zap,
   TASK_DUE_SOON: RefreshCw,
@@ -62,10 +68,16 @@ const TYPE_ICONS: Record<GlobalNotificationType, IconComponent> = {
 };
 
 const TYPE_COLORS: Record<GlobalNotificationType, string> = {
+  SALE_CREATED: 'text-emerald-400',
   PAYMENT_FAILED: 'text-red-400',
   INVOICE_OVERDUE: 'text-orange-400',
   SALE_STATUS_CHANGED: 'text-blue-400',
   CHARGEBACK_FILED: 'text-red-500',
+  LEAD_CREATED: 'text-sky-400',
+  LEAD_ASSIGNED: 'text-cyan-400',
+  LEAD_CONTRIBUTOR_ADDED: 'text-cyan-300',
+  CLIENT_ASSIGNED: 'text-emerald-300',
+  CLIENT_PM_ASSIGNED: 'text-teal-300',
   PAYMENT_RECEIVED: 'text-green-400',
   TASK_ASSIGNED: 'text-yellow-400',
   TASK_DUE_SOON: 'text-amber-400',

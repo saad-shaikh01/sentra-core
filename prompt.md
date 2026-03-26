@@ -1,106 +1,60 @@
-Continue from the completed fixes and final state already implemented.
+You have already explored my email-related flow and you are familiar with my codebase. I want you to deeply investigate and identify the root cause of the following issues.
 
-Now perform a strict verification pass focused on correctness, regression safety, and send-permission behavior. Do not provide coding suggestions, optional ideas, or architectural recommendations. Only verify actual behavior and report confirmed findings.
+Issue 1: Sync toast message behavior
+On the UI, a toast message appears at the bottom with messages like:
+- "0 messages synced"
+- "1 message synced"
 
-## Verification goals
+I want you to find out:
+1. Why this toast is being shown
+2. What exact logic, event, API response, websocket event, polling mechanism, state update, or background job triggers it
+3. Why it sometimes shows "0 messages synced" and sometimes "1 message synced"
+4. From where the synced count is being calculated
+5. Whether this is caused by frontend state leakage, backend event broadcasting, shared cache, shared store, database query issue, socket channel issue, global state issue, tenant scoping issue, or incorrect auth/user filtering
 
-Validate that the current implementation now behaves correctly in all of these cases:
+Issue 2: Cross-user email sync toast leakage
+Let’s say Agent A has connected an email account. In that case, it makes sense if Agent A sees the sync toast.
 
-### 1. Lead Email tab visibility after reassignment
+But the problem is:
+Agent B, who has NOT connected any email account at all, is also seeing the same sync toast related to the exact email account that Agent A connected.
 
-Verify this exact scenario:
+I want you to investigate:
+1. Why Agent B is receiving that toast
+2. How the email/account/user/agent scoping is currently implemented
+3. Whether events are being broadcast globally instead of user-specific
+4. Whether the frontend subscription/channel/topic/socket listener is not scoped per authenticated user
+5. Whether backend queries are returning data without filtering by the correct agent/user/workspace/team/account
+6. Whether some shared Redux/Zustand/Context/global store/local storage/cache/session state is causing this
+7. Whether there is any issue in pub-sub, websocket rooms, SSE, notification service, or job result broadcasting
+8. Whether the toast is tied to a shared mailbox record instead of the currently logged-in agent
+9. Whether the problem comes from multi-tenant isolation failure
 
-1. Agent A communicates with a client
-2. Emails are visible in the lead/client Email tab
-3. The lead/client is reassigned to Agent B
-4. Agent B opens the same Email tab
+Issue 3: Inbox count showing for users with no email connected
+In the sidebar, the Inbox count is also sometimes displayed for multiple users who have not connected any email account.
 
-Confirm:
+I want you to investigate:
+1. Why users with no connected email account are seeing an Inbox count
+2. How the inbox count is fetched and scoped
+3. Whether the count query is incorrectly using shared data
+4. Whether the count is based on a global mailbox/inbox table instead of the logged-in user’s connected account
+5. Whether stale frontend cache or persisted state is causing old counts to appear
+6. Whether server-side response caching, query caching, or client-side caching is leaking data across users
+7. Whether there is a missing check like “user has connected email account” before showing inbox count
+8. Whether the data is scoped by agent, organization, workspace, or account correctly
 
-* whether Agent B can see the full prior communication history
-* whether thread list and message list both work
-* whether access works only because the thread is entity-linked
-* whether any org member can see entity-linked history or only users with access to that entity
-* whether backend permission checks still apply correctly
+What I need from you:
+1. Trace the full flow end-to-end:
+   - email connection
+   - sync trigger
+   - sync status update
+   - toast generation
+   - inbox count fetch/update
+   - frontend rendering
+2. Identify the exact files, functions, components, hooks, services, backend handlers, jobs, queries, events, and listeners responsible
+3. Explain the root cause clearly
+4. Highlight whether the bug is frontend, backend, realtime layer, caching layer, or database scoping related
+5. Point out any missing tenant isolation / auth checks / user filters
+6. Suggest the exact fix with code-level reasoning
+7. Mention any edge cases or similar places in the codebase where the same bug could also happen
 
-### 2. Inbox isolation still remains intact
-
-Verify that `/dashboard/inbox` still behaves as a personal mailbox view.
-
-Confirm:
-
-* Agent A only sees their own Gmail/inbox content there
-* Agent B does not suddenly see Agent A’s personal inbox threads in inbox view
-* the identity filter is still applied for non-entity-linked queries
-* no regression has been introduced in personal inbox behavior
-
-### 3. Message-level visibility in entity-linked threads
-
-Verify that:
-
-* all messages inside an entity-linked thread are visible in the lead/client Email tab
-* no messages are hidden because of identity filtering
-* replies and historical messages are included correctly
-
-### 4. Send/reply permission behavior
-
-This is critical and must be verified separately from visibility.
-
-Confirm:
-
-* whether Agent B can only view prior communication or also reply from the lead Email tab
-* if reply/send is possible, which mailbox/identity is used
-* whether sending is correctly restricted to connected/authorized identities
-* whether a user without ownership of the original Gmail identity can incorrectly send as another agent
-* whether compose/reply behavior is safe after reassignment
-
-### 5. Historical and auto-linked threads
-
-Verify that the reassignment visibility behavior is correct for:
-
-* new outgoing emails
-* replies in existing threads
-* historical backfilled emails
-* incoming synced emails
-
----
-
-## Strict report format
-
-Return only this structure:
-
-### A. Verified behavior
-
-List the exact confirmed behaviors that now work correctly.
-
-### B. Regression check
-
-State whether inbox isolation is still preserved and whether any regression was found.
-
-### C. Reassignment visibility result
-
-Answer clearly:
-
-* Can Agent B see prior communication in the lead/client Email tab?
-* Under what exact conditions?
-* What access scope controls this?
-
-### D. Send/reply permission result
-
-Answer clearly:
-
-* Can Agent B reply to or send from the reassigned lead/client context?
-* Under what mailbox/identity rules?
-* Is anything unsafe or incorrect?
-
-### E. Remaining verified issues
-
-Only include real, confirmed issues if any still exist.
-
-## Important rules
-
-* Do not suggest code changes unless a real verified issue remains.
-* Do not provide implementation ideas.
-* Do not speculate.
-* Do not modify working logic unless you find a confirmed bug.
-* Focus on verification only.
+Please do not give a generic answer. I want a codebase-specific investigation based on the actual implementation. If you suspect multiple possible causes, rank them by likelihood and explain why.

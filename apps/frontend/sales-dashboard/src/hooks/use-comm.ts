@@ -87,6 +87,13 @@ export function useUnreadCount() {
   const setCommUnread = useUIStore((state) => state.setCommUnread);
   const storedUnread = readStoredUnreadCount();
 
+  // Only treat localStorage as initialData if it's very recent (under 30s).
+  // Older entries may have been inflated by org-wide socket events for other
+  // users' identities and should not be shown on page load.
+  const isStoredFresh = storedUnread
+    ? Date.now() - storedUnread.timestamp < 30_000
+    : false;
+
   return useQuery({
     queryKey: commKeys.unreadCount(),
     queryFn: async () => {
@@ -96,14 +103,11 @@ export function useUnreadCount() {
       setCommUnread(response.total);
       return response;
     },
-    initialData: storedUnread
-      ? {
-          total: storedUnread.count,
-          byIdentity: {},
-        }
+    initialData: isStoredFresh
+      ? { total: storedUnread!.count, byIdentity: {} }
       : undefined,
-    initialDataUpdatedAt: storedUnread?.timestamp ?? undefined,
-    staleTime: COMM_UNREAD_STALE_TIME_MS,
+    initialDataUpdatedAt: isStoredFresh ? storedUnread!.timestamp : undefined,
+    staleTime: 60 * 1000,
     refetchOnMount: true,
     enabled: COMM_ENABLED,
   });

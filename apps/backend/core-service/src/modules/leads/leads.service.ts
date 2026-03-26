@@ -9,7 +9,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { Prisma, PrismaService, NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-client';
+import {
+  Prisma,
+  PrismaService,
+  NotificationHelper,
+  NOTIFICATION_QUEUE,
+  UserRole as PrismaUserRole,
+} from '@sentra-core/prisma-client';
 import { InputJsonValue, JsonValue, PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import {
   LeadStatus,
@@ -112,6 +118,216 @@ export class LeadsService {
 
     const stringValue = String(value).trim();
     return stringValue ? stringValue : undefined;
+  }
+
+  private buildLeadLabel(lead: {
+    id: string;
+    title?: string | null;
+    name?: string | null;
+    email?: string | null;
+  }): string {
+    return lead.title?.trim() || lead.name?.trim() || lead.email?.trim() || lead.id;
+  }
+
+  private buildLeadUrl(leadId: string): string {
+    return `/dashboard/leads?highlight=${leadId}`;
+  }
+
+  private buildClientLabel(client: {
+    id: string;
+    contactName?: string | null;
+    email?: string | null;
+  }): string {
+    return client.contactName?.trim() || client.email?.trim() || client.id;
+  }
+
+  private buildClientUrl(clientId: string): string {
+    return `/dashboard/clients?highlight=${clientId}`;
+  }
+
+  private async resolveAdminRecipientIds(organizationId: string): Promise<string[]> {
+    const admins = await this.prisma.user.findMany({
+      where: {
+        organizationId,
+        role: PrismaUserRole.ADMIN,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    return admins.map((user) => user.id);
+  }
+
+  private async notifyLeadAssignment(
+    organizationId: string,
+    actorId: string,
+    lead: {
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      email?: string | null;
+    },
+    recipientId: string | null | undefined,
+  ): Promise<void> {
+    if (!recipientId || recipientId === actorId) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds: [recipientId],
+      actorId,
+      type: 'LEAD_ASSIGNED',
+      module: 'SALES',
+      title: 'Lead Assigned',
+      body: `You were assigned to lead "${this.buildLeadLabel(lead)}".`,
+      entityType: 'lead',
+      entityId: lead.id,
+      url: this.buildLeadUrl(lead.id),
+      data: { leadId: lead.id },
+    });
+  }
+
+  private async notifyLeadContributorAdded(
+    organizationId: string,
+    actorId: string,
+    lead: {
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      email?: string | null;
+    },
+    recipientId: string | null | undefined,
+  ): Promise<void> {
+    if (!recipientId || recipientId === actorId) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds: [recipientId],
+      actorId,
+      type: 'LEAD_CONTRIBUTOR_ADDED',
+      module: 'SALES',
+      title: 'Lead Contributor Added',
+      body: `You were added as a contributor to lead "${this.buildLeadLabel(lead)}".`,
+      entityType: 'lead',
+      entityId: lead.id,
+      url: this.buildLeadUrl(lead.id),
+      data: { leadId: lead.id },
+    });
+  }
+
+  private async notifyLeadCreatedToAdmins(
+    organizationId: string,
+    lead: {
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      email?: string | null;
+    },
+    actorId?: string,
+  ): Promise<void> {
+    const recipientIds = await this.resolveAdminRecipientIds(organizationId);
+    if (recipientIds.length === 0) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds,
+      actorId,
+      type: 'LEAD_CREATED',
+      module: 'SALES',
+      title: 'New Lead Created',
+      body: `A new lead "${this.buildLeadLabel(lead)}" was created.`,
+      entityType: 'lead',
+      entityId: lead.id,
+      url: this.buildLeadUrl(lead.id),
+      data: { leadId: lead.id },
+    });
+  }
+
+  private async notifyImportedLeadsCreatedToAdmins(
+    organizationId: string,
+    actorId: string,
+    leads: Array<{
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      email?: string | null;
+    }>,
+  ): Promise<void> {
+    if (leads.length === 0) return;
+
+    const recipientIds = await this.resolveAdminRecipientIds(organizationId);
+    if (recipientIds.length === 0) return;
+
+    await Promise.all(
+      leads.map((lead) =>
+        this.notificationHelper.notify({
+          organizationId,
+          recipientIds,
+          actorId,
+          type: 'LEAD_CREATED',
+          module: 'SALES',
+          title: 'New Lead Created',
+          body: `A new lead "${this.buildLeadLabel(lead)}" was created.`,
+          entityType: 'lead',
+          entityId: lead.id,
+          url: this.buildLeadUrl(lead.id),
+          data: { leadId: lead.id, trigger: 'import' },
+        }),
+      ),
+    );
+  }
+
+  private async notifyClientAssignment(
+    organizationId: string,
+    actorId: string,
+    client: {
+      id: string;
+      contactName?: string | null;
+      email?: string | null;
+    },
+    recipientId: string | null | undefined,
+  ): Promise<void> {
+    if (!recipientId || recipientId === actorId) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds: [recipientId],
+      actorId,
+      type: 'CLIENT_ASSIGNED',
+      module: 'SALES',
+      title: 'Client Assigned',
+      body: `You were assigned to client "${this.buildClientLabel(client)}".`,
+      entityType: 'client',
+      entityId: client.id,
+      url: this.buildClientUrl(client.id),
+      data: { clientId: client.id },
+    });
+  }
+
+  private async notifyProjectManagerAssignment(
+    organizationId: string,
+    actorId: string,
+    client: {
+      id: string;
+      contactName?: string | null;
+      email?: string | null;
+    },
+    recipientId: string | null | undefined,
+  ): Promise<void> {
+    if (!recipientId || recipientId === actorId) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds: [recipientId],
+      actorId,
+      type: 'CLIENT_PM_ASSIGNED',
+      module: 'SALES',
+      title: 'Project Manager Assigned',
+      body: `You were assigned as project manager for client "${this.buildClientLabel(client)}".`,
+      entityType: 'client',
+      entityId: client.id,
+      url: this.buildClientUrl(client.id),
+      data: { clientId: client.id },
+    });
   }
 
   private getImportCellValue(
@@ -306,6 +522,14 @@ export class LeadsService {
       void this.triggerCommBackfill(orgId, 'lead', lead.id, [lead.email]);
     }
 
+    void this.notifyLeadCreatedToAdmins(orgId, lead, userId).catch((err) =>
+      this.logger.warn('lead created notification failed (non-fatal):', err),
+    );
+
+    void this.notifyLeadAssignment(orgId, userId, lead, assignedToId).catch((err) =>
+      this.logger.warn('lead assignment notification failed on create (non-fatal):', err),
+    );
+
     return this.mapToILead(lead);
   }
 
@@ -473,14 +697,20 @@ export class LeadsService {
     }
 
     let created = 0;
+    let createdLeads: Array<{
+      id: string;
+      title: string | null;
+      name: string | null;
+      email: string | null;
+    }> = [];
 
     if (leadsToCreate.length > 0) {
-      const createdLeads = await this.prisma.$transaction(async (tx) => {
+      createdLeads = await this.prisma.$transaction(async (tx) => {
         const leads = await Promise.all(
           leadsToCreate.map((leadData) =>
             tx.lead.create({
               data: leadData as never,
-              select: { id: true },
+              select: { id: true, title: true, name: true, email: true },
             }),
           ),
         );
@@ -504,6 +734,12 @@ export class LeadsService {
     }
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
+
+    if (created > 0) {
+      void this.notifyImportedLeadsCreatedToAdmins(orgId, userId, createdLeads).catch((err) =>
+        this.logger.warn('lead import notification failed (non-fatal):', err),
+      );
+    }
 
     return {
       total: rows.length,
@@ -754,6 +990,12 @@ export class LeadsService {
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
 
+    if (dto.assignedToId !== lead.assignedToId) {
+      void this.notifyLeadAssignment(orgId, userId, lead, dto.assignedToId).catch((err) =>
+        this.logger.warn('lead assignment notification failed (non-fatal):', err),
+      );
+    }
+
     return this.mapToILead(updated);
   }
 
@@ -820,8 +1062,8 @@ export class LeadsService {
 
     const [totalLeads, wonLeads, lostLeads, salesAgg] = await Promise.all([
       this.prisma.lead.count({ where: baseWhere }),
-      this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.CLOSED_WON } }),
-      this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.CLOSED_LOST } }),
+      this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.WON } }),
+      this.prisma.lead.count({ where: { ...baseWhere, status: LeadStatus.LOST } }),
       saleWhere
         ? this.prisma.sale.aggregate({
             where: saleWhere,
@@ -883,8 +1125,8 @@ export class LeadsService {
 
     const lostReason = dto.lostReason?.trim();
 
-    if (dto.status === LeadStatus.CLOSED_LOST && !lostReason) {
-      throw new BadRequestException('lostReason is required when transitioning to CLOSED_LOST status');
+    if (dto.status === LeadStatus.LOST && !lostReason) {
+      throw new BadRequestException('lostReason is required when transitioning to LOST status');
     }
 
     const updated = await this.prisma.lead.update({
@@ -894,7 +1136,7 @@ export class LeadsService {
         followUpDate: dto.status === LeadStatus.FOLLOW_UP && dto.followUpDate
           ? new Date(dto.followUpDate)
           : null,
-        lostReason: dto.status === LeadStatus.CLOSED_LOST ? lostReason : null,
+        lostReason: dto.status === LeadStatus.LOST ? lostReason : null,
       },
     });
 
@@ -976,6 +1218,12 @@ export class LeadsService {
     });
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
+
+    if (dto.assignedToId !== lead.assignedToId) {
+      void this.notifyLeadAssignment(orgId, userId, lead, dto.assignedToId).catch((err) =>
+        this.logger.warn('lead assignment notification failed (non-fatal):', err),
+      );
+    }
 
     return this.mapToILead(updated);
   }
@@ -1079,6 +1327,10 @@ export class LeadsService {
 
       await this.cache.delByPrefix(`leads:${orgId}:`);
 
+      void this.notifyLeadContributorAdded(orgId, userId, lead, targetUserId).catch((err) =>
+        this.logger.warn('lead contributor notification failed (non-fatal):', err),
+      );
+
       return {
         id: collaborator.id,
         leadId: collaborator.leadId,
@@ -1167,7 +1419,7 @@ export class LeadsService {
             recipientIds: recipients,
             actorId: userId,
             type: 'MENTION',
-            module: 'LEADS',
+            module: 'SALES',
             title: `${actorName} mentioned you`,
             body: `${actorName} mentioned you on this lead`,
             entityType: 'lead',
@@ -1293,7 +1545,7 @@ export class LeadsService {
           where: { id },
           data: {
             convertedClientId: client.id,
-            status: LeadStatus.CLOSED_WON,
+            status: LeadStatus.WON,
           },
         });
 
@@ -1317,6 +1569,36 @@ export class LeadsService {
 
     await this.cache.delByPrefix(`leads:${orgId}:`);
     await this.cache.delByPrefix(`clients:${orgId}:`);
+
+    if (dto.upsellAgentId) {
+      void this.notifyClientAssignment(
+        orgId,
+        userId,
+        {
+          id: result.convertedClientId ?? '',
+          contactName: dto.contactName,
+          email: dto.email,
+        },
+        dto.upsellAgentId,
+      ).catch((err) =>
+        this.logger.warn('client assignment notification failed (non-fatal):', err),
+      );
+    }
+
+    if (dto.projectManagerId) {
+      void this.notifyProjectManagerAssignment(
+        orgId,
+        userId,
+        {
+          id: result.convertedClientId ?? '',
+          contactName: dto.contactName,
+          email: dto.email,
+        },
+        dto.projectManagerId,
+      ).catch((err) =>
+        this.logger.warn('project manager assignment notification failed (non-fatal):', err),
+      );
+    }
 
     return this.mapToILead(result);
   }
@@ -1353,6 +1635,10 @@ export class LeadsService {
     });
 
     await this.cache.delByPrefix(`leads:${brand.organizationId}:`);
+
+    void this.notifyLeadCreatedToAdmins(brand.organizationId, lead).catch((err) =>
+      this.logger.warn('captured lead notification failed (non-fatal):', err),
+    );
 
     return { id: lead.id, message: 'Lead captured successfully' };
   }

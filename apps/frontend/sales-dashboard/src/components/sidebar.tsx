@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { PermissionGuard } from '@/components/permission-guard';
 import { useUIStore, useSidebarOpen } from '@/stores/ui-store';
 import { COMM_ENABLED } from '@/lib/feature-flags';
+import { useIdentities } from '@/hooks/use-comm';
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -61,6 +62,8 @@ export function Sidebar() {
   const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const commUnreadCount = useUIStore((state) => state.commUnreadCount);
+  const { data: commIdentities } = useIdentities();
+  const hasCommIdentity = COMM_ENABLED && (commIdentities?.length ?? 0) > 0;
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -195,7 +198,7 @@ export function Sidebar() {
                       {item.name}
                     </motion.span>
                   )}
-                  {item.href === '/dashboard/inbox' && commUnreadCount > 0 && (
+                  {item.href === '/dashboard/inbox' && hasCommIdentity && commUnreadCount > 0 && (
                     <span className="ml-auto shrink-0 h-5 min-w-5 px-1 rounded-full bg-primary text-[10px] font-bold text-white flex items-center justify-center leading-none">
                       {commUnreadCount > 99 ? '99+' : commUnreadCount}
                     </span>

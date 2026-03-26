@@ -330,6 +330,18 @@ export class ClientsService {
 
     await this.cache.delByPrefix(`clients:${orgId}:`);
 
+    if (dto.upsellAgentId !== undefined && dto.upsellAgentId !== client.upsellAgentId) {
+      void this.notifyClientAssignment(orgId, actorId, client, dto.upsellAgentId).catch((err) =>
+        this.logger.warn('client assignment notification failed (non-fatal):', err),
+      );
+    }
+
+    if (dto.projectManagerId !== undefined && dto.projectManagerId !== client.projectManagerId) {
+      void this.notifyProjectManagerAssignment(orgId, actorId, client, dto.projectManagerId).catch((err) =>
+        this.logger.warn('project manager assignment notification failed (non-fatal):', err),
+      );
+    }
+
     return this.findOne(id, orgId);
   }
 
@@ -404,7 +416,7 @@ export class ClientsService {
             recipientIds: recipients,
             actorId: userId,
             type: 'MENTION',
-            module: 'CLIENTS',
+            module: 'SALES',
             title: `${actorName} mentioned you`,
             body: `${actorName} mentioned you on this client`,
             entityType: 'client',
@@ -547,6 +559,72 @@ export class ClientsService {
     }
 
     return { name: user.name };
+  }
+
+  private buildClientLabel(client: {
+    id: string;
+    contactName?: string | null;
+    email?: string | null;
+  }): string {
+    return client.contactName?.trim() || client.email?.trim() || client.id;
+  }
+
+  private buildClientUrl(clientId: string): string {
+    return `/dashboard/clients?highlight=${clientId}`;
+  }
+
+  private async notifyClientAssignment(
+    organizationId: string,
+    actorId: string,
+    client: {
+      id: string;
+      contactName?: string | null;
+      email?: string | null;
+    },
+    recipientId: string | null | undefined,
+  ): Promise<void> {
+    if (!recipientId || recipientId === actorId) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds: [recipientId],
+      actorId,
+      type: 'CLIENT_ASSIGNED',
+      module: 'SALES',
+      title: 'Client Assigned',
+      body: `You were assigned to client "${this.buildClientLabel(client)}".`,
+      entityType: 'client',
+      entityId: client.id,
+      url: this.buildClientUrl(client.id),
+      data: { clientId: client.id },
+    });
+  }
+
+  private async notifyProjectManagerAssignment(
+    organizationId: string,
+    actorId: string,
+    client: {
+      id: string;
+      contactName?: string | null;
+      email?: string | null;
+    },
+    recipientId: string | null | undefined,
+  ): Promise<void> {
+    if (!recipientId || recipientId === actorId) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds: [recipientId],
+      actorId,
+      type: 'CLIENT_PM_ASSIGNED',
+      module: 'SALES',
+      title: 'Project Manager Assigned',
+      body: `You were assigned as project manager for client "${this.buildClientLabel(client)}".`,
+      entityType: 'client',
+      entityId: client.id,
+      url: this.buildClientUrl(client.id),
+      data: { clientId: client.id },
+    });
   }
 
   private mapToIClient(client: {

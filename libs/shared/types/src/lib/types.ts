@@ -28,8 +28,10 @@ export enum LeadStatus {
   CONTACTED = 'CONTACTED',
   PROPOSAL = 'PROPOSAL',
   FOLLOW_UP = 'FOLLOW_UP',
-  CLOSED_WON = 'CLOSED_WON',
-  CLOSED_LOST = 'CLOSED_LOST',
+  WON = 'WON',
+  LOST = 'LOST',
+  NCE = 'NCE',
+  INVALID = 'INVALID',
 }
 
 export enum LeadType {
@@ -204,12 +206,14 @@ export type DataScopeType = (typeof DataScopeType)[keyof typeof DataScopeType];
 // ==========================================
 
 export const LEAD_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
-  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
-  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
-  [LeadStatus.PROPOSAL]: [LeadStatus.FOLLOW_UP, LeadStatus.CONTACTED, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
-  [LeadStatus.FOLLOW_UP]: [LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.CLOSED_WON, LeadStatus.CLOSED_LOST],
-  [LeadStatus.CLOSED_WON]: [],   // terminal — converted
-  [LeadStatus.CLOSED_LOST]: [],  // terminal — lost
+  [LeadStatus.NEW]: [LeadStatus.CONTACTED, LeadStatus.FOLLOW_UP, LeadStatus.WON, LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID],
+  [LeadStatus.CONTACTED]: [LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.WON, LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID],
+  [LeadStatus.PROPOSAL]: [LeadStatus.FOLLOW_UP, LeadStatus.CONTACTED, LeadStatus.WON, LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID],
+  [LeadStatus.FOLLOW_UP]: [LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.WON, LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID],
+  [LeadStatus.WON]: [],      // terminal — converted
+  [LeadStatus.LOST]: [],     // terminal — lost
+  [LeadStatus.NCE]: [],      // terminal — non-convertible / closed
+  [LeadStatus.INVALID]: [],  // terminal — invalid lead
 };
 
 export const SALE_STATUS_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {

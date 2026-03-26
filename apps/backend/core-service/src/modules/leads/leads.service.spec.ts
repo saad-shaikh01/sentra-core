@@ -1,10 +1,11 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
-import { CacheService } from '../../common';
+import { CacheService, PermissionsService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 import { TeamBrandHelper } from '../scope/team-brand.helper';
 import { LeadsService } from './leads.service';
@@ -135,6 +136,7 @@ describe('LeadsService', () => {
     };
     user: {
       findUnique: jest.Mock;
+      findMany: jest.Mock;
     };
     $transaction: jest.Mock;
   };
@@ -154,6 +156,12 @@ describe('LeadsService', () => {
   };
   let notifQueueMock: {
     add: jest.Mock;
+  };
+  let permissionsServiceMock: {
+    userHasPermission: jest.Mock;
+  };
+  let configServiceMock: {
+    get: jest.Mock;
   };
   let transactionClient: TransactionClient;
 
@@ -192,6 +200,7 @@ describe('LeadsService', () => {
       },
       user: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn(async <T>(callback: (tx: TransactionClient) => Promise<T>) => callback(transactionClient)),
     };
@@ -220,6 +229,14 @@ describe('LeadsService', () => {
       resolveBrandTeamMap: jest.fn().mockResolvedValue(new Map()),
     };
 
+    permissionsServiceMock = {
+      userHasPermission: jest.fn().mockResolvedValue(true),
+    };
+
+    configServiceMock = {
+      get: jest.fn().mockReturnValue(undefined),
+    };
+
     notifQueueMock = {
       add: jest.fn(),
     };
@@ -231,6 +248,8 @@ describe('LeadsService', () => {
         { provide: CacheService, useValue: cacheMock },
         { provide: ScopeService, useValue: scopeServiceMock },
         { provide: TeamBrandHelper, useValue: teamBrandHelperMock },
+        { provide: PermissionsService, useValue: permissionsServiceMock },
+        { provide: ConfigService, useValue: configServiceMock },
         { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: notifQueueMock },
       ],
     }).compile();
@@ -339,6 +358,34 @@ describe('LeadsService', () => {
     await expect(
       service.changeStatus(leadId, orgId, userId, { status: LeadStatus.CONTACTED }),
     ).resolves.not.toThrow();
+  });
+
+  it('TC-B3.1: changeStatus to LOST without lostReason throws BadRequestException', async () => {
+    prismaMock.lead.findUnique.mockResolvedValue(makeLead({ status: LeadStatus.PROPOSAL }));
+
+    await expect(
+      service.changeStatus(leadId, orgId, userId, { status: LeadStatus.LOST }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prismaMock.lead.update).not.toHaveBeenCalled();
+  });
+
+  it('TC-B3.2: changeStatus to INVALID succeeds without lostReason', async () => {
+    prismaMock.lead.findUnique.mockResolvedValue(makeLead({ status: LeadStatus.CONTACTED }));
+    prismaMock.lead.update.mockResolvedValue(
+      makeLead({
+        status: LeadStatus.INVALID,
+      }),
+    );
+    prismaMock.leadActivity.create.mockResolvedValue({
+      id: 'activity-invalid',
+    });
+
+    const result = await service.changeStatus(leadId, orgId, userId, {
+      status: LeadStatus.INVALID,
+    });
+
+    expect(result.status).toBe(LeadStatus.INVALID);
   });
 
   it('TC-B4: findAll for FRONTSELL_AGENT only returns own leads', async () => {

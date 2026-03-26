@@ -24,6 +24,10 @@ import { cn } from '@/lib/utils';
 type ViewMode = 'kanban' | 'table';
 
 function formatEnumLabel(value: string) {
+  if (value === 'NCE') {
+    return 'NCE';
+  }
+
   return value
     .toLowerCase()
     .split('_')
@@ -257,7 +261,7 @@ export default function LeadsPage() {
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
                   {Object.values(LeadStatus).map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                    <SelectItem key={s} value={s}>{formatEnumLabel(s)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

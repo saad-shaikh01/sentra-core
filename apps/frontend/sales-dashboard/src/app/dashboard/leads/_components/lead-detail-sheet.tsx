@@ -234,7 +234,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const canCreateSale = hasPermission('sales:sales:create');
   const isFrontsell = hasPermission('sales:leads:view_own');
   const showReadOnlyAssignee = !canAssign && !isFrontsell;
-  const isLeadClosed = lead?.status === LeadStatus.CLOSED_WON || lead?.status === LeadStatus.CLOSED_LOST;
+  const isLeadClosed = !!lead && [LeadStatus.WON, LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID].includes(lead.status);
   const isOwner = !!user && lead?.assignedToId === user.id;
   const isCollaborator = !!user && (lead as any)?.collaborators?.some((c: { userId: string }) => c.userId === user.id);
   const canClaim = hasPermission('sales:leads:claim') && !lead?.assignedToId && !isLeadClosed;
@@ -432,7 +432,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                               return;
                             }
 
-                            if (status === LeadStatus.CLOSED_LOST) {
+                            if (status === LeadStatus.LOST) {
                               setLostDialogOpen(true);
                               return;
                             }
@@ -606,7 +606,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
                 {canCreateSale || (canConvert && !isLeadClosed && !lead.convertedClientId) ? (
                   <div className="flex flex-col sm:flex-row gap-2">
-                    {canCreateSale && lead.status !== LeadStatus.CLOSED_LOST ? (
+                    {canCreateSale && ![LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID].includes(lead.status) ? (
                       <Button
                         variant="outline"
                         className="flex-1"
@@ -861,7 +861,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                 onClick={() => {
                   changeStatus.mutate({
                     id: lead.id,
-                    status: LeadStatus.CLOSED_LOST,
+                    status: LeadStatus.LOST,
                     lostReason: lostReason.trim(),
                   });
                   closeLostDialog();
@@ -1159,9 +1159,10 @@ function formatEnumLabel(value?: string): string {
   }
 
   return value
-    .toLowerCase()
     .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part) => part.toUpperCase() === 'NCE'
+      ? 'NCE'
+      : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
 }
 

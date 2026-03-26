@@ -6,6 +6,7 @@ import { NotificationHelper, NOTIFICATION_QUEUE } from '@sentra-core/prisma-clie
 import { AppModule, UserRole } from '@prisma/client';
 
 const TYPE_MAP: Record<string, string> = {
+  SALE_CREATED: 'SALE_CREATED',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   SALE_STATUS_CHANGED: 'SALE_STATUS_CHANGED',
@@ -14,6 +15,7 @@ const TYPE_MAP: Record<string, string> = {
 };
 
 const TITLE_MAP: Record<string, string> = {
+  SALE_CREATED: 'Sale Created',
   PAYMENT_FAILED: 'Payment Failed',
   INVOICE_OVERDUE: 'Invoice Overdue',
   SALE_STATUS_CHANGED: 'Sale Status Updated',

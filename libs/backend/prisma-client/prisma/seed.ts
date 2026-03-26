@@ -338,7 +338,7 @@ async function main() {
       name: 'Jane Smith',
       email: 'jane.smith@example.com',
       phone: '+1-555-8000',
-      status: LeadStatus.CLOSED_WON,
+      status: LeadStatus.WON,
       leadType: 'REFERRAL',
       source: 'COLD_REFERRAL',
       leadDate: daysAgo(10),

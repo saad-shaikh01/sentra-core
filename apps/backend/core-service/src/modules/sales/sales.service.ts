@@ -263,6 +263,25 @@ export class SalesService {
     }
     await this.cache.delByPrefix(`sales:${orgId}:`);
 
+    this.salesNotificationService
+      .resolveRecipientsByRole(orgId, [PrismaUserRole.ADMIN])
+      .then((recipients) =>
+        this.salesNotificationService.dispatch({
+          type: 'SALE_CREATED',
+          message: `A new sale ${sale.id} was created.`,
+          saleId: sale.id,
+          organizationId: orgId,
+          recipientIds: recipients,
+          data: {
+            saleId: sale.id,
+            clientId: sale.clientId,
+            totalAmount: Number(sale.totalAmount),
+            status: sale.status,
+          },
+        }),
+      )
+      .catch((err) => this.logger.error('Notification dispatch failed', err));
+
     if (dto.description) {
       try {
         const actor = await this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } });
@@ -585,7 +604,7 @@ export class SalesService {
         where: { id: lead.id },
         data: {
           convertedClientId: client.id,
-          status: LeadStatus.CLOSED_WON,
+          status: LeadStatus.WON,
         },
       });
 
