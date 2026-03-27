@@ -37,8 +37,10 @@ export interface ClientScopeFilter {
 export interface SaleScopeFilter {
   organizationId: string;
   brandId?: { in: string[] };
+  salesAgentId?: string;
   id?: { in: string[] };
   client?: { is: { upsellAgentId: string } };
+  OR?: Array<Omit<SaleScopeFilter, 'organizationId' | 'OR'>>;
 }
 
 export interface InvoiceScopeFilter {
