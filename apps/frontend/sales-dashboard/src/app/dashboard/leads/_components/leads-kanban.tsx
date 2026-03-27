@@ -147,10 +147,14 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
           ref={scrollContainerRef}
           onScroll={handleScroll}
           className={cn(
-            "flex gap-4 md:grid md:grid-cols-2 xl:grid-cols-8",
-            "overflow-x-auto md:overflow-x-visible pb-6 -mx-4 px-4 md:mx-0 md:px-0",
-            "snap-x snap-mandatory md:snap-none no-scrollbar"
+            "flex gap-6 overflow-x-auto pb-8 -mx-4 px-4 md:mx-0 md:px-0",
+            "snap-x snap-mandatory md:snap-none",
+            "scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20 transition-all"
           )}
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent'
+          }}
         >
           {COLUMNS.map(({ status, label }) => {
             const columnLeads = leads.filter((l) => l.status === status);
@@ -158,12 +162,21 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
               <div
                 key={status}
                 id={`kanban-col-${status}`}
-                className="flex flex-col min-h-[400px] w-[85vw] shrink-0 md:w-auto snap-center"
+                className="flex flex-col min-h-[600px] w-[85vw] md:w-[340px] shrink-0 snap-center"
               >
-                <div className={`rounded-t-2xl border border-b-0 border-white/10 ${COLUMN_COLORS[status]} border-t-2 px-4 py-3 bg-white/[0.02]`}>
+                <div className={cn(
+                  "rounded-t-3xl border border-b-0 border-white/10 px-5 py-5 bg-white/[0.04] backdrop-blur-xl",
+                  COLUMN_COLORS[status],
+                  "border-t-[6px]"
+                )}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
-                    <span className="text-xs font-bold bg-white/10 rounded-full px-2 py-0.5">{columnLeads.length}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[12px] font-black uppercase tracking-[0.25em] text-foreground/80">{label}</span>
+                      <span className="text-[11px] font-bold bg-white/10 text-muted-foreground rounded-lg px-2.5 py-1 min-w-[24px] text-center backdrop-blur-md">
+                        {columnLeads.length}
+                      </span>
+                    </div>
+                    <div className="h-2 w-2 rounded-full bg-white/10 animate-pulse" />
                   </div>
                 </div>
                 <Droppable droppableId={status} isDropDisabled={isMobile}>
@@ -171,20 +184,22 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`
-                        flex-1 rounded-b-2xl border border-white/10 p-3 space-y-2 transition-colors duration-200
-                        ${snapshot.isDraggingOver ? 'bg-white/[0.05] border-white/20' : 'bg-white/[0.02]'}
-                      `}
+                      className={cn(
+                        "flex-1 rounded-b-3xl border border-white/10 p-4 space-y-4 transition-all duration-500 ease-out",
+                        snapshot.isDraggingOver ? "bg-white/[0.08] border-white/30 shadow-inner" : "bg-white/[0.02]"
+                      )}
                     >
-                      {columnLeads.map((lead, i) => (
-                        <LeadsKanbanCard
-                          key={lead.id}
-                          lead={lead}
-                          index={i}
-                          onClick={onLeadClick}
-                          isDragDisabled={isMobile}
-                        />
-                      ))}
+                      <div className="flex flex-col gap-4">
+                        {columnLeads.map((lead, i) => (
+                          <LeadsKanbanCard
+                            key={lead.id}
+                            lead={lead}
+                            index={i}
+                            onClick={onLeadClick}
+                            isDragDisabled={isMobile}
+                          />
+                        ))}
+                      </div>
                       {provided.placeholder}
                     </div>
                   )}
