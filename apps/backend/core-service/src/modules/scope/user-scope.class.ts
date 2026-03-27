@@ -86,13 +86,15 @@ export class UserScope {
     }
 
     if (this.data.scopeBehavior === 'frontsell') {
+      const ownSales = { salesAgentId: this.data.userId };
+
       if (
         this.data.memberVisibleTeamIds.length > 0 &&
         this.data.brandIds.length > 0
       ) {
-        return { ...base, brandId: { in: this.data.brandIds } };
+        return { ...base, OR: [{ brandId: { in: this.data.brandIds } }, ownSales] };
       }
-      return { ...base, id: { in: [] } };
+      return { ...base, ...ownSales };
     }
 
     if (this.data.scopeBehavior === 'upsell') {

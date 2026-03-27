@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsEnum, IsUUID, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsUUID, IsDateString, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { LeadStatus, LeadType, LeadSource, LeadViewTab } from '@sentra-core/types';
 import { PaginationQueryDto } from '../../../common';
 
@@ -42,4 +43,9 @@ export class QueryLeadsDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(['my', 'collaborating', 'pool', 'team'])
   leadView?: LeadViewTab;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  unassigned?: boolean;
 }

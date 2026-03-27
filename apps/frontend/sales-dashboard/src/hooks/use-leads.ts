@@ -113,6 +113,7 @@ export function useAssignLead() {
     onSuccess: (data, { id }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
       toast.success('Lead assigned');
     },
     onError: (e: Error) => toast.error('Failed to assign lead', e.message),
@@ -190,6 +191,7 @@ export function useClaimLead() {
     onSuccess: (data, id) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
       toast.success('Lead claimed');
     },
     onError: (e: Error) => toast.error('Failed to claim lead', e.message),
@@ -203,6 +205,7 @@ export function useUnclaimLead() {
     onSuccess: (data, id) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
       toast.success('Lead returned to pool');
     },
     onError: (e: Error) => toast.error('Failed to unclaim lead', e.message),
@@ -217,6 +220,7 @@ export function useAddLeadCollaborator() {
     onSuccess: (_, { leadId }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadsKeys.detail(leadId) });
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(leadId) });
       toast.success('Collaborator added');
     },
     onError: (e: Error) => toast.error('Failed to add collaborator', e.message),
@@ -231,6 +235,7 @@ export function useRemoveLeadCollaborator() {
     onSuccess: (_, { leadId }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadsKeys.detail(leadId) });
+      queryClient.invalidateQueries({ queryKey: leadsKeys.activities(leadId) });
       toast.success('Collaborator removed');
     },
     onError: (e: Error) => toast.error('Failed to remove collaborator', e.message),

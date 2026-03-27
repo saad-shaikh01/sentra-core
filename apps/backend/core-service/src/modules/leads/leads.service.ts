@@ -34,7 +34,7 @@ import {
 } from '@sentra-core/types';
 import { isEmail, isURL } from 'class-validator';
 import * as XLSX from 'xlsx';
-import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
+import { buildPaginationResponse, CacheService, PermissionsService, StorageService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 import { TeamBrandHelper } from '../scope/team-brand.helper';
 import {
@@ -89,6 +89,7 @@ export class LeadsService {
     private readonly teamBrandHelper: TeamBrandHelper,
     private readonly permissionsService: PermissionsService,
     private readonly configService: ConfigService,
+    private readonly storage: StorageService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -763,7 +764,7 @@ export class LeadsService {
     const cached = await this.cache.get<IPaginatedResponse<ILead>>(cacheKey);
     if (cached) return cached;
 
-    const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search, teamId, leadView } = query;
+    const { page, limit, status, leadType, source, assignedToId, brandId, dateFrom, dateTo, search, teamId, leadView, unassigned } = query;
 
     // Get scope-based visibility filter
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
@@ -798,6 +799,10 @@ export class LeadsService {
     // Allow assignedToId filter for full access and managers
     if (assignedToId && (scope.isFullAccess || scope.isManager)) {
       where.assignedToId = assignedToId;
+    }
+
+    if (unassigned) {
+      where.assignedToId = null;
     }
 
     if (dateFrom || dateTo) {
@@ -921,13 +926,17 @@ export class LeadsService {
     const result = {
       ...this.mapToILead(lead),
       activities: lead.activities.map((a) => this.mapToILeadActivity(a)),
-      assignedTo: lead.assignedTo ?? undefined,
+      assignedTo: lead.assignedTo
+        ? { ...lead.assignedTo, avatarUrl: this.storage.buildUrl(lead.assignedTo.avatarUrl) }
+        : undefined,
       collaborators: lead.collaborators.map((c) => ({
         id: c.id,
         leadId: c.leadId,
         userId: c.userId,
         addedByUserId: c.addedByUserId,
-        user: c.user ?? undefined,
+        user: c.user
+          ? { id: c.user.id, name: c.user.name, avatarUrl: this.storage.buildUrl(c.user.avatarUrl) }
+          : undefined,
         createdAt: c.createdAt,
       })),
     };
@@ -1337,7 +1346,7 @@ export class LeadsService {
         userId: collaborator.userId,
         addedByUserId: collaborator.addedByUserId,
         user: collaborator.user
-          ? { id: collaborator.user.id, name: collaborator.user.name, avatarUrl: collaborator.user.avatarUrl ?? undefined }
+          ? { id: collaborator.user.id, name: collaborator.user.name, avatarUrl: this.storage.buildUrl(collaborator.user.avatarUrl) }
           : undefined,
         createdAt: collaborator.createdAt,
       };
@@ -1361,6 +1370,7 @@ export class LeadsService {
 
     const collaborator = await this.prisma.leadCollaborator.findUnique({
       where: { leadId_userId: { leadId: id, userId: targetUserId } },
+      include: { user: { select: { name: true } } },
     });
 
     if (!collaborator) throw new NotFoundException('Collaborator not found');
@@ -1372,7 +1382,7 @@ export class LeadsService {
     await this.prisma.leadActivity.create({
       data: {
         type: LeadActivityType.COLLABORATOR_REMOVED,
-        data: { userId: targetUserId },
+        data: { userId: targetUserId, name: collaborator.user?.name ?? null },
         leadId: id,
         userId,
       },
@@ -1789,7 +1799,7 @@ export class LeadsService {
         ? {
           id: a.user.id,
           name: a.user.name,
-          avatarUrl: a.user.avatarUrl ?? undefined,
+          avatarUrl: this.storage.buildUrl(a.user.avatarUrl),
         }
         : undefined,
       createdAt: a.createdAt,

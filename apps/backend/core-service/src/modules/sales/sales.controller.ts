@@ -49,14 +49,14 @@ export class SalesController {
   }
 
   @Get('summary')
-  @Permissions('sales:reports:view')
+  @Permissions('sales:sales:view_own')
   getSummary(
     @Query('brandId') brandId: string | undefined,
     @Query('dateFrom') dateFrom: string | undefined,
     @Query('dateTo') dateTo: string | undefined,
-    @CurrentUser('orgId') orgId: string,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.salesService.getSummary(orgId, { brandId, dateFrom, dateTo });
+    return this.salesService.getSummary(user.orgId, user.sub, user.role, { brandId, dateFrom, dateTo });
   }
 
   @Get()
@@ -97,14 +97,14 @@ export class SalesController {
     if (file.size > MAX_CONTRACT_SIZE) {
       throw new BadRequestException('File too large. Maximum 20 MB');
     }
-    const url = await this.storage.upload(
+    const key = await this.storage.upload(
       file.buffer,
       file.originalname,
       file.mimetype,
       `contracts/${orgId}`,
       orgId,
     );
-    return { url };
+    return { url: key };
   }
 
   @Post(':id/charge')

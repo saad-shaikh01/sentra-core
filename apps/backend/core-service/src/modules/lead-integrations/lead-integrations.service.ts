@@ -140,11 +140,16 @@ export class LeadIntegrationsService {
   }
 
   private getWebhookBaseUrl(): string {
-    return (
+    const explicit =
       this.config.get<string>('PUBLIC_API_URL') ||
-      this.config.get<string>('API_BASE_URL') ||
-      'http://localhost:3001/api'
-    ).replace(/\/$/, '');
+      this.config.get<string>('API_BASE_URL');
+    if (explicit) return explicit.replace(/\/$/, '');
+
+    // Fall back to CORE_SERVICE_URL (the service's own public URL) + /api
+    const serviceUrl = this.config.get<string>('CORE_SERVICE_URL');
+    if (serviceUrl) return serviceUrl.replace(/\/$/, '') + '/api';
+
+    return 'http://localhost:3001/api';
   }
 
   private mapToGenericLeadWebhook(

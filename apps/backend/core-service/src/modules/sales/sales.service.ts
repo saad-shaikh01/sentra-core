@@ -39,7 +39,7 @@ import {
   InvoiceStatus,
   GatewayType,
 } from '@sentra-core/types';
-import { buildPaginationResponse, CacheService } from '../../common';
+import { buildPaginationResponse, CacheService, StorageService } from '../../common';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
 import { SalesNotificationService } from './sales-notification.service';
@@ -87,6 +87,7 @@ export class SalesService {
     private cache: CacheService,
     private salesNotificationService: SalesNotificationService,
     private readonly scopeService: ScopeService,
+    private readonly storage: StorageService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -169,7 +170,7 @@ export class SalesService {
           totalAmount,
           status: dto.status,
           saleType: dto.saleType ?? null,
-          salesAgentId: dto.salesAgentId ?? null,
+          salesAgentId: dto.salesAgentId ?? (this.isAgentRole(actorRole) ? actorId : null),
           currency: dto.currency || 'USD',
           description: dto.description,
           contractUrl: dto.contractUrl,
@@ -700,11 +701,17 @@ export class SalesService {
 
   async getSummary(
     orgId: string,
+    userId: string,
+    role: UserRole,
     query: { brandId?: string; dateFrom?: string; dateTo?: string },
   ) {
     const { brandId, dateFrom, dateTo } = query;
+
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const scopeWhere = scope.toSaleFilter();
+
     const baseWhere: Prisma.SaleWhereInput = {
-      organizationId: orgId,
+      ...scopeWhere,
       deletedAt: null,
       ...(brandId ? { brandId } : {}),
       ...(dateFrom || dateTo
@@ -1579,7 +1586,7 @@ export class SalesService {
       salesAgentId: sale.salesAgentId ?? undefined,
       currency: sale.currency,
       description: sale.description ?? undefined,
-      contractUrl: sale.contractUrl ?? undefined,
+      contractUrl: this.storage.buildUrl(sale.contractUrl),
       paymentPlan: sale.paymentPlan as PaymentPlanType,
       installmentCount: sale.installmentCount ?? undefined,
       installmentMode: (sale.installmentMode as InstallmentMode | null) ?? undefined,

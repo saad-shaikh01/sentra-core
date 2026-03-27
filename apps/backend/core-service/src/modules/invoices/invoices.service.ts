@@ -7,7 +7,7 @@ import {
 import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
-import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
+import { buildPaginationResponse, CacheService, PermissionsService, StorageService } from '../../common';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
 import { InvoicePdfService } from './pdf/invoice-pdf.service';
@@ -22,6 +22,7 @@ export class InvoicesService {
     private cache: CacheService,
     private readonly scopeService: ScopeService,
     private readonly permissionsService: PermissionsService,
+    private readonly storage: StorageService,
   ) {}
 
   private async generateInvoiceNumber(): Promise<string> {
@@ -142,6 +143,7 @@ export class InvoicesService {
                 faviconUrl: true,
                 primaryColor: true,
                 secondaryColor: true,
+                organization: { select: { storageBucket: true } },
               },
             },
             client: {
@@ -273,7 +275,7 @@ export class InvoicesService {
         sale: {
           include: {
             client: true,
-            brand: { include: { invoiceConfig: true } },
+            brand: { include: { invoiceConfig: true, organization: true } },
             items: true,
           },
         },
@@ -299,7 +301,7 @@ export class InvoicesService {
       },
       brand: {
         name: invoice.sale.brand.name,
-        logoUrl: invoice.sale.brand.logoUrl ?? undefined,
+        logoUrl: this.storage.buildUrl(invoice.sale.brand.logoUrl, invoice.sale.brand.organization?.storageBucket),
         website: invoiceConfig.website ?? undefined,
         email: invoiceConfig.billingEmail ?? invoiceConfig.supportEmail ?? undefined,
         phone: invoiceConfig.phone ?? undefined,

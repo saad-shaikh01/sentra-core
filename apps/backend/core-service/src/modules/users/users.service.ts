@@ -29,7 +29,7 @@ export class UsersService {
       email: user.email,
       name: user.name,
       role: user.role as UserRole,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: this.storageService.buildUrl(user.avatarUrl) ?? null,
       jobTitle: user.jobTitle,
       phone: user.phone,
       bio: user.bio,
@@ -80,7 +80,7 @@ export class UsersService {
       email: user.email,
       name: user.name,
       role: user.role as UserRole,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: this.storageService.buildUrl(user.avatarUrl) ?? null,
       jobTitle: user.jobTitle,
       phone: user.phone,
       bio: user.bio,
@@ -105,7 +105,7 @@ export class UsersService {
       select: { avatarUrl: true },
     });
 
-    const avatarUrl = await this.storageService.upload(
+    const avatarKey = await this.storageService.upload(
       buffer,
       originalName,
       mimeType,
@@ -114,7 +114,7 @@ export class UsersService {
 
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl },
+      data: { avatarUrl: avatarKey },
       include: { organization: true },
     });
 
@@ -130,7 +130,7 @@ export class UsersService {
       email: user.email,
       name: user.name,
       role: user.role as UserRole,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: this.storageService.buildUrl(user.avatarUrl) ?? null,
       jobTitle: user.jobTitle,
       phone: user.phone,
       bio: user.bio,

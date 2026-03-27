@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs';
+import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum, parseAsBoolean } from 'nuqs';
 import { Plus, LayoutGrid, List, Upload } from 'lucide-react';
 import { PageHeader, FilterBar, Pagination, FilterGroup, FilterChips, FilterLabel, ActiveFilter } from '@/components/shared';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ export default function LeadsPage() {
     brandId:      parseAsString,
     teamId:       parseAsString,
     assignedToId: parseAsString,
+    unassigned:   parseAsBoolean.withDefault(false),
     dateFrom:     parseAsString,
     dateTo:       parseAsString,
     view:         parseAsStringEnum<ViewMode>(['kanban', 'table']).withDefault('kanban'),
@@ -66,11 +67,12 @@ export default function LeadsPage() {
     ...(params.brandId       ? { brandId: params.brandId }           : {}),
     ...(params.teamId        ? { teamId: params.teamId }             : {}),
     ...(params.assignedToId  ? { assignedToId: params.assignedToId } : {}),
+    ...(params.unassigned    ? { unassigned: true }                  : {}),
     ...(params.dateFrom      ? { dateFrom: params.dateFrom }         : {}),
     ...(params.dateTo        ? { dateTo: params.dateTo }             : {}),
     ...(params.leadView      ? { leadView: params.leadView }         : {}),
   }), [isKanban, params.page, params.limit, debouncedSearch, params.status,
-       params.source, params.leadType, params.brandId, params.teamId, params.assignedToId, params.dateFrom, params.dateTo, params.leadView]);
+       params.source, params.leadType, params.brandId, params.teamId, params.assignedToId, params.unassigned, params.dateFrom, params.dateTo, params.leadView]);
 
   const { data, isLoading, isError } = useLeads(queryParams);
   const { data: brandsData }  = useBrands({ limit: 100 });
@@ -131,6 +133,9 @@ export default function LeadsPage() {
       const agent = (frontSellAgents ?? []).find((a) => a.id === params.assignedToId);
       filters.push({ key: 'assignedToId', label: 'Assignee', displayValue: agent?.name ?? params.assignedToId });
     }
+    if (params.unassigned) {
+      filters.push({ key: 'unassigned', label: 'Assignee', displayValue: 'Unassigned' });
+    }
     if (params.dateFrom) {
       filters.push({ key: 'dateFrom', label: 'From', displayValue: params.dateFrom });
     }
@@ -148,6 +153,7 @@ export default function LeadsPage() {
       brandId: null,
       teamId: null,
       assignedToId: null,
+      unassigned: false,
       dateFrom: null,
       dateTo: null,
       leadView: null,
@@ -213,6 +219,17 @@ export default function LeadsPage() {
 
       {isFrontsell && (
         <div className="flex border-b border-white/[0.06] mb-1">
+          <button
+            onClick={() => setParams({ leadView: null, page: 1 })}
+            className={cn(
+              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+              params.leadView === null
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-white/20',
+            )}
+          >
+            All
+          </button>
           {leadViewTabs.map((tab) => (
             <button
               key={tab.value}
@@ -341,14 +358,21 @@ export default function LeadsPage() {
           {hasPermission('sales:leads:view_all') && (
             <FilterLabel label="Assignee">
               <Select
-                value={params.assignedToId ?? 'all'}
-                onValueChange={(v) => setParams({ assignedToId: v === 'all' ? null : v, page: 1 })}
+                value={params.unassigned ? '__unassigned__' : (params.assignedToId ?? 'all')}
+                onValueChange={(v) => {
+                  if (v === '__unassigned__') {
+                    setParams({ unassigned: true, assignedToId: null, page: 1 });
+                  } else {
+                    setParams({ unassigned: false, assignedToId: v === 'all' ? null : v, page: 1 });
+                  }
+                }}
               >
                 <SelectTrigger className="w-full bg-white/[0.03] border-white/[0.05] focus:ring-primary/20 transition-all">
                   <SelectValue placeholder="All assignees" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All assignees</SelectItem>
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
                   {(frontSellAgents ?? []).map((member: Pick<IOrganizationMember, 'id' | 'name'>) => (
                     <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                   ))}
@@ -379,7 +403,7 @@ export default function LeadsPage() {
 
       <FilterChips
         filters={activeFilters}
-        onRemove={(key: string) => setParams({ [key]: null, page: 1 })}
+        onRemove={(key: string) => setParams({ [key]: key === 'unassigned' ? false : null, page: 1 })}
         onClear={handleClearFilters}
       />
 

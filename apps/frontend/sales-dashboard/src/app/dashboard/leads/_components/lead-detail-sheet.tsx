@@ -1081,7 +1081,7 @@ function buildActivityMeta(activity: ILeadActivity, actorName: string): Activity
       return {
         title: `${actorName} removed a collaborator`,
         details: compactDetails([
-          { label: 'User ID', value: readString(data.userId) },
+          { label: 'Collaborator', value: readString(data.name) || readString(data.userId) },
         ]),
         accentClassName: 'border-orange-500/20',
         icon: activityIcons[activity.type],

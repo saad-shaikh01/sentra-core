@@ -212,8 +212,8 @@ export const LEAD_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   [LeadStatus.FOLLOW_UP]: [LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.WON, LeadStatus.LOST, LeadStatus.NCE, LeadStatus.INVALID],
   [LeadStatus.WON]: [],      // terminal — converted
   [LeadStatus.LOST]: [],     // terminal — lost
-  [LeadStatus.NCE]: [],      // terminal — non-convertible / closed
-  [LeadStatus.INVALID]: [],  // terminal — invalid lead
+  [LeadStatus.NCE]: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.LOST, LeadStatus.INVALID],
+  [LeadStatus.INVALID]: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.PROPOSAL, LeadStatus.FOLLOW_UP, LeadStatus.LOST, LeadStatus.NCE],
 };
 
 export const SALE_STATUS_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {

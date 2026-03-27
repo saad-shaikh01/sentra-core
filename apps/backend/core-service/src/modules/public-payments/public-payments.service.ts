@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { GatewayType } from '@sentra-core/types';
+import { StorageService } from '../../common';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { PublicInvoiceDto } from './dto/public-invoice.dto';
 import { PublicPaymentDto } from './dto/public-payment.dto';
@@ -15,6 +16,7 @@ export class PublicPaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gatewayFactory: PaymentGatewayFactory,
+    private readonly storage: StorageService,
   ) {}
 
   async getInvoiceByToken(token: string): Promise<PublicInvoiceDto> {
@@ -28,7 +30,7 @@ export class PublicPaymentsService {
         sale: {
           include: {
             brand: {
-              select: { name: true, logoUrl: true },
+              select: { name: true, logoUrl: true, organization: { select: { storageBucket: true } } },
             },
           },
         },
@@ -52,7 +54,7 @@ export class PublicPaymentsService {
       installmentNote: invoice.notes ?? undefined,
       brand: {
         name: invoice.sale.brand.name,
-        logoUrl: invoice.sale.brand.logoUrl ?? undefined,
+        logoUrl: this.storage.buildUrl(invoice.sale.brand.logoUrl, invoice.sale.brand.organization?.storageBucket),
       },
       paymentToken: token,
       gateway: (invoice.sale.gateway ?? 'AUTHORIZE_NET') as 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL',

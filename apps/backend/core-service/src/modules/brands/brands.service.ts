@@ -61,7 +61,7 @@ export class BrandsService {
     ]);
 
     const result: IPaginatedResponse<IBrand> = buildPaginationResponse(
-      brands.map((b) => this.mapToIBrand(b)),
+      await Promise.all(brands.map((b) => this.mapToIBrand(b))),
       total,
       page,
       limit,
@@ -82,7 +82,7 @@ export class BrandsService {
     });
     if (!brand) throw new NotFoundException('Brand not found');
 
-    const result = this.mapToIBrand(brand);
+    const result = await this.mapToIBrand(brand);
     await this.cache.set(cacheKey, result);
     return result;
   }
@@ -142,7 +142,7 @@ export class BrandsService {
 
     await this.cache.delByPrefix(`brands:${orgId}:`);
 
-    return this.mapToIBrand(updated);
+    return await this.mapToIBrand(updated);
   }
 
   async uploadAsset(
@@ -154,7 +154,7 @@ export class BrandsService {
     const brand = await this.prisma.brand.findFirst({ where: { id, organizationId: orgId } });
     if (!brand) throw new NotFoundException('Brand not found');
 
-    const url = await this.storage.upload(
+    const key = await this.storage.upload(
       file.buffer,
       file.originalname,
       file.mimetype,
@@ -163,34 +163,34 @@ export class BrandsService {
     );
 
     const data =
-      field === 'logo' ? { logoUrl: url } : { faviconUrl: url };
+      field === 'logo' ? { logoUrl: key } : { faviconUrl: key };
 
     const updated = await this.prisma.brand.update({ where: { id }, data });
 
-    const previousUrl =
+    const previousKey =
       field === 'logo'
         ? brand.logoUrl
         : brand.faviconUrl;
 
-    if (previousUrl) {
-      await this.storage.delete(previousUrl, orgId).catch(() => null);
+    if (previousKey) {
+      await this.storage.delete(previousKey, orgId).catch(() => null);
     }
 
     await this.cache.delByPrefix(`brands:${orgId}:`);
 
-    return this.mapToIBrand(updated);
+    return await this.mapToIBrand(updated);
   }
 
   async findPublicByDomain(domain: string): Promise<Partial<IBrand>> {
     const brand = await this.prisma.brand.findFirst({
       where: { domain },
-      select: { name: true, logoUrl: true, faviconUrl: true, primaryColor: true, secondaryColor: true },
+      select: { name: true, logoUrl: true, faviconUrl: true, primaryColor: true, secondaryColor: true, organizationId: true },
     });
     if (!brand) return {};
     return {
       name: brand.name,
-      logoUrl: brand.logoUrl ?? undefined,
-      faviconUrl: brand.faviconUrl ?? undefined,
+      logoUrl: await this.storage.getUrl(brand.logoUrl, brand.organizationId),
+      faviconUrl: await this.storage.getUrl(brand.faviconUrl, brand.organizationId),
       primaryColor: brand.primaryColor ?? undefined,
       secondaryColor: brand.secondaryColor ?? undefined,
     };
@@ -220,13 +220,13 @@ export class BrandsService {
     return { message: 'Brand deleted successfully' };
   }
 
-  private mapToIBrand(brand: any): IBrand {
+  private async mapToIBrand(brand: any): Promise<IBrand> {
     return {
       id: brand.id,
       name: brand.name,
       domain: brand.domain ?? undefined,
-      logoUrl: brand.logoUrl ?? undefined,
-      faviconUrl: brand.faviconUrl ?? undefined,
+      logoUrl: await this.storage.getUrl(brand.logoUrl, brand.organizationId),
+      faviconUrl: await this.storage.getUrl(brand.faviconUrl, brand.organizationId),
       primaryColor: brand.primaryColor ?? undefined,
       secondaryColor: brand.secondaryColor ?? undefined,
       colors: (brand.colors as Record<string, string>) ?? undefined,

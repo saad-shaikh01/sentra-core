@@ -11,7 +11,7 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly s3: S3Client;
   private readonly bucket: string;
-  private readonly cdnBaseUrl: string;
+  private readonly wasabiEndpoint: string;
 
   constructor(
     private readonly config: ConfigService,
@@ -21,8 +21,7 @@ export class StorageService {
     const endpoint = this.config.getOrThrow<string>('WASABI_ENDPOINT');
     const region = this.config.get<string>('WASABI_REGION', 'us-east-1');
     this.bucket = this.config.getOrThrow<string>('WASABI_BUCKET');
-    const rawCdnHost = this.config.getOrThrow<string>('BUNNY_CDN_HOSTNAME').trim().replace(/\/+$/, '');
-    this.cdnBaseUrl = /^https?:\/\//i.test(rawCdnHost) ? rawCdnHost : `https://${rawCdnHost}`;
+    this.wasabiEndpoint = endpoint.replace(/\/+$/, '');
 
     this.s3 = new S3Client({
       endpoint,
@@ -35,28 +34,23 @@ export class StorageService {
     });
   }
 
-  private async getOrgBucket(orgId: string): Promise<{ bucket: string; cdnBase: string }> {
+  private async getOrgBucket(orgId: string): Promise<{ bucket: string }> {
     const cacheKey = `org-storage:${orgId}`;
-    const cached = await this.cache.get<{ bucket: string; cdnBase: string }>(cacheKey);
+    const cached = await this.cache.get<{ bucket: string }>(cacheKey);
     if (cached) {
       return cached;
     }
 
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
-      select: { storageBucket: true, cdnHostname: true },
+      select: { storageBucket: true },
     });
 
-    if (!org?.storageBucket || !org.cdnHostname) {
-      return { bucket: this.bucket, cdnBase: this.cdnBaseUrl };
+    if (!org?.storageBucket) {
+      return { bucket: this.bucket };
     }
 
-    const result = {
-      bucket: org.storageBucket,
-      cdnBase: org.cdnHostname.startsWith('http')
-        ? org.cdnHostname
-        : `https://${org.cdnHostname}`,
-    };
+    const result = { bucket: org.storageBucket };
 
     await this.cache.set(cacheKey, result, 5 * 60 * 1000);
     return result;
@@ -71,9 +65,9 @@ export class StorageService {
   ): Promise<string> {
     const ext = extname(originalName).toLowerCase();
     const key = `${folder}/${randomUUID()}${ext}`;
-    const { bucket, cdnBase } = orgId
+    const { bucket } = orgId
       ? await this.getOrgBucket(orgId)
-      : { bucket: this.bucket, cdnBase: this.cdnBaseUrl };
+      : { bucket: this.bucket };
 
     try {
       await this.s3.send(
@@ -89,23 +83,42 @@ export class StorageService {
       throw new BadRequestException('File upload failed');
     }
 
-    // Return Bunny CDN URL
-    return `${cdnBase}/${key}`;
+    // Return the file key only (e.g. brands/id/logos/uuid.png)
+    return key;
   }
 
-  async delete(cdnUrl: string, orgId?: string): Promise<void> {
+  buildUrl(key: string | null | undefined, orgStorageBucket?: string | null): string | undefined {
+    if (!key) return undefined;
+    // If key is already a full URL (legacy data), return as-is
+    if (key.startsWith('http')) return key;
+    const bucket = orgStorageBucket ?? this.bucket;
+    return `${this.wasabiEndpoint}/${bucket}/${key}`;
+  }
+
+  async getUrl(key: string | null | undefined, orgId?: string): Promise<string | undefined> {
+    if (!key) return undefined;
+    if (key.startsWith('http')) return key;
+    const bucket = orgId ? (await this.getOrgBucket(orgId)).bucket : this.bucket;
+    return `${this.wasabiEndpoint}/${bucket}/${key}`;
+  }
+
+  async delete(fileKeyOrUrl: string, orgId?: string): Promise<void> {
     try {
-      const { bucket, cdnBase } = orgId
+      const { bucket } = orgId
         ? await this.getOrgBucket(orgId)
-        : { bucket: this.bucket, cdnBase: this.cdnBaseUrl };
-      // Extract S3 key from CDN URL
-      const prefix = `${cdnBase}/`;
-      const key = cdnUrl.startsWith(prefix)
-        ? cdnUrl.slice(prefix.length)
-        : new URL(cdnUrl).pathname.replace(/^\/+/, '');
-      await this.s3.send(
-        new DeleteObjectCommand({ Bucket: bucket, Key: key }),
-      );
+        : { bucket: this.bucket };
+
+      let key: string;
+      if (!fileKeyOrUrl.startsWith('http')) {
+        // Already a key
+        key = fileKeyOrUrl;
+      } else {
+        // Legacy URL — extract key from pathname
+        const pathname = new URL(fileKeyOrUrl).pathname.replace(/^\/+/, '');
+        key = pathname.startsWith(`${bucket}/`) ? pathname.slice(bucket.length + 1) : pathname;
+      }
+
+      await this.s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     } catch (err) {
       this.logger.warn(`Wasabi delete failed: ${(err as Error).message}`);
     }

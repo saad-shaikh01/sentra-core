@@ -24,7 +24,7 @@ import {
   QueryClientsDto,
   AssignClientDto,
 } from './dto';
-import { buildPaginationResponse, CacheService, PermissionsService } from '../../common';
+import { buildPaginationResponse, CacheService, PermissionsService, StorageService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 
 @Injectable()
@@ -38,6 +38,7 @@ export class ClientsService {
     private mailService: MailClientService,
     private readonly scopeService: ScopeService,
     private readonly permissionsService: PermissionsService,
+    private readonly storage: StorageService,
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
@@ -668,14 +669,14 @@ export class ClientsService {
         ? {
           id: client.upsellAgent.id,
           name: client.upsellAgent.name,
-          avatarUrl: client.upsellAgent.avatarUrl ?? undefined,
+          avatarUrl: this.storage.buildUrl(client.upsellAgent.avatarUrl),
         }
         : undefined,
       projectManager: client.projectManager
         ? {
           id: client.projectManager.id,
           name: client.projectManager.name,
-          avatarUrl: client.projectManager.avatarUrl ?? undefined,
+          avatarUrl: this.storage.buildUrl(client.projectManager.avatarUrl),
         }
         : undefined,
       brandId: client.brandId,
@@ -704,7 +705,7 @@ export class ClientsService {
         ? {
           id: activity.user.id,
           name: activity.user.name,
-          avatarUrl: activity.user.avatarUrl ?? undefined,
+          avatarUrl: this.storage.buildUrl(activity.user.avatarUrl),
         }
         : undefined,
       createdAt: activity.createdAt,
