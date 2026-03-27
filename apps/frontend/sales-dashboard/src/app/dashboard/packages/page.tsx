@@ -21,6 +21,7 @@ import { usePackages, useDeletePackage } from '@/hooks/use-packages';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useUIStore } from '@/stores/ui-store';
 import { IProductPackage, PackageCategory } from '@sentra-core/types';
+import { RichTextDisplay } from '@sentra-core/rich-text';
 import { PackageFormModal } from './_components/package-form-modal';
 import { cn } from '@/lib/utils';
 
@@ -63,6 +64,7 @@ interface PackageDetailDialogProps {
 
 function PackageDetailDialog({ pkg, onClose }: PackageDetailDialogProps) {
   if (!pkg) return null;
+  const richContent = pkg.contentHtml?.trim() ?? '';
 
   const priceStr =
     pkg.price != null
@@ -89,6 +91,17 @@ function PackageDetailDialog({ pkg, onClose }: PackageDetailDialogProps) {
           {/* Description */}
           {pkg.description && (
             <p className="text-sm text-muted-foreground">{pkg.description}</p>
+          )}
+
+          {richContent && (
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-3">
+                Detailed Content
+              </h4>
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <RichTextDisplay html={richContent} className="tiptap-display" />
+              </div>
+            </div>
           )}
 
           {/* Services list */}

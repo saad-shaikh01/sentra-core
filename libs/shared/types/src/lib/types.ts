@@ -771,6 +771,7 @@ export interface IProductPackage {
   id: string;
   name: string;
   description?: string;
+  contentHtml?: string;
   isActive: boolean;
   category?: PackageCategory;
   price?: number;
@@ -795,6 +796,7 @@ export interface ISalePackage {
   price: number;
   currency: string;
   category?: string;
+  contentHtml?: string;
   packageId?: string;
   saleId: string;
   services: ISalePackageService[];

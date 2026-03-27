@@ -1,3 +1,5 @@
+import './lib/rich-text-editor.css';
+
 // Editor
 export { RichTextEditor } from './lib/RichTextEditor';
 export type { RichTextEditorProps } from './lib/RichTextEditor';

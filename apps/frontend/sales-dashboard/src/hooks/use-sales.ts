@@ -15,6 +15,7 @@ export const salesKeys = {
 };
 
 type CreateSaleInput = {
+  saleDate?: string;
   clientId?: string;
   leadId?: string;
   brandId: string;

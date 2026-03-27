@@ -1,6 +1,7 @@
 'use client';
 
 import { ISalePackage } from '@sentra-core/types';
+import { RichTextDisplay } from '@sentra-core/rich-text';
 import { CheckCircle2, Package } from 'lucide-react';
 
 interface SalePackageSectionProps {
@@ -29,6 +30,13 @@ export function SalePackageSection({ salePackage, currency = 'USD' }: SalePackag
         </div>
         <p className="text-xl font-bold text-primary">{fmt(salePackage.price)}</p>
       </div>
+
+      {salePackage.contentHtml?.trim() ? (
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 mb-4 max-h-72 overflow-y-auto pr-1">
+          <RichTextDisplay html={salePackage.contentHtml} className="tiptap-display" />
+        </div>
+      ) : null}
+
       {salePackage.services.length > 0 && (
         <div className="space-y-2 border-t border-white/10 pt-4">
           {salePackage.services.sort((a, b) => a.order - b.order).map((service) => (

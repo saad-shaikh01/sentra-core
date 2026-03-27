@@ -13,6 +13,7 @@ import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
 import { usePackages } from '@/hooks/use-packages';
 import { PaymentPlanType, SaleType, PackageCategory } from '@sentra-core/types';
+import { RichTextDisplay } from '@sentra-core/rich-text';
 
 interface LineItem {
   name: string;
@@ -74,6 +75,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
   const [salePackagePrice, setSalePackagePrice] = useState('');
   const [salePackageCurrency, setSalePackageCurrency] = useState('USD');
   const [salePackageCategory, setSalePackageCategory] = useState('');
+  const [salePackageContentHtml, setSalePackageContentHtml] = useState('');
   const [salePackageServices, setSalePackageServices] = useState<SalePackageService[]>([]);
 
   // Additional line items (extras on top of package)
@@ -110,12 +112,13 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
   const handlePackageSelect = (packageId: string) => {
     setSelectedPackageId(packageId);
     if (packageId && packageId !== 'none') {
-      const pkg = packages?.find(p => p.id === packageId);
+      const pkg = (packages ?? []).find((p) => p.id === packageId);
       if (pkg) {
         setSalePackageName(pkg.name);
         setSalePackagePrice(pkg.price?.toString() ?? '');
         setSalePackageCurrency(pkg.currency || 'USD');
         setSalePackageCategory(pkg.category ?? '');
+        setSalePackageContentHtml(pkg.contentHtml ?? '');
         setSalePackageServices(
           (pkg.items ?? []).filter(i => i.isActive).map((item, i) => ({ name: item.name, order: i }))
         );
@@ -125,6 +128,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
       setSalePackageName('');
       setSalePackagePrice('');
       setSalePackageCategory('');
+      setSalePackageContentHtml('');
       setSalePackageServices([]);
     }
   };
@@ -141,6 +145,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
     setSalePackagePrice('');
     setSalePackageCurrency('USD');
     setSalePackageCategory('');
+    setSalePackageContentHtml('');
     setSalePackageServices([]);
     setItems([]);
     setPaymentPlan(PaymentPlanType.ONE_TIME);
@@ -190,6 +195,7 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
       price:     packagePrice,
       currency:  salePackageCurrency || currency,
       category:  salePackageCategory || undefined,
+      contentHtml: salePackageContentHtml,
       services:  salePackageServices.map((s, i) => ({ name: s.name, order: s.order ?? i })),
     } : undefined;
 
@@ -390,6 +396,15 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
                       </Button>
                     </div>
                   )}
+
+                  {salePackageContentHtml?.trim() ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Detailed Content</Label>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                        <RichTextDisplay html={salePackageContentHtml} className="tiptap-display" />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -625,6 +640,11 @@ export function QuickSaleModal({ open, onOpenChange }: QuickSaleModalProps) {
                       ))}
                     </div>
                   )}
+                  {salePackageContentHtml?.trim() ? (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mt-3">
+                      <RichTextDisplay html={salePackageContentHtml} className="tiptap-display" />
+                    </div>
+                  ) : null}
                 </div>
               )}
 

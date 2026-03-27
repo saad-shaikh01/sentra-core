@@ -1,11 +1,14 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { InvoiceStatus, PaymentPlanType, SaleStatus, UserRole } from '@sentra-core/types';
-import { CacheService } from '../../common';
+import { CacheService, StorageService } from '../../common';
 import { AuthorizeNetService } from '../authorize-net';
+import { PaymentGatewayFactory } from '../payment-gateway';
+import { ScopeService } from '../scope/scope.service';
 import { TeamsService } from '../teams';
 import { CreateSaleDto, UpdateSaleDto } from './dto';
 import { SalesNotificationService } from './sales-notification.service';
@@ -135,8 +138,15 @@ describe('SalesService', () => {
   let service: SalesService;
   let prismaMock: {
     $transaction: jest.Mock<Promise<unknown>, [unknown]>;
+    $queryRaw: jest.Mock<Promise<Array<{ lastSeq: number }>>, [unknown]>;
+    productPackage: {
+      findFirst: jest.Mock<Promise<{ content: string | null } | null>, [unknown]>;
+    };
     client: {
       findFirst: jest.Mock<Promise<ClientRecord | null>, [unknown]>;
+    };
+    user: {
+      findUnique: jest.Mock<Promise<{ name: string } | null>, [unknown]>;
     };
     sale: {
       create: jest.Mock<Promise<SaleRecord>, [unknown]>;
@@ -144,6 +154,14 @@ describe('SalesService', () => {
       findUnique: jest.Mock<Promise<SaleRecord | null>, [unknown]>;
       update: jest.Mock<Promise<SaleRecord>, [unknown]>;
       delete: jest.Mock<Promise<SaleRecord>, [unknown]>;
+    };
+    salePackage: {
+      create: jest.Mock<Promise<unknown>, [unknown]>;
+      findUnique: jest.Mock<Promise<{ id: string; packageId: string | null; content: string | null } | null>, [unknown]>;
+      update: jest.Mock<Promise<unknown>, [unknown]>;
+    };
+    salePackageService: {
+      deleteMany: jest.Mock<Promise<unknown>, [unknown]>;
     };
     invoice: {
       create: jest.Mock<Promise<InvoiceRecord>, [unknown]>;
@@ -171,6 +189,7 @@ describe('SalesService', () => {
     chargeCustomerProfile: jest.Mock<Promise<unknown>, [unknown]>;
     createSubscription: jest.Mock<Promise<unknown>, [unknown]>;
     cancelSubscription: jest.Mock<Promise<unknown>, [unknown]>;
+    chargeOnce: jest.Mock<Promise<unknown>, [unknown]>;
   };
   let cacheMock: {
     get: jest.Mock<Promise<unknown>, [string]>;
@@ -182,6 +201,18 @@ describe('SalesService', () => {
   let teamsMock: {
     getMemberIds: jest.Mock<Promise<string[]>, [string, string]>;
   };
+  let paymentGatewayFactoryMock: {
+    resolve: jest.Mock<unknown, [unknown]>;
+  };
+  let scopeServiceMock: {
+    getUserScope: jest.Mock<Promise<unknown>, [string, string, UserRole]>;
+  };
+  let storageMock: {
+    buildUrl: jest.Mock<string | undefined, [string | null | undefined]>;
+  };
+  let notificationQueueMock: {
+    add: jest.Mock<Promise<unknown>, [string, unknown, unknown]>;
+  };
   let salesNotificationServiceMock: {
     dispatch: jest.Mock<Promise<void>, [unknown]>;
     resolveRecipientsByRole: jest.Mock<Promise<string[]>, [string, UserRole[]]>;
@@ -190,8 +221,15 @@ describe('SalesService', () => {
   beforeEach(async () => {
     prismaMock = {
       $transaction: jest.fn<Promise<unknown>, [unknown]>(),
+      $queryRaw: jest.fn<Promise<Array<{ lastSeq: number }>>, [unknown]>().mockResolvedValue([{ lastSeq: 1 }]),
+      productPackage: {
+        findFirst: jest.fn<Promise<{ content: string | null } | null>, [unknown]>(),
+      },
       client: {
         findFirst: jest.fn<Promise<ClientRecord | null>, [unknown]>(),
+      },
+      user: {
+        findUnique: jest.fn<Promise<{ name: string } | null>, [unknown]>().mockResolvedValue({ name: 'Test User' }),
       },
       sale: {
         create: jest.fn<Promise<SaleRecord>, [unknown]>(),
@@ -199,6 +237,14 @@ describe('SalesService', () => {
         findUnique: jest.fn<Promise<SaleRecord | null>, [unknown]>(),
         update: jest.fn<Promise<SaleRecord>, [unknown]>(),
         delete: jest.fn<Promise<SaleRecord>, [unknown]>(),
+      },
+      salePackage: {
+        create: jest.fn<Promise<unknown>, [unknown]>(),
+        findUnique: jest.fn<Promise<{ id: string; packageId: string | null; content: string | null } | null>, [unknown]>(),
+        update: jest.fn<Promise<unknown>, [unknown]>(),
+      },
+      salePackageService: {
+        deleteMany: jest.fn<Promise<unknown>, [unknown]>(),
       },
       invoice: {
         create: jest.fn<Promise<InvoiceRecord>, [unknown]>(),
@@ -243,6 +289,7 @@ describe('SalesService', () => {
       chargeCustomerProfile: jest.fn<Promise<unknown>, [unknown]>(),
       createSubscription: jest.fn<Promise<unknown>, [unknown]>(),
       cancelSubscription: jest.fn<Promise<unknown>, [unknown]>(),
+      chargeOnce: jest.fn<Promise<unknown>, [unknown]>(),
     };
 
     cacheMock = {
@@ -256,6 +303,21 @@ describe('SalesService', () => {
     teamsMock = {
       getMemberIds: jest.fn<Promise<string[]>, [string, string]>().mockResolvedValue([]),
     };
+    paymentGatewayFactoryMock = {
+      resolve: jest.fn().mockReturnValue(authorizeNetMock),
+    };
+    scopeServiceMock = {
+      getUserScope: jest.fn().mockResolvedValue({
+        toSaleFilter: () => ({ organizationId: orgId }),
+        toInvoiceFilter: () => ({}),
+      }),
+    };
+    storageMock = {
+      buildUrl: jest.fn((value) => value ?? undefined),
+    };
+    notificationQueueMock = {
+      add: jest.fn<Promise<unknown>, [string, unknown, unknown]>().mockResolvedValue(undefined),
+    };
     salesNotificationServiceMock = {
       dispatch: jest.fn<Promise<void>, [unknown]>().mockResolvedValue(undefined),
       resolveRecipientsByRole: jest
@@ -268,9 +330,13 @@ describe('SalesService', () => {
         SalesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuthorizeNetService, useValue: authorizeNetMock },
+        { provide: PaymentGatewayFactory, useValue: paymentGatewayFactoryMock },
         { provide: CacheService, useValue: cacheMock },
+        { provide: ScopeService, useValue: scopeServiceMock },
+        { provide: StorageService, useValue: storageMock },
         { provide: TeamsService, useValue: teamsMock },
         { provide: SalesNotificationService, useValue: salesNotificationServiceMock },
+        { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: notificationQueueMock },
       ],
     }).compile();
 
@@ -468,6 +534,76 @@ describe('SalesService', () => {
     expect(result.items?.[0]?.packageName).toBe('Test Package');
   });
 
+  it('TC-B3.3.0: create maps saleDate to createdAt when provided', async () => {
+    prismaMock.client.findFirst.mockResolvedValue(makeClient());
+    prismaMock.sale.create.mockResolvedValue(makeSale());
+    prismaMock.invoice.create.mockResolvedValue({
+      id: 'invoice-1',
+      invoiceNumber: 'INV-1',
+      amount: 1200,
+      dueDate: new Date('2026-01-08T00:00:00.000Z'),
+      saleId,
+    });
+
+    await service.create(
+      orgId,
+      actorId,
+      UserRole.OWNER,
+      makeCreateSaleDto(PaymentPlanType.ONE_TIME, {
+        saleDate: '2026-03-15',
+      }),
+    );
+
+    expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          createdAt: new Date('2026-03-15T00:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
+  it('TC-B3.3.1: create snapshots rich package content from the selected package', async () => {
+    prismaMock.client.findFirst.mockResolvedValue(makeClient());
+    prismaMock.productPackage.findFirst.mockResolvedValue({ content: '<p><strong>Rich package</strong></p>' });
+    prismaMock.sale.create.mockResolvedValue(makeSale());
+    prismaMock.salePackage.create.mockResolvedValue({ id: 'sale-package-1' });
+    prismaMock.invoice.create.mockResolvedValue({
+      id: 'invoice-1',
+      invoiceNumber: 'INV-1',
+      amount: 1200,
+      dueDate: new Date('2026-01-08T00:00:00.000Z'),
+      saleId,
+    });
+
+    await service.create(
+      orgId,
+      actorId,
+      UserRole.OWNER,
+      makeCreateSaleDto(PaymentPlanType.ONE_TIME, {
+        salePackage: {
+          packageId: 'pkg_test',
+          name: 'Test Package',
+          price: 1200,
+          services: [{ name: 'Editing' }],
+        },
+      }),
+    );
+
+    expect(prismaMock.productPackage.findFirst).toHaveBeenCalledWith({
+      where: { id: 'pkg_test', organizationId: orgId },
+      select: { content: true },
+    });
+    expect(prismaMock.salePackage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          packageId: 'pkg_test',
+          content: '<p><strong>Rich package</strong></p>',
+        }),
+      }),
+    );
+  });
+
   it('TC-B3.4: create leaves package linkage fields undefined when null in source item', async () => {
     prismaMock.client.findFirst.mockResolvedValue(makeClient());
     prismaMock.sale.create.mockResolvedValue(makeSale());
@@ -483,6 +619,45 @@ describe('SalesService', () => {
 
     expect(result.items?.[0]?.packageId).toBeUndefined();
     expect(result.items?.[0]?.packageName).toBeUndefined();
+  });
+
+  it('TC-B3.5: update copies package content when sale package changes', async () => {
+    prismaMock.sale.findUnique.mockResolvedValue(makeSale());
+    prismaMock.sale.update.mockResolvedValue(makeSale());
+    prismaMock.salePackage.findUnique.mockResolvedValue({
+      id: 'sale-package-1',
+      packageId: 'pkg-old',
+      content: '<p>Old content</p>',
+    });
+    prismaMock.productPackage.findFirst.mockResolvedValue({ content: '<p>New snapshot</p>' });
+
+    await service.update(
+      saleId,
+      orgId,
+      actorId,
+      UserRole.OWNER,
+      {
+        salePackage: {
+          packageId: 'pkg-new',
+          name: 'Updated Package',
+          price: 1500,
+          services: [{ name: 'New service' }],
+        },
+      } as UpdateSaleDto,
+    );
+
+    expect(prismaMock.productPackage.findFirst).toHaveBeenCalledWith({
+      where: { id: 'pkg-new', organizationId: orgId },
+      select: { content: true },
+    });
+    expect(prismaMock.salePackage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          packageId: 'pkg-new',
+          content: '<p>New snapshot</p>',
+        }),
+      }),
+    );
   });
 
   it('TC-B4: remove rejects archiving when sale is already archived', async () => {
@@ -554,9 +729,9 @@ describe('SalesService', () => {
       customerProfileId: 'cust-1',
       paymentProfileId: 'pay-1',
     });
-    authorizeNetMock.chargeCustomerProfile.mockResolvedValue({
+    authorizeNetMock.chargeOnce.mockResolvedValue({
       success: false,
-      transactionId: 'txn-failed',
+      gatewayTransactionId: 'txn-failed',
       responseCode: '2',
       message: 'Declined',
     });

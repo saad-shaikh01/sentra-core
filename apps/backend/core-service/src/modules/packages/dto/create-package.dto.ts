@@ -48,6 +48,10 @@ export class CreatePackageDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  contentHtml?: string;
+
+  @IsOptional()
   @IsUUID()
   brandId?: string;
 

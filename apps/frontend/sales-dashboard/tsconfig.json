@@ -39,7 +39,8 @@
         "../../../libs/frontend/ui/src/data-display.ts"
       ],
       "@sentra-core/types": ["../../../libs/shared/types/src/index.ts"],
-      "@sentra-core/notifications": ["../../../libs/frontend/notifications/src/index.ts"]
+      "@sentra-core/notifications": ["../../../libs/frontend/notifications/src/index.ts"],
+      "@sentra-core/rich-text": ["../../../libs/frontend/rich-text/src/index.ts"]
     }
   },
   "include": [
