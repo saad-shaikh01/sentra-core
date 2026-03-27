@@ -301,7 +301,11 @@ export class InvoicesService {
       },
       brand: {
         name: invoice.sale.brand.name,
-        logoUrl: this.storage.buildUrl(invoice.sale.brand.logoUrl, invoice.sale.brand.organization?.storageBucket),
+        logoUrl: this.storage.buildUrl(
+          invoice.sale.brand.logoUrl,
+          invoice.sale.brand.organization?.storageBucket,
+          invoice.sale.brand.organization?.cdnHostname,
+        ),
         website: invoiceConfig.website ?? undefined,
         email: invoiceConfig.billingEmail ?? invoiceConfig.supportEmail ?? undefined,
         phone: invoiceConfig.phone ?? undefined,

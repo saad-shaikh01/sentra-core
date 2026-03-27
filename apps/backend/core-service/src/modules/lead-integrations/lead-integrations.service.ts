@@ -149,7 +149,7 @@ export class LeadIntegrationsService {
     const serviceUrl = this.config.get<string>('CORE_SERVICE_URL');
     if (serviceUrl) return serviceUrl.replace(/\/$/, '') + '/api';
 
-    return 'http://localhost:3001/api';
+    return 'https://api.sentracoresystems.com/api';
   }
 
   private mapToGenericLeadWebhook(

@@ -39,7 +39,7 @@ describe('LeadIntegrationsService', () => {
         LEAD_INTEGRATIONS_ENCRYPTION_KEY: 'test-encryption-key',
         FACEBOOK_APP_SECRET: 'facebook-secret',
         FACEBOOK_WEBHOOK_VERIFY_TOKEN: 'verify-me',
-        API_BASE_URL: 'http://localhost:3001/api',
+        API_BASE_URL: 'https://api.sentracoresystems.com/api',
       };
 
       return values[key];

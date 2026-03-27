@@ -30,7 +30,11 @@ export class PublicPaymentsService {
         sale: {
           include: {
             brand: {
-              select: { name: true, logoUrl: true, organization: { select: { storageBucket: true } } },
+              select: {
+                name: true,
+                logoUrl: true,
+                organization: { select: { storageBucket: true, cdnHostname: true } },
+              },
             },
           },
         },
@@ -54,7 +58,11 @@ export class PublicPaymentsService {
       installmentNote: invoice.notes ?? undefined,
       brand: {
         name: invoice.sale.brand.name,
-        logoUrl: this.storage.buildUrl(invoice.sale.brand.logoUrl, invoice.sale.brand.organization?.storageBucket),
+        logoUrl: this.storage.buildUrl(
+          invoice.sale.brand.logoUrl,
+          invoice.sale.brand.organization?.storageBucket,
+          invoice.sale.brand.organization?.cdnHostname,
+        ),
       },
       paymentToken: token,
       gateway: (invoice.sale.gateway ?? 'AUTHORIZE_NET') as 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL',
