@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateLead, useUpdateLead } from '@/hooks/use-leads';
 import { useBrands } from '@/hooks/use-brands';
 import { useMembers } from '@/hooks/use-organization';
+import { useTeamBrands } from '@/hooks/use-team-brands';
 import { useTeams } from '@/hooks/use-teams';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ILeadDetail, LeadSource, LeadType } from '@sentra-core/types';
@@ -95,6 +96,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const updateLead = useUpdateLead();
   const { data: brandsData } = useBrands({ limit: 100 });
   const { data: frontSellAgents } = useMembers({ permission: 'sales:leads:view_own' });
+  const { data: teamBrandMappings } = useTeamBrands();
   const { data: teamsData } = useTeams({ limit: 100 });
   const { hasPermission } = usePermissions();
   const canManageAssignment = hasPermission('sales:leads:assign');
@@ -115,6 +117,7 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
   const source = watch('source');
   const assignedToId = watch('assignedToId');
   const teamId = watch('teamId');
+  const mappedTeamId = teamBrandMappings?.find((mapping) => mapping.brandId === brandId)?.teamId ?? '';
   const today = new Date().toISOString().split('T')[0];
 
   register('brandId', { required: 'Brand is required' });
@@ -139,6 +142,14 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
 
     reset(defaultValues);
   }, [lead, reset]);
+
+  useEffect(() => {
+    if (isEdit || !canManageAssignment) {
+      return;
+    }
+
+    setValue('teamId', mappedTeamId);
+  }, [brandId, canManageAssignment, isEdit, mappedTeamId, setValue]);
 
   const mutation = isEdit ? updateLead : createLead;
   const error = mutation.error?.message ?? null;
@@ -309,6 +320,9 @@ export function LeadFormModal({ open, onOpenChange, lead }: LeadFormModalProps) 
                 ))}
               </SelectContent>
             </Select>
+            {mappedTeamId && !isEdit && (
+              <p className="text-xs text-muted-foreground">Auto-filled from the selected brand's assigned team.</p>
+            )}
           </div>
         )}
 

@@ -484,10 +484,16 @@ export class LeadsService {
     const shouldAutoAssignToCreator =
       creatorHasViewOwn && !dto.assignedToId;
     const assignedToId = shouldAutoAssignToCreator ? userId : dto.assignedToId;
-    const creatorTeamId = shouldAutoAssignToCreator
-      ? await this.resolveCreatorTeamId(orgId, userId)
-      : null;
-    const teamId = creatorTeamId ?? await this.teamBrandHelper.resolveTeamForBrand(dto.brandId);
+    if (dto.teamId !== undefined && dto.teamId !== null) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: dto.teamId, organizationId: orgId, deletedAt: null },
+      });
+      if (!team) throw new BadRequestException('Team not found or not in your organization');
+    }
+
+    const teamId = dto.teamId !== undefined
+      ? dto.teamId
+      : await this.teamBrandHelper.resolveTeamForBrand(dto.brandId);
 
     const lead = await this.prisma.lead.create({
       data: {
@@ -556,26 +562,6 @@ export class LeadsService {
     } catch {
       // Non-blocking — backfill failure must not break lead creation
     }
-  }
-
-  private async resolveCreatorTeamId(
-    orgId: string,
-    userId: string,
-  ): Promise<string | null> {
-    const membership = await this.prisma.teamMember.findFirst({
-      where: {
-        userId,
-        team: {
-          organizationId: orgId,
-          deletedAt: null,
-          isActive: true,
-        },
-      },
-      select: { teamId: true },
-      orderBy: { joinedAt: 'asc' },
-    });
-
-    return membership?.teamId ?? null;
   }
 
   async import(
@@ -1626,6 +1612,7 @@ export class LeadsService {
       email: dto.email,
       source: dto.source,
     });
+    const teamId = await this.teamBrandHelper.resolveTeamForBrand(brand.id);
 
     const lead = await this.prisma.lead.create({
       data: {
@@ -1641,6 +1628,7 @@ export class LeadsService {
         status: LeadStatus.NEW,
         brandId: brand.id,
         organizationId: brand.organizationId,
+        teamId,
       },
     });
 

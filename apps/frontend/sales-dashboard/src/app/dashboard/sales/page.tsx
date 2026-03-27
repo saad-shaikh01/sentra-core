@@ -168,6 +168,16 @@ export default function SalesPage() {
       const baseColumns: Column<SaleRow>[] = [
         { key: 'clientName', header: 'Client', className: 'min-w-[180px]' },
         { key: 'brandName',  header: 'Brand',  className: 'min-w-[120px]' },
+        {
+          key: 'saleType',
+          header: 'Type',
+          className: 'w-[110px]',
+          render: (s) => (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/5 bg-white/5 text-muted-foreground/80">
+              {s.saleType === SaleType.FRONTSELL ? 'Frontsell' : 'Upsell'}
+            </span>
+          ),
+        },
         { 
           key: 'salesAgentId', 
           header: 'Agent', 
