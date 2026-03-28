@@ -39,7 +39,6 @@ export interface SaleScopeFilter {
   brandId?: { in: string[] };
   salesAgentId?: string;
   id?: { in: string[] };
-  salesAgentId?: string;
   client?: { is: { upsellAgentId: string } };
   OR?: Array<Omit<SaleScopeFilter, 'organizationId' | 'OR'>>;
 }
