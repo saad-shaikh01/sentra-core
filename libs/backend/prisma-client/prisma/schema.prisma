@@ -544,6 +544,7 @@ model ProductPackage {
   id             String           @id @default(uuid())
   name           String
   description    String?
+  content        String?          @db.Text
   isActive       Boolean          @default(true)
   category       PackageCategory?
   price          Decimal?         @db.Decimal(10, 2)
@@ -585,6 +586,7 @@ model SalePackage {
   price    Decimal @db.Decimal(10, 2)
   currency String  @default("USD")
   category String?
+  content  String? @db.Text
 
   saleId String @unique
   sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)

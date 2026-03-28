@@ -15,6 +15,7 @@ export class PackagesService {
       data: {
         name: dto.name,
         description: dto.description,
+        content: dto.contentHtml,
         isActive: dto.isActive ?? true,
         brandId: dto.brandId,
         organizationId: orgId,
@@ -67,6 +68,7 @@ export class PackagesService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.contentHtml !== undefined && { content: dto.contentHtml }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.brandId !== undefined && { brandId: dto.brandId }),
         ...(dto.category !== undefined && { category: dto.category }),
@@ -122,6 +124,7 @@ export class PackagesService {
       id: pkg.id,
       name: pkg.name,
       description: pkg.description ?? undefined,
+      contentHtml: pkg.content ?? undefined,
       isActive: pkg.isActive,
       brandId: pkg.brandId ?? undefined,
       organizationId: pkg.organizationId,

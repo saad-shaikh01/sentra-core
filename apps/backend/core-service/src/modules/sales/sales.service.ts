@@ -93,6 +93,36 @@ export class SalesService {
     this.notificationHelper = new NotificationHelper(notifQueue);
   }
 
+  private async resolveSalePackageContent(
+    orgId: string,
+    packageId: string | undefined,
+    explicitContentHtml: string | undefined,
+    existingSnapshot?: { packageId: string | null; content: string | null },
+  ): Promise<string | undefined> {
+    if (explicitContentHtml !== undefined) {
+      return explicitContentHtml;
+    }
+
+    if (packageId) {
+      if (existingSnapshot && existingSnapshot.packageId === packageId) {
+        return existingSnapshot.content ?? undefined;
+      }
+
+      const pkg = await this.prisma.productPackage.findFirst({
+        where: { id: packageId, organizationId: orgId },
+        select: { content: true },
+      });
+
+      if (!pkg) {
+        throw new BadRequestException('Package not found');
+      }
+
+      return pkg.content ?? undefined;
+    }
+
+    return existingSnapshot?.content ?? undefined;
+  }
+
   async create(
     orgId: string,
     actorId: string,
@@ -107,6 +137,7 @@ export class SalesService {
     const installmentMode = paymentPlan === PaymentPlanType.INSTALLMENTS
       ? (dto.installmentMode ?? InstallmentMode.EQUAL)
       : undefined;
+    const createdAt = dto.saleDate ? new Date(`${dto.saleDate}T00:00:00.000Z`) : undefined;
 
     // Calculate totalAmount from items if not provided
     let totalAmount = dto.totalAmount;
@@ -167,6 +198,7 @@ export class SalesService {
     const sale = await this.prisma.$transaction(async (tx) => {
       const createdSale = await tx.sale.create({
         data: {
+          ...(createdAt ? { createdAt } : {}),
           totalAmount,
           status: dto.status,
           saleType: dto.saleType ?? null,
@@ -243,6 +275,12 @@ export class SalesService {
     });
 
     if (dto.salePackage) {
+      const salePackageContent = await this.resolveSalePackageContent(
+        orgId,
+        dto.salePackage.packageId,
+        dto.salePackage.contentHtml,
+      );
+
       await this.prisma.salePackage.create({
         data: {
           saleId: sale.id,
@@ -251,6 +289,7 @@ export class SalesService {
           price: dto.salePackage.price,
           currency: dto.salePackage.currency ?? 'USD',
           category: dto.salePackage.category ?? null,
+          content: salePackageContent ?? null,
           services: {
             create: (dto.salePackage.services ?? []).map((s, i) => ({ name: s.name, order: s.order ?? i })),
           },
@@ -959,6 +998,16 @@ export class SalesService {
 
     if (dto.salePackage !== undefined) {
       const existing = await this.prisma.salePackage.findUnique({ where: { saleId: id } });
+      const salePackageContent = await this.resolveSalePackageContent(
+        orgId,
+        dto.salePackage.packageId,
+        dto.salePackage.contentHtml,
+        existing ? {
+          packageId: existing.packageId,
+          content: existing.content,
+        } : undefined,
+      );
+
       if (existing) {
         await this.prisma.salePackageService.deleteMany({ where: { salePackageId: existing.id } });
         await this.prisma.salePackage.update({
@@ -969,6 +1018,7 @@ export class SalesService {
             price: dto.salePackage.price,
             currency: dto.salePackage.currency ?? 'USD',
             category: dto.salePackage.category ?? null,
+            content: salePackageContent ?? null,
             services: { create: (dto.salePackage.services ?? []).map((s, i) => ({ name: s.name, order: s.order ?? i })) },
           },
         });
@@ -981,6 +1031,7 @@ export class SalesService {
             price: dto.salePackage.price,
             currency: dto.salePackage.currency ?? 'USD',
             category: dto.salePackage.category ?? null,
+            content: salePackageContent ?? null,
             services: { create: (dto.salePackage.services ?? []).map((s, i) => ({ name: s.name, order: s.order ?? i })) },
           },
         });
@@ -1624,6 +1675,7 @@ export class SalesService {
         price: Number(sale.salePackage.price),
         currency: sale.salePackage.currency,
         category: sale.salePackage.category ?? undefined,
+        contentHtml: sale.salePackage.content ?? undefined,
         packageId: sale.salePackage.packageId ?? undefined,
         saleId: sale.salePackage.saleId,
         services: (sale.salePackage.services ?? []).map((s: any) => ({

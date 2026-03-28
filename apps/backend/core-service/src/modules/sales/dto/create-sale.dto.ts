@@ -62,6 +62,10 @@ export class SaleItemDto {
 
 export class CreateSaleDto {
   @IsOptional()
+  @IsDateString()
+  saleDate?: string;
+
+  @IsOptional()
   @IsUUID()
   clientId?: string;
 

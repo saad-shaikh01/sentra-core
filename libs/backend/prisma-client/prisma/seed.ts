@@ -1,5 +1,5 @@
 /**
- * Sentra Core — Database Seed
+ * Sentra Core - Database Seed
  * Run: npx prisma db seed --schema=libs/backend/prisma-client/prisma/schema.prisma
  */
 
@@ -10,10 +10,6 @@ import {
   AppCode,
   PlanType,
   OrganizationOnboardingMode,
-  LeadStatus,
-  SaleStatus,
-  PaymentPlanType,
-  InvoiceStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { runRbacSeed } from './seeds/rbac.seed';
@@ -38,21 +34,8 @@ function hash(plain: string) {
   return bcrypt.hashSync(plain, 10);
 }
 
-function daysFromNow(days: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function daysAgo(days: number): Date {
-  return daysFromNow(-days);
-}
-
 async function main() {
-  console.log('🌱  Seeding Sentra Core database...\n');
-
-  // ── 0. CLEANUP ───────────────────────────────────────────────────────────
-  console.log('🧹  Cleaning up existing data...');
+  console.log('Seeding Sentra Core database...\n');
 
   // RBAC junction tables first (before roles/permissions)
   await prisma.appRolePermission.deleteMany();
@@ -94,65 +77,111 @@ async function main() {
   // System RBAC rows (no org FK, safe after users are gone)
   await prisma.appRole.deleteMany();
   await prisma.permissionCatalog.deleteMany();
-  // AppRegistry intentionally NOT deleted — runRbacSeed uses upsert
+  // AppRegistry intentionally NOT deleted - runRbacSeed uses upsert
 
-  console.log('✨  Cleanup complete.\n');
+  console.log('Cleanup complete.\n');
 
-  // ── 1. RBAC: apps, permissions, system roles ─────────────────────────────
-  console.log('🔐  Seeding RBAC catalog...');
+  console.log('Seeding RBAC catalog...');
   await runRbacSeed(prisma);
-  console.log('✅  RBAC: AppRegistry, PermissionCatalog, system AppRoles seeded.\n');
+  console.log('RBAC seeded.\n');
 
-  // ── 2. HRMS: system team types ────────────────────────────────────────────
-  console.log('👥  Seeding HRMS team types...');
+  console.log('Seeding HRMS team types...');
   await runHrmsTeamsSeed(prisma);
-  console.log('✅  HRMS: system TeamTypes seeded.\n');
+  console.log('HRMS team types seeded.\n');
 
-  // ── 3. Organization ───────────────────────────────────────────────────────
   const org = await prisma.organization.create({
     data: {
-      name: 'Sentra Global Corp',
+      name: 'Sentra Core Systems',
       subscription: 'PRO',
       planType: PlanType.PRO,
       onboardingMode: OrganizationOnboardingMode.PUBLIC_OWNER_SIGNUP,
     },
   });
-  console.log(`✅  Organization: ${org.name} (${org.id})`);
+  console.log(`Organization: ${org.name} (${org.id})`);
 
-  // ── 4. Users ──────────────────────────────────────────────────────────────
+  // Damian was listed twice in resp.md, but User.email is unique, so he is seeded once as Sales Manager.
   const seedUsers: SeedUser[] = [
     {
       name: 'Admin User',
-      email: 'admin@sentra.com',
-      password: 'Admin@123',
+      email: 'shakirmadcom@gmail.com',
+      password: 'Sh-2212112@@',
       role: UserRole.OWNER,
       jobTitle: 'System Owner',
     },
     {
-      name: 'Manager Sarah',
-      email: 'sarah@sentra.com',
-      password: 'Admin@123',
+      name: 'Damian',
+      email: 'damian@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
       role: UserRole.SALES_MANAGER,
       jobTitle: 'Sales Manager',
     },
     {
-      name: 'Agent Alex',
-      email: 'alex@sentra.com',
-      password: 'Agent@123',
-      role: UserRole.FRONTSELL_AGENT,
-      jobTitle: 'Frontsell Agent',
-    },
-    {
-      name: 'Agent Mike',
-      email: 'mike@sentra.com',
-      password: 'Agent@123',
+      name: 'Ethan',
+      email: 'ethan@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
       role: UserRole.UPSELL_AGENT,
       jobTitle: 'Upsell Specialist',
     },
     {
-      name: 'PM Hira',
-      email: 'hira@sentra.com',
-      password: 'PmLead@123',
+      name: 'Samantha',
+      email: 'samantha@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.UPSELL_AGENT,
+      jobTitle: 'Upsell Specialist',
+    },
+    {
+      name: 'Jay',
+      email: 'jay@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.FRONTSELL_AGENT,
+      jobTitle: 'Frontsell Agent',
+    },
+    {
+      name: 'Adrian',
+      email: 'adrian@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.FRONTSELL_AGENT,
+      jobTitle: 'Frontsell Agent',
+    },
+    {
+      name: 'Jake',
+      email: 'jake@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.FRONTSELL_AGENT,
+      jobTitle: 'Frontsell Agent',
+    },
+    {
+      name: 'Denzil',
+      email: 'denzil@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.FRONTSELL_AGENT,
+      jobTitle: 'Frontsell Agent',
+    },
+    {
+      name: 'Becky',
+      email: 'becky@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.FRONTSELL_AGENT,
+      jobTitle: 'Frontsell Agent',
+    },
+    {
+      name: 'Logan',
+      email: 'logan@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.FRONTSELL_AGENT,
+      jobTitle: 'Frontsell Agent',
+    },
+    {
+      name: 'Mikhail',
+      email: 'mikhail@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
+      role: UserRole.PROJECT_MANAGER,
+      jobTitle: 'Project Lead',
+    },
+    {
+      name: 'M Adonis',
+      email: 'm.adonis@kapublishingsolutions.com',
+      password: 'Ka_Psh@123!!',
       role: UserRole.PROJECT_MANAGER,
       jobTitle: 'Project Lead',
     },
@@ -175,22 +204,40 @@ async function main() {
     );
   }
 
-  const userByEmail = new Map(users.map((u) => [u.email, u]));
-  const owner    = userByEmail.get('admin@sentra.com')!;
-  const manager  = userByEmail.get('sarah@sentra.com')!;
-  const agentFront = userByEmail.get('alex@sentra.com')!;
-  const agentUp    = userByEmail.get('mike@sentra.com')!;
-  const pm         = userByEmail.get('hira@sentra.com')!;
+  const userByEmail = new Map(users.map((user) => [user.email, user]));
+  const requireUser = (email: string) => {
+    const user = userByEmail.get(email);
+    if (!user) {
+      throw new Error(`Missing seeded user: ${email}`);
+    }
+    return user;
+  };
 
-  console.log(`✅  Users: ${seedUsers.length} accounts created.`);
+  const owner = requireUser('shakirmadcom@gmail.com');
+  const salesManagers = ['damian@kapublishingsolutions.com'].map(requireUser);
+  const upsellAgents = [
+    'ethan@kapublishingsolutions.com',
+    'samantha@kapublishingsolutions.com',
+  ].map(requireUser);
+  const frontsellAgents = [
+    'jay@kapublishingsolutions.com',
+    'adrian@kapublishingsolutions.com',
+    'jake@kapublishingsolutions.com',
+    'denzil@kapublishingsolutions.com',
+    'becky@kapublishingsolutions.com',
+    'logan@kapublishingsolutions.com',
+  ].map(requireUser);
+  const projectManagers = [
+    'mikhail@kapublishingsolutions.com',
+    'm.adonis@kapublishingsolutions.com',
+  ].map(requireUser);
 
-  // ── 5. App Access + Role Assignments ─────────────────────────────────────
-  // Fetch apps already seeded by runRbacSeed
+  console.log(`Users: ${seedUsers.length} accounts created.`);
+
   const salesApp = await prisma.appRegistry.findUniqueOrThrow({ where: { code: AppCode.SALES_DASHBOARD } });
-  const pmApp    = await prisma.appRegistry.findUniqueOrThrow({ where: { code: AppCode.PM_DASHBOARD } });
-  const hrmsApp  = await prisma.appRegistry.findUniqueOrThrow({ where: { code: AppCode.HRMS } });
+  const pmApp = await prisma.appRegistry.findUniqueOrThrow({ where: { code: AppCode.PM_DASHBOARD } });
+  const hrmsApp = await prisma.appRegistry.findUniqueOrThrow({ where: { code: AppCode.HRMS } });
 
-  // Helpers
   const grantAccess = async (userId: string, appId: string, isDefault = false) => {
     await prisma.userAppAccess.create({
       data: { organizationId: org.id, userId, appId, isEnabled: true, isDefault },
@@ -201,6 +248,7 @@ async function main() {
     const role = await prisma.appRole.findFirstOrThrow({
       where: { organizationId: null, appId, slug },
     });
+
     await prisma.userAppRole.create({
       data: {
         organizationId: org.id,
@@ -212,7 +260,6 @@ async function main() {
     });
   };
 
-  // Owner: Sales (default) + PM + HRMS → all admin roles
   await grantAccess(owner.id, salesApp.id, true);
   await grantAccess(owner.id, pmApp.id);
   await grantAccess(owner.id, hrmsApp.id);
@@ -220,28 +267,31 @@ async function main() {
   await assignRole(owner.id, pmApp.id, 'pm_admin');
   await assignRole(owner.id, hrmsApp.id, 'hrms_admin');
 
-  // Manager: Sales (default) + PM
-  await grantAccess(manager.id, salesApp.id, true);
-  await grantAccess(manager.id, pmApp.id);
-  await assignRole(manager.id, salesApp.id, 'sales_manager');
-  await assignRole(manager.id, pmApp.id, 'pm_project_manager');
+  for (const manager of salesManagers) {
+    await grantAccess(manager.id, salesApp.id, true);
+    await grantAccess(manager.id, pmApp.id);
+    await assignRole(manager.id, salesApp.id, 'sales_manager');
+    await assignRole(manager.id, pmApp.id, 'pm_project_manager');
+  }
 
-  // Frontsell Agent: Sales only
-  await grantAccess(agentFront.id, salesApp.id, true);
-  await assignRole(agentFront.id, salesApp.id, 'frontsell_agent');
+  for (const agent of frontsellAgents) {
+    await grantAccess(agent.id, salesApp.id, true);
+    await assignRole(agent.id, salesApp.id, 'frontsell_agent');
+  }
 
-  // Upsell Agent: Sales only
-  await grantAccess(agentUp.id, salesApp.id, true);
-  await assignRole(agentUp.id, salesApp.id, 'upsell_agent');
+  for (const agent of upsellAgents) {
+    await grantAccess(agent.id, salesApp.id, true);
+    await assignRole(agent.id, salesApp.id, 'upsell_agent');
+  }
 
-  // PM: PM (default) + Sales (for cross-module testing)
-  await grantAccess(pm.id, pmApp.id, true);
-  await grantAccess(pm.id, salesApp.id);
-  await assignRole(pm.id, pmApp.id, 'pm_project_manager');
+  for (const pm of projectManagers) {
+    await grantAccess(pm.id, pmApp.id, true);
+    await grantAccess(pm.id, salesApp.id);
+    await assignRole(pm.id, pmApp.id, 'pm_project_manager');
+  }
 
-  console.log('✅  App Access: granted and system roles assigned.\n');
+  console.log('App access granted and system roles assigned.\n');
 
-  // ── 6. Brands ─────────────────────────────────────────────────────────────
   const pulpHouse = await prisma.brand.create({
     data: {
       name: 'The Pulp House Publishing',
@@ -253,159 +303,53 @@ async function main() {
     },
   });
 
-  const urbanQuill = await prisma.brand.create({
-    data: {
-      name: 'Urban Quill Publishing',
-      domain: 'urbanquillpublishing.com',
-      logoUrl: '',
-      primaryColor: '#F59E0B',
-      secondaryColor: '#D97706',
-      organizationId: org.id,
-    },
-  });
+  console.log(`Brand: ${pulpHouse.name} created.`);
 
-  console.log('✅  Brands: 2 brands created.');
-
-  // ── 7. Sales Teams (legacy SalesTeam model) ───────────────────────────────
   // await prisma.salesTeam.create({
   //   data: {
   //     name: 'North America Frontsell',
   //     description: 'Acquisition team for US/Canada region',
   //     organizationId: org.id,
-  //     managers: { create: [{ userId: owner.id }, { userId: manager.id }] },
-  //     members:  { create: [{ userId: agentFront.id }] },
   //   },
   // });
 
-  // console.log('✅  Sales Teams: legacy team structure created.');
-
-  // ── 8. Product Catalog ────────────────────────────────────────────────────
-  await prisma.productPackage.create({
-    data: {
-      name: 'Essential Ebook',
-      description: 'Formatting + Cover Design',
-      brandId: pulpHouse.id,
-      organizationId: org.id,
-      items: {
-        create: [
-          { name: 'Professional Formatting', unitPrice: 299 },
-          { name: 'Standard Cover Art', unitPrice: 200 },
-        ],
-      },
-    },
-  });
-
-  await prisma.productPackage.create({
-    data: {
-      name: 'Custom Marketing Bundle',
-      description: 'Tailored for high-end authors',
-      brandId: urbanQuill.id,
-      organizationId: org.id,
-      items: {
-        create: [
-          { name: 'Social Media Management', unitPrice: 500 },
-          { name: 'Premium Press Release', unitPrice: 300 },
-        ],
-      },
-    },
-  });
-
-  console.log('✅  Packages: product catalog created.');
-
-  // ── 9. Leads ──────────────────────────────────────────────────────────────
-  // const activeLead = await prisma.lead.create({
+  // await prisma.productPackage.create({
   //   data: {
-  //     title: 'Interested in Ghostwriting',
-  //     name: 'John Doe',
-  //     email: 'john.doe@example.com',
-  //     phone: '+1-555-9000',
-  //     website: 'https://johndoe.com',
-  //     status: LeadStatus.FOLLOW_UP,
-  //     leadType: 'INBOUND',
-  //     source: 'PPC',
-  //     leadDate: daysAgo(2),
+  //     name: 'Essential Ebook',
+  //     description: 'Formatting + Cover Design',
   //     brandId: pulpHouse.id,
   //     organizationId: org.id,
-  //     assignedToId: agentFront.id,
-  //     followUpDate: daysFromNow(2),
-  //     data: { clientGoal: 'Publish by Q4', budget: 5000 },
+  //     items: {
+  //       create: [
+  //         { name: 'Professional Formatting', unitPrice: 299 },
+  //         { name: 'Standard Cover Art', unitPrice: 200 },
+  //       ],
+  //     },
   //   },
   // });
 
-  // const convertedLead = await prisma.lead.create({
-  //   data: {
-  //     title: 'Inquiry - Full Publishing',
-  //     name: 'Jane Smith',
-  //     email: 'jane.smith@example.com',
-  //     phone: '+1-555-8000',
-  //     status: LeadStatus.WON,
-  //     leadType: 'REFERRAL',
-  //     source: 'COLD_REFERRAL',
-  //     leadDate: daysAgo(10),
-  //     brandId: urbanQuill.id,
-  //     organizationId: org.id,
-  //     assignedToId: agentUp.id,
-  //   },
-  // });
+  // Product packages intentionally not seeded.
+  // Leads and sales data remain disabled as before.
 
-  // Suppress unused var warning
-  // void activeLead;
-
-  // console.log('✅  Leads: 2 leads created.');
-
-  // ── 10. Clients & Sales ───────────────────────────────────────────────────
-  // const client = await prisma.client.create({
-  //   data: {
-  //     email: 'john.author@example.com',
-  //     contactName: 'John Doe',
-  //     brandId: urbanQuill.id,
-  //     organizationId: org.id,
-  //   },
-  // });
-
-  // await prisma.lead.update({
-  //   where: { id: convertedLead.id },
-  //   data: { convertedClientId: client.id },
-  // });
-
-  // const sale = await prisma.sale.create({
-  //   data: {
-  //     totalAmount: 1200,
-  //     currency: 'USD',
-  //     status: SaleStatus.ACTIVE,
-  //     paymentPlan: PaymentPlanType.INSTALLMENTS,
-  //     installmentCount: 3,
-  //     clientId: client.id,
-  //     brandId: urbanQuill.id,
-  //     organizationId: org.id,
-  //     description: '3-month installment plan for full publishing bundle',
-  //     items: { create: [{ name: 'Full Publishing Bundle', quantity: 1, unitPrice: 1200 }] },
-  //   },
-  // });
-
-  // await prisma.invoice.createMany({
-  //   data: [
-  //     { invoiceNumber: 'INV-SEED-001', amount: 400, dueDate: daysAgo(1),     status: InvoiceStatus.PAID,   saleId: sale.id },
-  //     { invoiceNumber: 'INV-SEED-002', amount: 400, dueDate: daysFromNow(29), status: InvoiceStatus.UNPAID, saleId: sale.id },
-  //     { invoiceNumber: 'INV-SEED-003', amount: 400, dueDate: daysFromNow(59), status: InvoiceStatus.UNPAID, saleId: sale.id },
-  //   ],
-  // });
-
-  // console.log('✅  Sales: client, sale, and installment invoices created.\n');
-
-  // ── Summary ───────────────────────────────────────────────────────────────
-  console.log('🔐  TEST ACCOUNTS');
-  console.log('   admin@sentra.com  / Admin@123   → OWNER  | Sales Admin + PM Admin + HRMS Admin');
-  console.log('   sarah@sentra.com  / Admin@123   → SALES_MANAGER | Sales Manager + PM Project Manager');
-  console.log('   alex@sentra.com   / Agent@123   → FRONTSELL_AGENT | Frontsell Agent role');
-  console.log('   mike@sentra.com   / Agent@123   → UPSELL_AGENT    | Upsell Agent role');
-  console.log('   hira@sentra.com   / PmLead@123  → PROJECT_MANAGER | PM Project Manager role');
-  console.log('\n🚀  Seed complete! Happy smoke testing.\n');
+  console.log('TEST ACCOUNTS');
+  console.log('   shakirmadcom@gmail.com              / Sh-2212112@@   -> OWNER           | Sales Admin + PM Admin + HRMS Admin');
+  console.log('   damian@kapublishingsolutions.com    / Ka_Psh@123!!   -> SALES_MANAGER   | Sales Manager + PM Project Manager');
+  console.log('   ethan@kapublishingsolutions.com     / Ka_Psh@123!!   -> UPSELL_AGENT    | Upsell Agent role');
+  console.log('   samantha@kapublishingsolutions.com  / Ka_Psh@123!!   -> UPSELL_AGENT    | Upsell Agent role');
+  console.log('   jay@kapublishingsolutions.com       / Ka_Psh@123!!   -> FRONTSELL_AGENT | Frontsell Agent role');
+  console.log('   adrian@kapublishingsolutions.com    / Ka_Psh@123!!   -> FRONTSELL_AGENT | Frontsell Agent role');
+  console.log('   jake@kapublishingsolutions.com      / Ka_Psh@123!!   -> FRONTSELL_AGENT | Frontsell Agent role');
+  console.log('   denzil@kapublishingsolutions.com    / Ka_Psh@123!!   -> FRONTSELL_AGENT | Frontsell Agent role');
+  console.log('   becky@kapublishingsolutions.com     / Ka_Psh@123!!   -> FRONTSELL_AGENT | Frontsell Agent role');
+  console.log('   logan@kapublishingsolutions.com     / Ka_Psh@123!!   -> FRONTSELL_AGENT | Frontsell Agent role');
+  console.log('   mikhail@kapublishingsolutions.com   / Ka_Psh@123!!   -> PROJECT_MANAGER | PM Project Manager role');
+  console.log('   m.adonis@kapublishingsolutions.com  / Ka_Psh@123!!   -> PROJECT_MANAGER | PM Project Manager role');
+  console.log('\nSeed complete.\n');
 }
 
 main()
-  .catch((e) => {
-    console.error('❌  Seed failed:', e);
+  .catch((error) => {
+    console.error('Seed failed:', error);
     process.exit(1);
   })
   .finally(async () => {

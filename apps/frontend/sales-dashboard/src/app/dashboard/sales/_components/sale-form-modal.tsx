@@ -16,6 +16,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { useRouter } from 'next/navigation';
 import { ISale, SaleStatus, SaleType, PaymentPlanType, InstallmentMode, DiscountType } from '@sentra-core/types';
 import { Plus, Minus, X, Trash2 } from 'lucide-react';
+import { RichTextDisplay } from '@sentra-core/rich-text';
 
 interface SaleFormModalProps {
   open: boolean;
@@ -47,6 +48,7 @@ interface CustomInstallmentRow {
 }
 
 interface FormValues {
+  saleDate: string;
   clientId: string;
   brandId: string;
   saleType: SaleType | '';
@@ -68,6 +70,7 @@ interface FormValues {
   salePackagePrice: string;
   salePackageCurrency: string;
   salePackageCategory: string;
+  salePackageContentHtml: string;
   salePackageServices: Array<{ name: string; order: number }>;
 }
 
@@ -104,6 +107,7 @@ export function SaleFormModal({
         paymentPlan: PaymentPlanType.ONE_TIME,
         installmentMode: InstallmentMode.EQUAL,
         customInstallments: [],
+        saleDate: '',
         status: SaleStatus.DRAFT,
         discountEnabled: false,
         discountType: '',
@@ -115,6 +119,7 @@ export function SaleFormModal({
         salePackagePrice: '',
         salePackageCurrency: 'USD',
         salePackageCategory: '',
+        salePackageContentHtml: '',
         salePackageServices: [],
       },
     });
@@ -136,6 +141,7 @@ export function SaleFormModal({
   const watchedSaleType = watch('saleType');
   const watchedClientId = watch('clientId');
   const watchedSelectedPackageId = watch('selectedPackageId');
+  const watchedSalePackageContentHtml = watch('salePackageContentHtml');
 
   // Live total calculation
   const watchedSalePackagePrice = watch('salePackagePrice');
@@ -173,6 +179,7 @@ export function SaleFormModal({
     if (open) {
       setApiError(null);
       reset({
+        saleDate: sale?.createdAt ? new Date(sale.createdAt).toISOString().slice(0, 10) : '',
         clientId: sale?.clientId ?? prefillClientId ?? '',
         brandId: sale?.brandId ?? prefillBrandId ?? '',
         saleType: (sale?.saleType as SaleType) ?? prefillSaleType ?? '',
@@ -200,6 +207,7 @@ export function SaleFormModal({
         salePackagePrice: sale?.salePackage?.price?.toString() ?? '',
         salePackageCurrency: sale?.salePackage?.currency ?? 'USD',
         salePackageCategory: sale?.salePackage?.category ?? '',
+        salePackageContentHtml: sale?.salePackage?.contentHtml ?? '',
         salePackageServices: sale?.salePackage?.services?.map(s => ({ name: s.name, order: s.order })) ?? [],
       });
     }
@@ -229,12 +237,13 @@ export function SaleFormModal({
   const handlePackageSelect = (packageId: string) => {
     setValue('selectedPackageId', packageId);
     if (packageId && packageId !== 'none') {
-      const pkg = packages?.find(p => p.id === packageId);
+      const pkg = (packages ?? []).find((p) => p.id === packageId);
       if (pkg) {
         setValue('salePackageName', pkg.name);
         setValue('salePackagePrice', pkg.price?.toString() ?? '');
         setValue('salePackageCurrency', pkg.currency);
         setValue('salePackageCategory', pkg.category ?? '');
+        setValue('salePackageContentHtml', pkg.contentHtml ?? '');
         setValue('salePackageServices', (pkg.items ?? []).filter(i => i.isActive).map((item, i) => ({ name: item.name, order: i })));
         // Auto-fill totalAmount from package price
         if (pkg.price) setValue('totalAmount', pkg.price.toString());
@@ -242,6 +251,7 @@ export function SaleFormModal({
     } else {
       setValue('salePackageName', '');
       setValue('salePackagePrice', '');
+      setValue('salePackageContentHtml', '');
       setValue('salePackageServices', []);
       setValue('totalAmount', '');
     }
@@ -264,6 +274,7 @@ export function SaleFormModal({
         price: parseFloat(values.salePackagePrice) || 0,
         currency: values.salePackageCurrency || values.currency || 'USD',
         category: values.salePackageCategory || undefined,
+        contentHtml: values.salePackageContentHtml,
         services: values.salePackageServices.map((s, i) => ({ name: s.name, order: s.order ?? i })),
       } : undefined;
 
@@ -316,6 +327,7 @@ export function SaleFormModal({
         const payload = {
           ...dto,
           status: values.status,
+          ...(values.saleDate ? { saleDate: values.saleDate } : {}),
           ...(isLeadMode ? { leadId: prefillLeadId } : { clientId: values.clientId || prefillClientId }),
         };
 
@@ -369,6 +381,16 @@ export function SaleFormModal({
             </p>
           </div>
         ) : null}
+
+        <div className="space-y-1.5">
+          <Label>Sale Date</Label>
+          <Input type="date" disabled={isEdit} {...register('saleDate')} />
+          <p className="text-xs text-muted-foreground">
+            {isEdit
+              ? 'Sale date reflects when this sale was created.'
+              : 'Optional. If left empty, the current date will be used.'}
+          </p>
+        </div>
 
         {/* Client + Brand */}
         <div className="grid grid-cols-2 gap-4">
@@ -519,6 +541,15 @@ export function SaleFormModal({
                   </div>
                 </div>
               </div>
+
+              {watchedSalePackageContentHtml?.trim() ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Detailed Content</Label>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <RichTextDisplay html={watchedSalePackageContentHtml} className="tiptap-display" />
+                  </div>
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

@@ -18,6 +18,10 @@ export class UpdatePackageDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  contentHtml?: string;
+
+  @IsOptional()
   @IsUUID()
   brandId?: string;
 

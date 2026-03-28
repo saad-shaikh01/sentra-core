@@ -33,6 +33,10 @@ export class SalePackageDto {
   @IsString()
   category?: string;
 
+  @IsOptional()
+  @IsString()
+  contentHtml?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SalePackageServiceDto)

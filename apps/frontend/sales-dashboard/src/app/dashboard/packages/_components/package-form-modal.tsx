@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { useCreatePackage, useUpdatePackage } from '@/hooks/use-packages';
 import { IProductPackage, PackageCategory } from '@sentra-core/types';
+import { RichTextEditor } from '@sentra-core/rich-text';
 
 interface PackageFormModalProps {
   open: boolean;
@@ -33,6 +34,7 @@ interface FormValues {
   price: string;
   currency: string;
   description: string;
+  contentHtml: string;
   services: ServiceField[];
 }
 
@@ -49,6 +51,7 @@ export function PackageFormModal({ open, onOpenChange, pkg }: PackageFormModalPr
   const isEdit = !!pkg;
   const createPackage = useCreatePackage();
   const updatePackage = useUpdatePackage();
+  const richContent = pkg?.contentHtml ?? '';
 
   const {
     register,
@@ -65,6 +68,7 @@ export function PackageFormModal({ open, onOpenChange, pkg }: PackageFormModalPr
       price:       '',
       currency:    'USD',
       description: '',
+      contentHtml:  '',
       services:    [],
     },
   });
@@ -82,6 +86,7 @@ export function PackageFormModal({ open, onOpenChange, pkg }: PackageFormModalPr
         price:       pkg?.price != null ? String(pkg.price) : '',
         currency:    pkg?.currency ?? 'USD',
         description: pkg?.description ?? '',
+        contentHtml: richContent,
         services:    pkg?.items?.map((item) => ({ name: item.name })) ?? [],
       });
     }
@@ -97,6 +102,7 @@ export function PackageFormModal({ open, onOpenChange, pkg }: PackageFormModalPr
       price:    values.price ? parseFloat(values.price) : undefined,
       ...(values.category     && { category:    values.category }),
       ...(values.description  && { description: values.description }),
+      contentHtml: values.contentHtml,
       items: values.services.map((s, i) => ({
         name:      s.name,
         order:     i,
@@ -193,6 +199,20 @@ export function PackageFormModal({ open, onOpenChange, pkg }: PackageFormModalPr
             placeholder="Brief description of this package…"
             rows={2}
             className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0 resize-none"
+          />
+        </div>
+
+        {/* Detailed content */}
+        <div className="space-y-1.5">
+          <Label>Detailed Content</Label>
+          <p className="text-xs text-muted-foreground">
+            Use headings, bold text, lists, and links. This content will be shown on the package and copied into sales.
+          </p>
+          <RichTextEditor
+            key={`${open}-${pkg?.id ?? 'new'}`}
+            content={richContent}
+            onChange={(html) => setValue('contentHtml', html)}
+            placeholder="Describe the package in detail..."
           />
         </div>
 
