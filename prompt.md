@@ -1,250 +1,516 @@
-Perform a complete implementation of dashboard filtering and reporting improvements in the existing codebase, based on the previously identified analytics and data-visibility issues.
+The dashboard filter system has already been implemented. Do not redo or replace the filter work unless required for consistency.
 
-Your job is to explore the codebase, identify all relevant frontend and backend areas, and fully implement the required changes so the dashboard becomes a reliable reporting and validation surface for leads, invoices, and sales.
+Your task now is to fix the core business-data consistency issues exposed by the backdated-entry and partial-payment analysis.
 
-Background / Current Issues
+This is a full implementation task, not just analysis.
 
-The current dashboard behaves like a static summary screen instead of a proper reporting tool.
+You must explore the existing codebase and implement the necessary backend + frontend changes so that Leads, Sales, Invoices, Payments, and Dashboard analytics all behave consistently for:
 
-Known problems in the current implementation:
-The dashboard has no filter state.
-No From Date
-No To Date
-No week/month period presets
-No month selector
-No comparison mode
-The dashboard is driven by a single parameterless analytics query, so users cannot inspect data by period or reconcile dashboard numbers with detail pages.
-The UI suggests a time context such as “last 12 months”, but widgets currently mix multiple time models:
-all-time totals
-current month values
-last month comparison
-real-time snapshot values
-Charts and KPIs are not aligned on a shared filter window, which makes data validation difficult.
-Weekly or short-range anomalies are hidden because charting is effectively hardcoded to a monthly 12-month view.
-Previous-month comparison is limited and inconsistent. It does not apply uniformly across dashboard widgets.
-Dashboard metrics cannot be directly reconciled with leads, invoices, and sales listing pages because those screens already support filtering while the dashboard does not.
-Existing date-related bugs and inconsistencies are harder to detect because the dashboard cannot be narrowed to a specific period.
+backdated records
+installment sales
+partial invoice payments
+sale status transitions
+revenue vs collected vs outstanding amounts
+dashboard reconciliation
+Context
+
+The dashboard filtering/reporting layer was already added successfully. Current implemented behavior includes:
+
+Global analytics filter state
+Presets: this week, this month, last 30 days, specific month, custom range
+Weekly/monthly granularity
+Previous-period / previous-month comparison
+Parameterized analytics API
+Revenue-by-period buckets
+Snapshot vs period labeling on dashboard widgets
+
+That part is already done.
+
+New Task Focus
+
+Now fix the underlying business logic and metric definitions so that filtered dashboard data is actually trustworthy.
+
+Current Known Problems To Fix
+
+Based on prior code analysis, the current system has these issues:
+
+1. Lead date inconsistency
+Leads can have a business date like leadDate
+Dashboard lead analytics currently rely on createdAt in at least some places
+This causes backdated leads to appear in the current month instead of the intended business month
+2. Sale date inconsistency
+Sales reporting currently depends on createdAt, sometimes overridden from saleDate
+This is fragile and inconsistent
+Sales need a clear canonical business/reporting date instead of mutating audit timestamps
+3. Installment scheduling is wrong for backdated sales
+Installment invoices are being generated relative to “now” / entry time instead of the actual business sale date or an intentional installment schedule
+Example: a November 2025 sale entered in March 2026 can create April/May 2026 invoice due dates by default, which is incorrect for many business cases
+4. No proper partial-payment semantics
+A sale with total 500 and only 250 collected has no clear payment-state representation
+There is no reliable PARTIALLY_PAID equivalent or separate payment-state model
+This causes dashboard and UI ambiguity
+5. Invoice-payment path and sales-payment path behave differently
+Paying an invoice via the invoice module does not reliably update sale state
+Paying through the sales payment flow can update the sale differently
+This must be unified
+6. Revenue, collected, and outstanding are not clearly separated
+Dashboard revenue can show full booked sale amount while collected metrics show only paid invoices
+There is no clean, consistent distinction between:
+booked revenue
+collected cash
+outstanding receivables
+7. Dashboard time bases are inconsistent
+
+Different widgets may be driven by different dates:
+
+lead createdAt
+lead business date
+sale createdAt
+invoice dueDate
+invoice updatedAt
+transaction/payment timestamp
+
+This produces mixed-period dashboard output.
+
+8. Audit timestamps are being misused as business dates
+createdAt should not be overwritten or repurposed to simulate business dates
+System needs a proper canonical date model
+9. Cross-module stale state / sync issues
+After invoice payment, sale detail, dashboard, invoice list, and related metrics may not stay aligned
+Existing filter work does not solve incorrect domain logic by itself
 Goal
 
-Implement a fully functional dashboard filter system that allows users to inspect dashboard data by date range and time granularity, and compare periods in a consistent way across all relevant dashboard widgets.
+Implement a consistent business-date and payment-state model so that:
 
-Do not stop at partial UI work. Implement the full flow end to end:
+Backdated leads, sales, and invoices appear in the correct reporting period
+Installment sales behave correctly
+Partial payments are represented clearly
+Sale status transitions are deterministic and correct
+Dashboard metrics reconcile properly under the new filter system
+Revenue / collected / outstanding are all clearly defined and correctly computed
+Frontend and backend remain in sync after mutations
+Required Implementation Areas
+A. Canonical Date Model
 
-frontend state
-query params / API integration
-backend filter handling
-analytics calculation updates
-chart/data transformation
-comparison logic
-labeling and UX clarity
-cache/query-key correctness
-consistency across cards, charts, and summaries
-Required Features
-1. Global Dashboard Filter State
+You must introduce or normalize a clear date strategy across the system.
 
-Add a top-level dashboard filter state that controls all dashboard widgets consistently.
+Requirements
 
-It must support:
+Define and use distinct concepts for:
 
-From Date
-To Date
-Preset periods
-This Week
-This Month
-Last 30 Days
-Specific Month
-Custom Range
-Granularity toggle
-Weekly
-Monthly
-Month selector
-Example: March 2026
-Comparison mode
-Compare to Previous Period
-Compare to Previous Month
-Optional: no comparison
-
-All relevant dashboard cards, charts, summaries, and breakdown widgets must respond to the same shared filter state unless a widget is intentionally designed as a snapshot metric.
-
-2. Backend Analytics Filtering
-
-Update the backend analytics/dashboard summary logic so it accepts and correctly handles filter parameters.
-
-Implement support for:
-
-fromDate
-toDate
-preset
-month
-year
-granularity
-compareMode
-
-You should explore the existing analytics service/controller structure and apply the changes in the correct place rather than forcing a superficial workaround.
-
-3. Consistent Time Semantics
-
-Normalize time logic so each metric clearly belongs to one of these categories:
-
-Period metric
-Example: revenue collected within selected range, leads created within selected range, invoices generated within selected range
-Snapshot metric
-Example: currently overdue invoices, currently active sales
-
-Where snapshot metrics remain on the dashboard:
-
-clearly label them as current-state metrics
-do not misleadingly imply they belong to the selected period unless intentionally filtered by period
-
-If a widget cannot meaningfully work under the selected range, either:
-
-redesign its logic correctly, or
-label it clearly so users understand what it represents
-4. Chart Improvements
-
-Update chart logic so users can inspect data in a useful way.
-
-Required behavior:
-
-Weekly granularity should bucket by calendar week
-Monthly granularity should bucket by calendar month
-Charts must use the currently selected date window
-Specific month selection should show that month only
-Comparison datasets should align correctly with the chosen compare mode
-
-Do not leave the existing hardcoded “last 12 months” behavior unless it is being used only as a fallback default state.
-
-5. Comparison Logic
-
-Implement robust comparison support.
-
-Compare to Previous Month
-
-When a user selects a month or monthly context:
-
-calculate the immediately previous calendar month
-show delta values for all major applicable KPIs
-Compare to Previous Period
-
-When a user selects a custom date range:
-
-compare against the immediately preceding period of equal length
-
-Example:
-
-Selected range: March 10–March 20
-Comparison range: February 28–March 9 or the immediately preceding equal-length range based on exact day count
-
-Ensure comparison logic is:
-
-deterministic
-mathematically correct
-consistently applied
-6. Query Key / Caching / Refetch Correctness
-
-Update frontend query keys and fetching logic so dashboard queries refetch correctly whenever filters change.
-
-Do not use a static key like:
-
-['analytics-summary']
-
-Instead, ensure the query key reflects the active filter state.
-
-Also make sure the dashboard does not show stale data when:
-
-filters change
-month changes
-comparison mode changes
-granularity changes
-7. Reconciliation With Detail Pages
-
-Where practical, align dashboard metric definitions with existing list/detail pages for:
-
+Audit timestamp
+when the record was actually created in the database
+should remain createdAt
+Business/reporting date
+when the lead/sale/invoice should belong for reporting purposes
+Payment timestamp
+when cash was actually collected
+Due date
+when an invoice is due
+Expected Rules
 Leads
-Invoices
+
+Use a canonical business/reporting date for lead analytics.
+
+If leadDate exists and is intended as business date, dashboard and reporting should use it
+createdAt should remain audit-only unless business rules clearly require otherwise
 Sales
 
-The goal is that a user selecting a period on the dashboard should be able to cross-check the same period in detail pages and get logically matching results.
+Introduce or properly use a canonical business/reporting date such as saleDate.
 
-If exact one-to-one reconciliation is not possible due to domain differences, standardize and document the definitions in code comments or labels.
+Do not rely on overwriting createdAt
+Do not treat createdAt as the reporting date
+Preserve real record creation timestamps
+Invoices
 
-8. UX / Labeling Requirements
+Clarify:
 
-The dashboard must clearly communicate what data is being shown.
+invoice issue/reporting date
+invoice due date
+payment timestamp
 
-Implement clear labels such as:
+If the current model is missing an invoice business/reporting date, add or derive it cleanly.
 
-active date range
-active preset
-granularity
-comparison mode
-whether a widget is “Current Snapshot” or “Selected Period”
+Important
 
-The user should never be left guessing what period a number belongs to.
+Do not ship a half-fix where some analytics still use createdAt and others use business dates. Standardize it properly.
 
-Expected Behavior
-Default State
+B. Sale Payment State Model
 
-When the dashboard first loads:
+You must implement a clear and reliable payment-state representation for sales.
 
-use a sensible default filter state
-recommended default: Last 30 Days with Monthly or Weekly granularity based on what fits the design best
-ensure the UI clearly shows the selected default
-From Date / To Date
-defines a single inclusive reporting range
-all relevant metrics update together
-invalid ranges should be prevented or handled gracefully
-Specific Month
-selecting a month should automatically set the range to the first through last day of that month
-all applicable widgets should show only that month’s data
-Weekly View
-charts and grouped reporting should bucket by week
-useful for detecting short-term anomalies and sync issues
-Monthly View
-charts and grouped reporting should bucket by month
-useful for trend analysis and finance reporting
-Compare to Previous Month
-compare selected month or monthly context against immediately preceding month
-show delta on all major comparable cards
-Compare to Previous Period
-compare custom or preset date range to an immediately preceding equal-length window
-the comparison must be based on the same metric definitions
-Snapshot Widgets
+Problem
 
-If certain cards represent current state rather than selected-period activity:
+A sale’s commercial lifecycle status and payment/collection status are currently mixed or incomplete.
 
-make that explicit in the UI
-do not mix them misleadingly with period cards
-Implementation Expectations
+Required Outcome
 
+Support the equivalent of:
+
+unpaid
+partially paid
+fully paid
+
+This can be implemented as:
+
+a dedicated paymentStatus field, or
+an expanded saleStatus model, if that is cleaner for the existing architecture
+Important Rule
+
+Do not force unrelated lifecycle meanings into one ambiguous field.
+
+For example:
+
+commercial status might mean draft / pending / active / completed / cancelled
+payment status might mean unpaid / partially paid / paid
+
+These may need to be separate.
+
+Required Behavior
+
+For a sale total of 500:
+
+paid 0 → unpaid
+paid 250 → partially paid
+paid 500 → paid
+
+This logic must be derived from actual related invoices/payments, not guessed from one UI action.
+
+C. Unified Payment Handling
+
+There must be one canonical payment workflow regardless of where payment is recorded from.
+
+Current Problem
+Paying via invoice module and sales module produces different sale outcomes
+Required Fix
+
+Refactor payment handling so that all payment operations flow through shared domain logic.
+
+Required Behavior
+
+Whenever an invoice payment is recorded:
+
+invoice status updates correctly
+payment/transaction record is created correctly
+sale collected amount updates correctly
+sale outstanding amount updates correctly
+sale payment state updates correctly
+sale lifecycle status updates only if business rules say so
+dashboard-related queries become consistent
+Important
+
+Do not duplicate business logic in multiple controllers/services.
+Centralize it.
+
+D. Installment and Invoice Generation Logic
+
+Fix installment behavior so it correctly reflects business intent.
+
+Requirements
+
+For installment sales:
+
+invoice schedule should be based on the correct business date / configured schedule
+not blindly based on “today” unless that is explicitly the desired rule
+Example Scenario
+
+Sale date = November 15, 2025
+Amount = 500
+Installments = 2
+Expected financial meaning:
+
+250 upfront
+250 later
+
+The implementation should support this consistently.
+
+You Must Decide
+
+After exploring the code, implement the most correct model based on existing architecture:
+
+Either:
+
+Explicit installment schedule generation from sale date, or
+Configurable installment due dates, or
+A well-defined “upfront + monthly interval” rule
+
+But it must be deterministic and business-date aware.
+
+Important
+
+If the existing UI only supports equal splits, keep equal split if needed, but make due-date generation correct and transparent.
+
+E. Dashboard Metric Definition Cleanup
+
+Now that filters exist, fix the metric definitions underneath.
+
+The dashboard must clearly and correctly distinguish:
+
+1. Booked Revenue
+
+Value of sales booked in the selected reporting period
+
+2. Collected Cash
+
+Actual payments collected in the selected period
+
+3. Outstanding Receivables
+
+Amounts still unpaid as of current state or within selected scope, depending on widget definition
+
+4. Overdue Amount / Count
+
+Invoices past due and unpaid
+
+5. Lead Creation
+
+Use lead business date/reporting date consistently
+
+6. Lead Conversion
+
+Use an explicit and correct conversion timing rule
+
+7. Sales Count
+
+Use business/reporting date consistently
+
+8. Brand/Breakdown Charts
+
+Must align with the same reporting rules as revenue/sales metrics
+
+Important
+
+Do not leave the dashboard in a state where:
+
+revenue card uses one logic
+chart uses another
+invoice widget uses a third
+payment widget uses a fourth
+
+Standardize and document the definitions.
+
+F. Lead Conversion Date / Timing
+
+Current analysis showed that conversion may be inferred from current state rather than a proper conversion date.
+
+Fix this.
+
+Required Outcome
+
+There must be a reliable way to determine:
+
+when a lead was created
+when it was converted
+whether it is currently converted
+
+For dashboard analytics and filtered reporting:
+
+lead creation metrics should use lead business date
+lead conversion metrics should use an explicit conversion timestamp/date
+
+If the schema currently lacks this, add the appropriate field and wire it correctly.
+
+G. Backdated Entry Support
+
+The system must support this properly:
+
+User enters data today, but assigns it to November 2025.
+
+Required Behavior
+
+If a user intentionally backdates:
+
+lead reporting should use the lead business date
+sale reporting should use the sale business date
+invoice reporting should use invoice business/reporting date
+collected cash should still use actual payment date
+overdue logic should still use due date vs current time
+
+This distinction is critical and must be preserved.
+
+H. Frontend Updates
+
+Implement all required frontend changes to reflect the corrected backend/domain logic.
+
+Required Areas
+types/interfaces
+detail screens
+list screens if needed
+dashboard widgets
+sales/invoice status badges
+payment summaries
+any forms affected by the new date/status model
+UI Requirements
+
+Users must be able to clearly understand:
+
+sale total
+collected amount
+outstanding amount
+payment state
+lifecycle status
+business date vs due date vs paid date where relevant
+Important
+
+Do not hide complexity by leaving ambiguous labels.
+Make the display explicit.
+
+I. Query Invalidation / Consistency
+
+Ensure that after the business-logic fix:
+
+paying an invoice updates relevant queries
+sale detail refreshes correctly
+invoice detail refreshes correctly
+dashboard analytics refetch or invalidate correctly
+stale partial cache writes do not leave UI inconsistent
+
+If needed, replace unsafe direct cache patching with invalidate-and-refetch where appropriate.
+
+Exact Scenario That Must Work Correctly
+
+Use this as a verification scenario during implementation:
+
+Today’s actual date: March 29, 2026
+Lead business date: November 15, 2025
+Sale business date: November 15, 2025
+Sale total: 500
+Installments: 2
+First invoice: 250
+Second invoice: 250
+First invoice paid today (March 29, 2026)
+Second invoice unpaid
+Expected Correct Outcome
+
+After your implementation:
+
+Lead
+appears in November 2025 lead creation reporting
+not in March 2026 lead creation reporting unless the business rule explicitly says otherwise
+Sale
+appears in November 2025 sales/booked reporting
+not in March 2026 booked reporting just because it was entered later
+Payment
+250 appears in March 2026 collected-cash reporting
+not November 2025 collected-cash reporting
+Sale financial state
+total = 500
+collected = 250
+outstanding = 250
+payment state = partially paid
+Sale lifecycle status
+
+Must follow the domain rule you implement, but it must be explicit and not inconsistent across payment paths.
+
+Invoice state
+first invoice = paid
+second invoice = unpaid
+overdue only if due date has passed
+Dashboard
+
+Should be able to show, under the new filters:
+
+November 2025 booked sale activity
+March 2026 collected payment activity
+consistent outstanding / overdue state
+correct lead timing
+correct conversion timing
+Implementation Constraints
 You must:
+explore the codebase thoroughly
+implement end-to-end changes
+migrate existing logic carefully
+keep the solution production-ready
+Do not:
+fake correctness by only changing labels
+keep using overwritten createdAt as business date
+patch only dashboard queries while leaving domain logic broken
+make payment logic diverge across modules
+introduce unclear metric definitions
+Data Migration / Compatibility
 
-Explore the existing frontend dashboard structure and analytics hooks/API layer
-Explore the backend analytics controller/service/query logic
-Identify all widgets/cards/charts affected by dashboard filters
-Implement the changes end to end
-Update types/interfaces where needed
-Make the solution production-ready, not a proof of concept
-Important Notes
-Do not merely add UI controls without wiring them properly
-Do not hardcode temporary logic
-Do not leave inconsistent metric definitions between cards and charts
-Do not implement partial filtering for only one widget unless that widget is explicitly isolated by design
-Preserve existing functionality where correct, but refactor where necessary for consistency
+If schema changes are needed, handle them properly.
+
+If you add fields such as:
+saleDate
+convertedAt
+paymentStatus
+invoice reporting date field
+collected/outstanding derived helpers
+
+Then also:
+
+update DTOs
+update shared types
+update Prisma/schema models
+write migrations if applicable
+ensure existing records are handled sensibly
+Migration expectation
+
+Where old data relied on overwritten createdAt, you may need a compatibility strategy.
+Implement the safest practical approach and document assumptions.
+
 Deliverables
 
 After implementation, provide:
 
-A summary of what was changed
-Which files/modules were updated
-Final behavior of each filter
-Any assumptions or metric-definition decisions made
-Any remaining limitations, if unavoidable
+1. Change Summary
 
-Before finishing, verify that:
+What was changed at domain, API, analytics, and UI level
 
-changing dashboard filters changes data correctly
-comparison values update correctly
-charts and cards stay in sync
-no stale cache behavior remains
-the dashboard is now useful for actual data validation, not just passive summary display
+2. File/Module List
+
+Which backend/frontend files were updated
+
+3. Business-Date Model
+
+Explain the final chosen date model:
+
+lead reporting date
+sale reporting date
+invoice reporting date
+payment timestamp
+due date
+4. Payment-State Model
+
+Explain:
+
+how unpaid / partially paid / fully paid is determined
+whether it is stored or derived
+how lifecycle status interacts with payment status
+5. Dashboard Metric Definitions
+
+Define exactly what each major widget now means:
+
+booked revenue
+collected
+outstanding
+overdue
+leads
+conversions
+sales count
+brand breakdown
+6. Verification of the Exact Scenario
+
+Show the final expected output for the November-2025 / March-2026 partial-payment scenario
+
+7. Remaining Limitations
+
+Anything unavoidable that still remains
+
+Final Verification Checklist
+
+Before finishing, verify all of the following:
+
+Backdated lead shows in the correct reporting month
+Backdated sale shows in the correct reporting month
+Actual payment shows in the actual collection month
+Installment due dates are generated correctly
+Partial payment is represented correctly
+Invoice payment and sales payment paths produce the same domain outcome
+Dashboard widgets reconcile correctly under filters
+Revenue vs collected vs outstanding are no longer conflated
+createdAt remains an audit field, not a fake business-date substitute
+Queries/cache stay consistent after mutations
+
+Implement the full fix, not a partial workaround.

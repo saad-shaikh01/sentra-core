@@ -1,7 +1,14 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { ClientStatus, LeadStatus, SaleStatus, InvoiceStatus } from '@sentra-core/types';
+import {
+  ClientStatus,
+  InvoiceStatus,
+  LeadStatus,
+  SalePaymentStatus,
+  SaleStatus,
+  TransactionStatus,
+} from '@sentra-core/types';
 import { cn } from '@/lib/utils';
 
 interface StatusBadgeProps {
@@ -31,10 +38,18 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   [SaleStatus.PENDING]: { label: 'Pending', className: 'bg-amber-500/20 text-amber-400 border-amber-500/20' },
   [SaleStatus.ON_HOLD]: { label: 'On Hold', className: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/20' },
   [SaleStatus.CANCELLED]: { label: 'Cancelled', className: 'bg-red-500/20 text-red-400 border-red-500/20' },
+  // Sale payment statuses
+  [SalePaymentStatus.PARTIALLY_PAID]: { label: 'Partially Paid', className: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/20' },
   // Invoice
   [InvoiceStatus.UNPAID]: { label: 'Unpaid', className: 'bg-amber-500/20 text-amber-400 border-amber-500/20' },
   [InvoiceStatus.PAID]: { label: 'Paid', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },
   [InvoiceStatus.OVERDUE]: { label: 'Overdue', className: 'bg-red-500/20 text-red-400 border-red-500/20' },
+  // Transaction statuses
+  [TransactionStatus.SUCCESS]: { label: 'Success', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },
+  [TransactionStatus.FAILED]: { label: 'Failed', className: 'bg-red-500/20 text-red-400 border-red-500/20' },
+  [TransactionStatus.CHARGEBACK_FILED]: { label: 'Chargeback', className: 'bg-red-500/20 text-red-400 border-red-500/20' },
+  [TransactionStatus.CHARGEBACK_WON]: { label: 'Chargeback Won', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },
+  [TransactionStatus.CHARGEBACK_LOST]: { label: 'Chargeback Lost', className: 'bg-rose-500/20 text-rose-300 border-rose-500/20' },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

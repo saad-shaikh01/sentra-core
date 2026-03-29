@@ -68,6 +68,7 @@ export function SaleDetailHeader({ sale, onEdit, onRefund, onChargeback }: SaleD
               {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
             </button>
             <StatusBadge status={sale.status} />
+            <StatusBadge status={sale.paymentStatus ?? 'UNPAID'} />
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-muted-foreground shrink-0">
               {PAYMENT_PLAN_LABELS[sale.paymentPlan as PaymentPlanType] ?? sale.paymentPlan}
               {sale.paymentPlan === PaymentPlanType.INSTALLMENTS && sale.installmentCount
@@ -85,7 +86,12 @@ export function SaleDetailHeader({ sale, onEdit, onRefund, onChargeback }: SaleD
             ) : null}
           </div>
           <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
-            Created {new Date(sale.createdAt).toLocaleDateString()}
+            Collected {formatCurrency(sale.collectedAmount ?? 0, sale.currency)}
+            {' · Outstanding '}
+            {formatCurrency(sale.outstandingAmount ?? 0, sale.currency)}
+          </p>
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+            Sale Date {new Date(sale.saleDate ?? sale.createdAt).toLocaleDateString()}
             {' · Updated '}
             {new Date(sale.updatedAt).toLocaleDateString()}
           </p>

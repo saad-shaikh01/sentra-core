@@ -8,8 +8,10 @@ import * as crypto from 'crypto';
 import { PrismaService } from '@sentra-core/prisma-client';
 import { IInvoice, IPaginatedResponse, InvoiceStatus, TransactionType, TransactionStatus, UserRole, GatewayType } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService, PermissionsService, StorageService } from '../../common';
+import { deriveInvoiceStatus } from '../../common/helpers/sales-domain.helper';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
+import { SalesService } from '../sales';
 import { InvoicePdfService } from './pdf/invoice-pdf.service';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
 
@@ -23,6 +25,7 @@ export class InvoicesService {
     private readonly scopeService: ScopeService,
     private readonly permissionsService: PermissionsService,
     private readonly storage: StorageService,
+    private readonly salesService: SalesService,
   ) {}
 
   private async generateInvoiceNumber(): Promise<string> {
@@ -51,6 +54,7 @@ export class InvoicesService {
       data: {
         invoiceNumber,
         amount: dto.amount,
+        invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : sale.saleDate,
         dueDate: new Date(dto.dueDate),
         notes: dto.notes,
         saleId: dto.saleId,
@@ -58,6 +62,7 @@ export class InvoicesService {
     });
 
     await this.cache.delByPrefix(`invoices:${orgId}:`);
+    await this.cache.delByPrefix(`sales:${orgId}:`);
 
     return this.mapToIInvoice(invoice);
   }
@@ -94,7 +99,7 @@ export class InvoicesService {
       this.prisma.invoice.aggregate({
         where: {
           status: InvoiceStatus.PAID,
-          updatedAt: { gte: startOfMonth, lte: endOfMonth },
+          paidAt: { gte: startOfMonth, lte: endOfMonth },
           sale: { is: { ...saleWhere } },
         },
         _sum: { amount: true },
@@ -126,7 +131,9 @@ export class InvoicesService {
         id: true,
         invoiceNumber: true,
         amount: true,
+        invoiceDate: true,
         dueDate: true,
+        paidAt: true,
         status: true,
         notes: true,
         paymentToken: true,
@@ -154,7 +161,11 @@ export class InvoicesService {
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return invoice;
+    return {
+      ...invoice,
+      amount: Number(invoice.amount),
+      status: deriveInvoiceStatus(invoice),
+    };
   }
 
   async findAll(orgId: string, query: QueryInvoicesDto, userId: string, role: UserRole): Promise<IPaginatedResponse<IInvoice>> {
@@ -180,18 +191,31 @@ export class InvoicesService {
       },
     };
     if (search) where.invoiceNumber = { contains: search, mode: 'insensitive' };
-    if (status) where.status = status;
+    if (status === InvoiceStatus.OVERDUE) {
+      where.OR = [
+        { status: InvoiceStatus.OVERDUE },
+        { status: InvoiceStatus.UNPAID, dueDate: { lt: new Date() } },
+      ];
+    } else if (status === InvoiceStatus.UNPAID) {
+      where.status = InvoiceStatus.UNPAID;
+      where.dueDate = { gte: new Date() };
+    } else if (status) {
+      where.status = status;
+    }
     if (saleId) where.saleId = saleId;
     if (dueBefore || dueAfter) {
-      where.dueDate = {};
-      if (dueAfter) where.dueDate.gte = new Date(dueAfter);
-      if (dueBefore) where.dueDate.lte = new Date(dueBefore);
+      const dueDateFilter = {
+        ...(where.dueDate ?? {}),
+        ...(dueAfter ? { gte: new Date(`${dueAfter}T00:00:00.000Z`) } : {}),
+        ...(dueBefore ? { lte: new Date(`${dueBefore}T23:59:59.999Z`) } : {}),
+      };
+      where.dueDate = dueDateFilter;
     }
 
     const [invoices, total] = await Promise.all([
       this.prisma.invoice.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * limit,
         take: limit,
         include: { sale: { include: { client: true } } },
@@ -225,8 +249,23 @@ export class InvoicesService {
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.sale.organizationId !== orgId) throw new ForbiddenException('Invoice belongs to another organization');
 
-    await this.cache.set(cacheKey, invoice);
-    return invoice;
+    const mappedInvoice = {
+      ...this.mapToIInvoice(invoice),
+      sale: invoice.sale
+        ? {
+            ...invoice.sale,
+            totalAmount: Number(invoice.sale.totalAmount),
+            discountedTotal: invoice.sale.discountedTotal != null ? Number(invoice.sale.discountedTotal) : undefined,
+          }
+        : undefined,
+      transactions: invoice.transactions.map((transaction) => ({
+        ...transaction,
+        amount: Number(transaction.amount),
+      })),
+    };
+
+    await this.cache.set(cacheKey, mappedInvoice);
+    return mappedInvoice;
   }
 
   async update(id: string, orgId: string, dto: UpdateInvoiceDto): Promise<IInvoice> {
@@ -241,6 +280,7 @@ export class InvoicesService {
       where: { id },
       data: {
         amount: dto.amount,
+        invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : undefined,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         status: dto.status,
         notes: dto.notes,
@@ -248,6 +288,7 @@ export class InvoicesService {
     });
 
     await this.cache.delByPrefix(`invoices:${orgId}:`);
+    await this.cache.delByPrefix(`sales:${orgId}:`);
 
     return this.mapToIInvoice(updated);
   }
@@ -264,6 +305,7 @@ export class InvoicesService {
     await this.prisma.invoice.delete({ where: { id } });
 
     await this.cache.delByPrefix(`invoices:${orgId}:`);
+    await this.cache.delByPrefix(`sales:${orgId}:`);
 
     return { message: 'Invoice deleted successfully' };
   }
@@ -320,7 +362,7 @@ export class InvoicesService {
         })),
       },
       invoiceTerms: invoiceConfig.invoiceTerms ?? undefined,
-      createdAt: invoice.createdAt,
+      createdAt: invoice.invoiceDate,
     });
   }
 
@@ -352,28 +394,19 @@ export class InvoicesService {
 
     // Manual payment — no gateway involved, just mark as paid
     if (gatewayType === GatewayType.MANUAL) {
-      const transaction = await this.prisma.paymentTransaction.create({
-        data: {
-          transactionId: `MANUAL-${Date.now()}`,
-          type: TransactionType.ONE_TIME,
-          amount: Number(invoice.amount),
-          status: TransactionStatus.SUCCESS,
-          gateway: GatewayType.MANUAL,
-          responseCode: 'MANUAL',
-          responseMessage: 'Manually marked as paid',
-          saleId: sale.id,
-          invoiceId: id,
-        },
+      const paymentResult = await this.salesService.applySuccessfulPayment({
+        saleId: sale.id,
+        amount: Number(invoice.amount),
+        actorId: userId ?? 'system',
+        gateway: GatewayType.MANUAL,
+        invoiceId: id,
+        transactionId: `MANUAL-${Date.now()}`,
+        responseCode: 'MANUAL',
+        responseMessage: 'Manually marked as paid',
+        source: 'invoice_module',
       });
 
-      await this.prisma.invoice.update({
-        where: { id },
-        data: { status: InvoiceStatus.PAID },
-      });
-
-      await this.cache.delByPrefix(`invoices:${orgId}:`);
-
-      return { transaction, paid: true };
+      return { transaction: paymentResult.transaction, paid: true };
     }
 
     const gateway = this.gatewayFactory.resolve(gatewayType);
@@ -393,32 +426,37 @@ export class InvoicesService {
       invoiceNumber: invoice.invoiceNumber,
     });
 
-    const transaction = await this.prisma.paymentTransaction.create({
-      data: {
-        transactionId: result.gatewayTransactionId,
-        type: TransactionType.ONE_TIME,
-        amount: Number(invoice.amount),
-        status: result.success ? TransactionStatus.SUCCESS : TransactionStatus.FAILED,
-        gateway: gatewayType,
-        responseCode: result.responseCode,
-        responseMessage: result.message,
-        saleId: sale.id,
-        invoiceId: id,
-      },
-    });
-
-    if (result.success) {
-      await this.prisma.invoice.update({
-        where: { id },
-        data: { status: InvoiceStatus.PAID },
+    if (!result.success) {
+      await this.prisma.paymentTransaction.create({
+        data: {
+          transactionId: result.gatewayTransactionId,
+          type: TransactionType.ONE_TIME,
+          amount: Number(invoice.amount),
+          status: TransactionStatus.FAILED,
+          gateway: gatewayType,
+          responseCode: result.responseCode,
+          responseMessage: result.message,
+          saleId: sale.id,
+          invoiceId: id,
+        },
       });
-    } else {
+
       throw new BadRequestException(`Payment failed: ${result.message}`);
     }
 
-    await this.cache.delByPrefix(`invoices:${orgId}:`);
+    const paymentResult = await this.salesService.applySuccessfulPayment({
+      saleId: sale.id,
+      amount: Number(invoice.amount),
+      actorId: userId ?? 'system',
+      gateway: gatewayType,
+      invoiceId: id,
+      transactionId: result.gatewayTransactionId ?? null,
+      responseCode: result.responseCode ?? null,
+      responseMessage: result.message ?? null,
+      source: 'invoice_module',
+    });
 
-    return { transaction, paid: true };
+    return { transaction: paymentResult.transaction, paid: true };
   }
 
   async regenerateToken(invoiceId: string, orgId: string): Promise<{ paymentToken: string }> {
@@ -443,8 +481,10 @@ export class InvoicesService {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       amount: Number(invoice.amount),
+      invoiceDate: invoice.invoiceDate ?? invoice.createdAt,
       dueDate: invoice.dueDate,
-      status: invoice.status as InvoiceStatus,
+      paidAt: invoice.paidAt ?? undefined,
+      status: deriveInvoiceStatus(invoice),
       pdfUrl: invoice.pdfUrl ?? undefined,
       notes: invoice.notes ?? undefined,
       paymentToken: invoice.paymentToken ?? undefined,

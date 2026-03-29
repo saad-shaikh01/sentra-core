@@ -403,6 +403,9 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                   <InfoCard label="Source" value={<span className="text-sm">{formatEnumLabel(lead.source)}</span>} />
                   <InfoCard label="Lead Type" value={<span className="text-sm">{formatEnumLabel(lead.leadType)}</span>} />
                   <InfoCard label="Lead Date" value={<span className="text-sm">{formatDateValue(lead.leadDate ?? lead.createdAt)}</span>} />
+                  {lead.convertedAt ? (
+                    <InfoCard label="Converted At" value={<span className="text-sm">{formatDateValue(lead.convertedAt)}</span>} />
+                  ) : null}
                 </div>
 
                 {lead.status === LeadStatus.FOLLOW_UP ? (

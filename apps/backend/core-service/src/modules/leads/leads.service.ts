@@ -870,7 +870,7 @@ export class LeadsService {
     const [leads, total] = await Promise.all([
       this.prisma.lead.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ leadDate: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -1051,7 +1051,7 @@ export class LeadsService {
       teamId,
       organizationId: orgId,
       deletedAt: null,
-      createdAt: { gte: startDate, lte: endDate },
+      leadDate: { gte: startDate, lte: endDate },
     };
 
     // Get team's brand for sales lookup
@@ -1065,7 +1065,7 @@ export class LeadsService {
           organizationId: orgId,
           brandId: teamBrand.brandId,
           deletedAt: null,
-          createdAt: { gte: startDate, lte: endDate },
+          saleDate: { gte: startDate, lte: endDate },
         }
       : null;
 
@@ -1555,6 +1555,7 @@ export class LeadsService {
           where: { id },
           data: {
             convertedClientId: client.id,
+            convertedAt: new Date(),
             status: LeadStatus.WON,
           },
         });
@@ -1750,6 +1751,7 @@ export class LeadsService {
     assignedToId: string | null;
     teamId: string | null;
     convertedClientId: string | null;
+    convertedAt: Date | null;
     followUpDate: Date | null;
     createdAt: Date;
     updatedAt: Date;
@@ -1773,6 +1775,7 @@ export class LeadsService {
       assignedToId: lead.assignedToId ?? undefined,
       teamId: lead.teamId ?? undefined,
       convertedClientId: lead.convertedClientId ?? undefined,
+      convertedAt: lead.convertedAt ?? undefined,
       followUpDate: lead.followUpDate ?? undefined,
       collaboratorCount: lead._count?.collaborators,
       createdAt: lead.createdAt,

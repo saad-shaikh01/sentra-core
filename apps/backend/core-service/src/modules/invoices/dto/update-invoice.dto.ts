@@ -9,6 +9,10 @@ export class UpdateInvoiceDto {
 
   @IsOptional()
   @IsDateString()
+  invoiceDate?: string;
+
+  @IsOptional()
+  @IsDateString()
   dueDate?: string;
 
   @IsOptional()

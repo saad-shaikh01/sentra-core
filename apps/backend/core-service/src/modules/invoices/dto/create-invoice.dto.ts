@@ -5,6 +5,10 @@ export class CreateInvoiceDto {
   @Min(0.01)
   amount: number;
 
+  @IsOptional()
+  @IsDateString()
+  invoiceDate?: string;
+
   @IsDateString()
   dueDate: string;
 

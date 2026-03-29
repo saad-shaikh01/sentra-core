@@ -20,6 +20,7 @@ interface InvoiceFormModalProps {
 interface FormValues {
   saleId: string;
   amount: string;
+  invoiceDate: string;
   dueDate: string;
   notes: string;
 }
@@ -38,12 +39,16 @@ export function InvoiceFormModal({ open, onOpenChange, invoice }: InvoiceFormMod
 
   useEffect(() => {
     if (open) {
+      const invoiceDate = invoice?.invoiceDate
+        ? new Date(invoice.invoiceDate).toISOString().split('T')[0]
+        : '';
       const dueDate = invoice?.dueDate
         ? new Date(invoice.dueDate).toISOString().split('T')[0]
         : '';
       reset({
         saleId: invoice?.saleId ?? '',
         amount: invoice?.amount?.toString() ?? '',
+        invoiceDate,
         dueDate,
         notes: invoice?.notes ?? '',
       });
@@ -55,15 +60,15 @@ export function InvoiceFormModal({ open, onOpenChange, invoice }: InvoiceFormMod
 
   const onSubmit = async (values: FormValues) => {
     const dto: Record<string, unknown> = {
-      saleId: values.saleId,
       amount: parseFloat(values.amount),
+      ...(values.invoiceDate && { invoiceDate: values.invoiceDate }),
       dueDate: values.dueDate,
       ...(values.notes && { notes: values.notes }),
     };
     if (isEdit && invoice) {
       await updateInvoice.mutateAsync({ id: invoice.id, ...dto });
     } else {
-      await createInvoice.mutateAsync(dto);
+      await createInvoice.mutateAsync({ saleId: values.saleId, ...dto });
     }
     onOpenChange(false);
   };
@@ -104,6 +109,13 @@ export function InvoiceFormModal({ open, onOpenChange, invoice }: InvoiceFormMod
             />
             {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
           </div>
+          <div className="space-y-1.5">
+            <Label>Invoice Date</Label>
+            <Input type="date" {...register('invoiceDate')} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-1.5">
             <Label>Due Date *</Label>
             <Input

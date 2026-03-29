@@ -65,10 +65,10 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
       },
       { key: 'source', header: 'Source', render: (lead) => lead.source ?? '—', className: 'w-[100px]' },
       {
-        key: 'createdAt',
-        header: 'Created',
+        key: 'leadDate',
+        header: 'Lead Date',
         className: 'w-[120px]',
-        render: (lead) => new Date(lead.createdAt).toLocaleDateString(),
+        render: (lead) => new Date(lead.leadDate ?? lead.createdAt).toLocaleDateString(),
       },
     ];
 

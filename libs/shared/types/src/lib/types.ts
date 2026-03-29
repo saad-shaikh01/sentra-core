@@ -81,6 +81,12 @@ export enum SaleStatus {
   REFUNDED = 'REFUNDED',
 }
 
+export enum SalePaymentStatus {
+  UNPAID = 'UNPAID',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  PAID = 'PAID',
+}
+
 export enum SaleType {
   FRONTSELL = 'FRONTSELL',
   UPSELL = 'UPSELL',
@@ -480,6 +486,7 @@ export interface ILead {
   assignedToId?: string;
   teamId?: string;
   convertedClientId?: string;
+  convertedAt?: Date | string;
   followUpDate?: Date | string;
   collaboratorCount?: number;
   createdAt: Date | string;
@@ -636,17 +643,24 @@ export interface ISale {
   id: string;
   totalAmount: number;
   status: SaleStatus;
+  paymentStatus?: SalePaymentStatus;
   saleType?: SaleType;
   salesAgentId?: string;
   currency: string;
   description?: string;
   contractUrl?: string;
+  saleDate?: Date | string;
   paymentPlan: PaymentPlanType;
   installmentCount?: number;
   installmentMode?: InstallmentMode;
   discountType?: DiscountType;
   discountValue?: number;
   discountedTotal?: number;
+  netAmount?: number;
+  collectedAmount?: number;
+  outstandingAmount?: number;
+  paidInvoiceCount?: number;
+  totalInvoiceCount?: number;
   clientId: string;
   brandId: string;
   organizationId: string;
@@ -674,9 +688,13 @@ export interface ISaleWithRelations extends ISale {
   transactions: IPaymentTransaction[];
   items: ISaleItem[];
   salePackage?: ISalePackage;
+  netAmount?: number;
+  collectedAmount?: number;
+  outstandingAmount?: number;
+  paidInvoiceCount?: number;
+  totalInvoiceCount?: number;
   paidAmount?: number;
   remainingAmount?: number;
-  paidInvoiceCount?: number;
 }
 
 export interface ISaleActivity {
@@ -695,7 +713,9 @@ export interface IInvoice {
   id: string;
   invoiceNumber: string;
   amount: number;
+  invoiceDate: Date;
   dueDate: Date;
+  paidAt?: Date | string;
   status: InvoiceStatus;
   pdfUrl?: string;
   notes?: string;
@@ -847,45 +867,36 @@ export interface IAnalyticsFilter {
 }
 
 export interface IAnalyticsSummary {
-  // === PERIOD METADATA ===
   periodLabel: string;
   granularity: AnalyticsGranularity;
   compareMode: 'previous_period' | 'previous_month' | null;
 
-  // === PERIOD METRICS (filtered by selected date range) ===
-  totalRevenue: number;
-  totalLeads: number;
-  convertedLeads: number;
-  activeSales: number; // snapshot: current active sales
+  bookedRevenue: number;
+  collectedCash: number;
+  leadCount: number;
+  convertedLeadCount: number;
+  salesCount: number;
+  activeSales: number;
+  outstandingReceivables: number;
 
-  // === COMPARISON SUMMARY ===
   comparison: {
-    revenue: number;
-    leads: number;
-    convertedLeads: number;
+    bookedRevenue: number;
+    collectedCash: number;
+    leadCount: number;
+    convertedLeadCount: number;
+    salesCount: number;
     periodLabel: string;
   } | null;
 
-  // === CHART DATA ===
-  revenueByMonth: Array<{ month: string; revenue: number }>; // legacy compat (monthly buckets)
-  revenueByPeriod: Array<{ period: string; revenue: number; compRevenue?: number }>; // primary (weekly or monthly)
-
-  // === BREAKDOWNS ===
+  revenueByPeriod: Array<{ period: string; bookedRevenue: number; compBookedRevenue?: number }>;
   leadsByAgent: Array<{ agentName: string; total: number; converted: number }>;
-  salesByBrand: Array<{ brandName: string; total: number; revenue: number }>;
+  salesByBrand: Array<{ brandName: string; total: number; bookedRevenue: number }>;
   leadStatusBreakdown: Array<{ status: string; count: number }>;
 
-  // === PERIOD-AWARE COMPARISON HELPERS ===
-  thisMonthRevenue: number;   // revenue in selected period
-  lastMonthRevenue: number;   // revenue in comparison period
-  newLeadsThisMonth: number;  // leads in selected period
-  newLeadsLastMonth: number;  // leads in comparison period
-
-  // === INVOICE SUMMARY ===
-  invoiceSummary: {
-    overdue: { count: number; total: number };       // snapshot
-    unpaid: { count: number; total: number };         // snapshot
-    paidThisMonth: { count: number; total: number };  // period: paid within selected range
+  receivablesSummary: {
+    outstanding: { count: number; total: number };
+    overdue: { count: number; total: number };
+    unpaidUpcoming: { count: number; total: number };
   };
 }
 

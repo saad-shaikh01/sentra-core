@@ -82,7 +82,7 @@ function RevenueChart({
   data,
   granularity,
 }: {
-  data: { period: string; revenue: number; compRevenue?: number }[];
+  data: { period: string; bookedRevenue: number; compBookedRevenue?: number }[];
   granularity: 'weekly' | 'monthly';
 }) {
   if (!data.length)
@@ -92,8 +92,8 @@ function RevenueChart({
       </div>
     );
 
-  const maxVal = Math.max(...data.flatMap((d) => [d.revenue, d.compRevenue ?? 0]), 1);
-  const hasComp = data.some((d) => d.compRevenue != null && d.compRevenue > 0);
+  const maxVal = Math.max(...data.flatMap((d) => [d.bookedRevenue, d.compBookedRevenue ?? 0]), 1);
+  const hasComp = data.some((d) => d.compBookedRevenue != null && d.compBookedRevenue > 0);
 
   function formatPeriodLabel(period: string) {
     if (granularity === 'weekly') {
@@ -120,8 +120,8 @@ function RevenueChart({
       )}
       <div className="flex items-end gap-1.5 h-40 pt-2">
         {data.map((d) => {
-          const mainPct = (d.revenue / maxVal) * 100;
-          const compPct = d.compRevenue != null ? (d.compRevenue / maxVal) * 100 : null;
+          const mainPct = (d.bookedRevenue / maxVal) * 100;
+          const compPct = d.compBookedRevenue != null ? (d.compBookedRevenue / maxVal) * 100 : null;
           return (
             <div key={d.period} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
               <div className="w-full relative flex justify-center gap-0.5" style={{ height: '120px' }}>
@@ -130,14 +130,14 @@ function RevenueChart({
                   <div
                     className="flex-1 rounded-t bg-white/15 group-hover:bg-white/25 transition-colors self-end"
                     style={{ height: `${Math.max(compPct, 2)}%` }}
-                    title={`Comparison: ${fmt(d.compRevenue ?? 0)}`}
+                    title={`Comparison: ${fmt(d.compBookedRevenue ?? 0)}`}
                   />
                 )}
                 {/* Main bar */}
                 <div
                   className="flex-1 rounded-t bg-primary/60 group-hover:bg-primary transition-colors self-end"
                   style={{ height: `${Math.max(mainPct, 2)}%` }}
-                  title={`${d.period}: ${fmt(d.revenue)}`}
+                  title={`${d.period}: ${fmt(d.bookedRevenue)}`}
                 />
               </div>
               <span className="text-[9px] text-muted-foreground/60 font-medium truncate w-full text-center">
@@ -202,13 +202,13 @@ function AgentTable({
 function BrandBars({
   data,
 }: {
-  data: { brandName: string; total: number; revenue: number }[];
+  data: { brandName: string; total: number; bookedRevenue: number }[];
 }) {
   if (!data.length)
     return (
       <div className="text-sm text-muted-foreground py-6 text-center">No brand data for period</div>
     );
-  const maxRev = Math.max(...data.map((b) => b.revenue), 1);
+  const maxRev = Math.max(...data.map((b) => b.bookedRevenue), 1);
   const COLORS = [
     'bg-violet-500',
     'bg-blue-500',
@@ -220,13 +220,13 @@ function BrandBars({
   return (
     <div className="space-y-3">
       {data.map((b, i) => {
-        const pct = (b.revenue / maxRev) * 100;
+        const pct = (b.bookedRevenue / maxRev) * 100;
         return (
           <div key={b.brandName} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium">{b.brandName}</span>
               <span className="text-muted-foreground">
-                {b.total} sales · {fmt(b.revenue)}
+                {b.total} sales · {fmt(b.bookedRevenue)}
               </span>
             </div>
             <div className="h-2 rounded-full bg-white/5 overflow-hidden">
@@ -520,84 +520,99 @@ export default function DashboardPage() {
   const gran = data?.granularity ?? filters.granularity ?? 'monthly';
 
   const conversionRate =
-    data && data.totalLeads > 0
-      ? Math.round((data.convertedLeads / data.totalLeads) * 100)
+    data && data.leadCount > 0
+      ? Math.round((data.convertedLeadCount / data.leadCount) * 100)
       : 0;
 
   const kpis = [
     {
-      label: 'Revenue',
-      value: fmt(data?.totalRevenue ?? 0),
+      label: 'Booked Revenue',
+      value: fmt(data?.bookedRevenue ?? 0),
       icon: DollarSign,
       color: 'text-emerald-400',
       bg: 'bg-emerald-400/10',
-      current: data?.thisMonthRevenue ?? 0,
-      previous: data?.lastMonthRevenue ?? 0,
+      current: data?.bookedRevenue ?? 0,
+      previous: data?.comparison?.bookedRevenue ?? 0,
       isMoney: true,
       isSnapshot: false,
+      helperText: 'Sales booked in the selected period',
     },
     {
-      label: 'New Leads',
-      value: fmtNum(data?.totalLeads ?? 0),
+      label: 'Collected Cash',
+      value: fmt(data?.collectedCash ?? 0),
+      icon: CheckCircle2,
+      color: 'text-cyan-400',
+      bg: 'bg-cyan-400/10',
+      current: data?.collectedCash ?? 0,
+      previous: data?.comparison?.collectedCash ?? 0,
+      isMoney: true,
+      isSnapshot: false,
+      helperText: 'Successful payments collected in the selected period',
+    },
+    {
+      label: 'Leads Created',
+      value: fmtNum(data?.leadCount ?? 0),
       icon: Users,
       color: 'text-blue-400',
       bg: 'bg-blue-400/10',
-      current: data?.newLeadsThisMonth ?? 0,
-      previous: data?.newLeadsLastMonth ?? 0,
+      current: data?.leadCount ?? 0,
+      previous: data?.comparison?.leadCount ?? 0,
       isMoney: false,
       isSnapshot: false,
+      helperText: 'Lead business dates in the selected period',
     },
     {
-      label: 'Lead Conversion',
-      value: `${conversionRate}%`,
+      label: 'Lead Conversions',
+      value: fmtNum(data?.convertedLeadCount ?? 0),
       icon: TrendingUp,
       color: 'text-violet-400',
       bg: 'bg-violet-400/10',
-      current: 0,
-      previous: 0,
+      current: data?.convertedLeadCount ?? 0,
+      previous: data?.comparison?.convertedLeadCount ?? 0,
       isMoney: false,
+      isSnapshot: false,
+      helperText: `${conversionRate}% conversion rate for the selected period`,
+    },
+  ];
+
+  const summaryCards = [
+    {
+      label: 'Sales Booked',
+      value: fmtNum(data?.salesCount ?? 0),
+      icon: Zap,
+      color: 'text-amber-400',
+      bg: 'bg-amber-400/10',
+      helperText: 'Booked sales in the selected period',
       isSnapshot: false,
     },
     {
       label: 'Active Sales',
       value: fmtNum(data?.activeSales ?? 0),
-      icon: Zap,
-      color: 'text-amber-400',
-      bg: 'bg-amber-400/10',
-      current: 0,
-      previous: 0,
-      isMoney: false,
-      isSnapshot: true, // snapshot metric, not period-filtered
-    },
-  ];
-
-  const invoiceCards = [
-    {
-      label: 'Overdue Invoices',
-      count: data?.invoiceSummary?.overdue?.count ?? 0,
-      total: data?.invoiceSummary?.overdue?.total ?? 0,
-      icon: AlertTriangle,
-      color: 'text-red-400',
-      bg: 'bg-red-400/10',
+      icon: Activity,
+      color: 'text-blue-300',
+      bg: 'bg-blue-300/10',
+      helperText: 'Current active lifecycle status',
       isSnapshot: true,
     },
     {
-      label: 'Unpaid (Upcoming)',
-      count: data?.invoiceSummary?.unpaid?.count ?? 0,
-      total: data?.invoiceSummary?.unpaid?.total ?? 0,
+      label: 'Outstanding Receivables',
+      value: fmt(data?.receivablesSummary?.outstanding?.total ?? 0),
+      count: data?.receivablesSummary?.outstanding?.count ?? 0,
       icon: Clock,
       color: 'text-amber-400',
       bg: 'bg-amber-400/10',
+      helperText: 'Open invoice balance across unpaid and overdue invoices',
       isSnapshot: true,
     },
     {
-      label: 'Collected in Period',
-      count: data?.invoiceSummary?.paidThisMonth?.count ?? 0,
-      total: data?.invoiceSummary?.paidThisMonth?.total ?? 0,
-      icon: CheckCircle2,
-      color: 'text-emerald-400',
-      bg: 'bg-emerald-400/10',
-      isSnapshot: false,
+      label: 'Overdue Invoices',
+      value: fmt(data?.receivablesSummary?.overdue?.total ?? 0),
+      count: data?.receivablesSummary?.overdue?.count ?? 0,
+      icon: AlertTriangle,
+      color: 'text-red-400',
+      bg: 'bg-red-400/10',
+      helperText: 'Invoices past due and still unpaid',
+      isSnapshot: true,
     },
   ];
 
@@ -682,29 +697,27 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="space-y-1">
                 <div className="text-2xl font-bold">{kpi.value}</div>
-                {hasComparison && kpi.current !== 0 && kpi.previous !== 0 && (
+                {hasComparison && !kpi.isSnapshot && (
                   <DeltaBadge
                     current={kpi.current}
                     previous={kpi.previous}
                     isMoney={kpi.isMoney}
                   />
                 )}
-                {!hasComparison && kpi.isSnapshot && (
-                  <p className="text-xs text-muted-foreground/60">Current state</p>
-                )}
+                <p className="text-xs text-muted-foreground/60">{kpi.helperText}</p>
               </CardContent>
             </Card>
           </motion.div>
         ))}
       </div>
 
-      {/* Invoice Summary */}
+      {/* Snapshot Summary */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Invoice & Payments
+          Snapshot & Receivables
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {invoiceCards.map((card, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {summaryCards.map((card, i) => (
             <motion.div
               key={card.label}
               initial={{ opacity: 0, y: 16 }}
@@ -726,10 +739,13 @@ export default function DashboardPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{fmt(card.total)}</div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {card.count} invoice{card.count !== 1 ? 's' : ''}
-                  </p>
+                  <div className="text-2xl font-bold">{card.value}</div>
+                  {typeof card.count === 'number' ? (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {card.count} item{card.count !== 1 ? 's' : ''}
+                    </p>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground/60 mt-1">{card.helperText}</p>
                 </CardContent>
               </Card>
             </motion.div>

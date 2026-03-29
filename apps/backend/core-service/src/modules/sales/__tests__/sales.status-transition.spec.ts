@@ -1,10 +1,11 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import { ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { PaymentPlanType, SaleStatus, UserRole } from '@sentra-core/types';
-import { CacheService } from '../../../common';
-import { AuthorizeNetService } from '../../authorize-net';
-import { TeamsService } from '../../teams';
+import { CacheService, StorageService } from '../../../common';
+import { PaymentGatewayFactory } from '../../payment-gateway';
+import { ScopeService } from '../../scope/scope.service';
 import { UpdateSaleDto } from '../dto';
 import { SalesNotificationService } from '../sales-notification.service';
 import { SalesService } from '../sales.service';
@@ -65,7 +66,7 @@ describe('SalesService status transitions', () => {
       providers: [
         SalesService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: AuthorizeNetService, useValue: {} },
+        { provide: PaymentGatewayFactory, useValue: { resolve: jest.fn() } },
         {
           provide: CacheService,
           useValue: {
@@ -76,7 +77,8 @@ describe('SalesService status transitions', () => {
             hashQuery: jest.fn<string, [Record<string, unknown>]>().mockReturnValue('hash'),
           },
         },
-        { provide: TeamsService, useValue: { getMemberIds: jest.fn().mockResolvedValue([]) } },
+        { provide: ScopeService, useValue: { getUserScope: jest.fn() } },
+        { provide: StorageService, useValue: { buildUrl: jest.fn((value) => value) } },
         {
           provide: SalesNotificationService,
           useValue: {
@@ -84,6 +86,7 @@ describe('SalesService status transitions', () => {
             resolveRecipientsByRole: jest.fn().mockResolvedValue([]),
           },
         },
+        { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: {} },
       ],
     }).compile();
 

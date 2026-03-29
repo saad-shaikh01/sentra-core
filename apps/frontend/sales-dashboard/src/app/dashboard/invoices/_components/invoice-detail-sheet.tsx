@@ -77,7 +77,12 @@ export function InvoiceDetailSheet({ invoiceId, onClose }: InvoiceDetailSheetPro
             <InfoCard label="Invoice #" value={<span className="text-sm font-mono">{invoice.invoiceNumber}</span>} />
             <InfoCard label="Status" value={<StatusBadge status={invoice.status} />} />
             <InfoCard label="Amount" value={<span className="text-sm font-bold">${invoice.amount}</span>} />
+            <InfoCard label="Invoice Date" value={<span className="text-sm">{new Date(invoice.invoiceDate).toLocaleDateString()}</span>} />
             <InfoCard label="Due Date" value={<span className="text-sm">{new Date(invoice.dueDate).toLocaleDateString()}</span>} />
+            <InfoCard label="Paid Date" value={<span className="text-sm">{invoice.paidAt ? new Date(invoice.paidAt).toLocaleDateString() : 'Not paid yet'}</span>} />
+            {invoice.sale ? (
+              <InfoCard label="Sale Total" value={<span className="text-sm font-medium">${invoice.sale.totalAmount}</span>} />
+            ) : null}
           </div>
 
           {invoice.notes && (
