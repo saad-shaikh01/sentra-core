@@ -48,6 +48,8 @@ import {
   AlertCircle,
   ArrowRightLeft,
   ClipboardList,
+  ChevronDown,
+  ChevronRight,
   GitBranch,
   Mail,
   MessageSquare,
@@ -231,6 +233,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const [teamId, setTeamId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt?: string } | null>(null);
   const [addCollabUserId, setAddCollabUserId] = useState('');
+  const [isSignupSubmissionOpen, setIsSignupSubmissionOpen] = useState(false);
 
   const claimLead = useClaimLead();
   const unclaimLead = useUnclaimLead();
@@ -261,6 +264,10 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   useEffect(() => {
     setTeamId(lead?.teamId ?? null);
   }, [lead?.teamId]);
+
+  useEffect(() => {
+    setIsSignupSubmissionOpen(false);
+  }, [lead?.id]);
 
   const memberMap = useMemo(() => {
     return new Map((members ?? []).map((member) => [member.id, member]));
@@ -423,40 +430,55 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
                 {signupSubmissionData && (
                   <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Signup Submission</h3>
-                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                          {signupSubmissionData.submissionFields.length} extra field{signupSubmissionData.submissionFields.length === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Additional form fields captured from the signup campaign. Contact basics stay above to keep this section clean.
-                      </p>
-                    </div>
-
-                    {signupSubmissionData.submissionFields.length ? (
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {signupSubmissionData.submissionFields.map((field) => (
-                          <LeadDataFieldCard key={field.id} field={field} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No extra signup fields were captured for this lead.</p>
-                    )}
-
-                    {canViewSensitiveSignupMeta && signupSubmissionData.ipFields.length ? (
-                      <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">Admin Only</p>
-                          <h4 className="text-sm font-semibold text-foreground">Visitor IP Info</h4>
+                    <button
+                      type="button"
+                      className="flex w-full items-start justify-between gap-3 text-left"
+                      onClick={() => setIsSignupSubmissionOpen((current) => !current)}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {isSignupSubmissionOpen ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Signup Submission</h3>
                         </div>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          {signupSubmissionData.ipFields.map((field) => (
-                            <LeadDataFieldCard key={field.id} field={field} className="bg-black/10" />
-                          ))}
-                        </div>
+                        <p className="pl-6 text-sm text-muted-foreground">
+                          Additional form fields captured from the signup campaign. Contact basics stay above to keep this section clean.
+                        </p>
                       </div>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {signupSubmissionData.submissionFields.length} extra field{signupSubmissionData.submissionFields.length === 1 ? '' : 's'}
+                      </span>
+                    </button>
+
+                    {isSignupSubmissionOpen ? (
+                      <>
+                        {signupSubmissionData.submissionFields.length ? (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {signupSubmissionData.submissionFields.map((field) => (
+                              <LeadDataFieldCard key={field.id} field={field} />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No extra signup fields were captured for this lead.</p>
+                        )}
+
+                        {canViewSensitiveSignupMeta && signupSubmissionData.ipFields.length ? (
+                          <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">Admin Only</p>
+                              <h4 className="text-sm font-semibold text-foreground">Visitor IP Info</h4>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              {signupSubmissionData.ipFields.map((field) => (
+                                <LeadDataFieldCard key={field.id} field={field} className="bg-black/10" />
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 )}
@@ -1264,12 +1286,9 @@ function extractSignupSubmissionData(lead: ILeadDetail): {
     });
   };
 
-  addField('form-label', 'Form Label', data.label, { allowDuplicateValue: true });
-  addField('collector', 'Collector', payloadData?.collector, { allowDuplicateValue: true });
-  addField('webhook-id', 'Webhook ID', data.webhookId, { allowDuplicateValue: true });
   addField('website', 'Website', lead.website ?? payload?.website ?? rawFormData?.website ?? rawFormData?.fullPageUrl);
 
-  const preferredRawKeys = ['companyName', 'goal', 'message', 'manuscript_status', 'word_count', 'fullPageUrl'];
+  const preferredRawKeys = ['goal', 'message', 'manuscript_status', 'word_count', 'fullPageUrl'];
 
   preferredRawKeys.forEach((key) => {
     addField(
@@ -1280,7 +1299,7 @@ function extractSignupSubmissionData(lead: ILeadDetail): {
   });
 
   collectScalarRecordFields(rawFormData, {
-    excludeKeys: new Set(['name', 'email', 'phone', 'website', 'title', 'ipInfo', ...preferredRawKeys]),
+    excludeKeys: new Set(['name', 'email', 'phone', 'website', 'title', 'ipInfo', 'companyName', ...preferredRawKeys]),
     addField: (key, value) => addField(`raw-${key}`, humanizeFieldLabel(key), value),
   });
 
@@ -1290,7 +1309,7 @@ function extractSignupSubmissionData(lead: ILeadDetail): {
   });
 
   collectScalarRecordFields(payload, {
-    excludeKeys: new Set(['data', 'name', 'email', 'phone', 'title', 'website']),
+    excludeKeys: new Set(['data', 'name', 'email', 'phone', 'title', 'website', 'companyName']),
     addField: (key, value) => addField(`payload-${key}`, humanizeFieldLabel(key), value),
   });
 
