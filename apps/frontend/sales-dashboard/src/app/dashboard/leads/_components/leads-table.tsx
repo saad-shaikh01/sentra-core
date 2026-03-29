@@ -82,6 +82,7 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
         key: 'actions',
         header: '',
         className: 'w-16',
+        sticky: 'right',
         render: (lead) => (
           <Button
             variant="ghost"
@@ -113,6 +114,9 @@ export function LeadsTable({ leads, isLoading, isError, onRowClick }: LeadsTable
       keyExtractor={(lead) => lead.id}
       emptyTitle="No leads yet"
       emptyDescription="Create your first lead or switch to Kanban view."
+      stickyHeader
+      showDesktopScrollControls
+      desktopScrollerStyle={{ maxHeight: 'clamp(24rem, calc(100dvh - 24rem), 42rem)' }}
       renderMobileRow={(lead: EnrichedLead) => (
         <div
           onClick={() => onRowClick(lead)}

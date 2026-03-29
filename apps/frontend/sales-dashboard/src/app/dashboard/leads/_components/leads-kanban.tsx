@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ILead, LeadStatus, LEAD_STATUS_TRANSITIONS } from '@sentra-core/types';
-import { LeadsKanbanCard } from './leads-kanban-card';
-import { useChangeLeadStatus } from '@/hooks/use-leads';
-import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,7 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { toast } from '@/hooks/use-toast';
+import { useChangeLeadStatus } from '@/hooks/use-leads';
 import { cn } from '@/lib/utils';
+import { LeadsKanbanCard } from './leads-kanban-card';
 
 const COLUMNS: { status: LeadStatus; label: string }[] = [
   { status: LeadStatus.NEW, label: 'New' },
@@ -40,6 +41,10 @@ const COLUMN_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.INVALID]: 'border-t-rose-500/60',
 };
 
+const boardViewportStyle = {
+  height: 'clamp(26rem, calc(100dvh - 22rem), 44rem)',
+} satisfies CSSProperties;
+
 interface LeadsKanbanProps {
   leads: Array<ILead & { brandName?: string; assigneeName?: string }>;
   onLeadClick: (lead: ILead) => void;
@@ -51,36 +56,107 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
   const [followUpDate, setFollowUpDate] = useState<string>('');
   const [pendingLost, setPendingLost] = useState<{ leadId: string } | null>(null);
   const [lostReason, setLostReason] = useState<string>('');
-  const minFollowUpDate = new Date().toISOString().split('T')[0];
-
   const [activeTab, setActiveTab] = useState<LeadStatus>(LeadStatus.NEW);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [boardScrollState, setBoardScrollState] = useState({
+    hasOverflow: false,
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+
+  const minFollowUpDate = new Date().toISOString().split('T')[0];
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  useEffect(() => {
+    const updateBoardScrollState = () => {
+      const container = scrollContainerRef.current;
+
+      if (!container) {
+        return;
+      }
+
+      const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
+      const hasOverflow = maxScrollLeft > 8;
+
+      setBoardScrollState({
+        hasOverflow,
+        canScrollLeft: container.scrollLeft > 8,
+        canScrollRight: container.scrollLeft < maxScrollLeft - 8,
+      });
+    };
+
+    updateBoardScrollState();
+
+    const container = scrollContainerRef.current;
+    container?.addEventListener('scroll', updateBoardScrollState, { passive: true });
+    window.addEventListener('resize', updateBoardScrollState);
+
+    return () => {
+      container?.removeEventListener('scroll', updateBoardScrollState);
+      window.removeEventListener('resize', updateBoardScrollState);
+    };
+  }, [leads.length]);
+
   const scrollToColumn = (status: LeadStatus) => {
     setActiveTab(status);
+
     const element = document.getElementById(`kanban-col-${status}`);
-    if (element && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      const targetScroll = element.offsetLeft - 16; // 16 is padding
-      container.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    const container = scrollContainerRef.current;
+
+    if (!element || !container) {
+      return;
     }
+
+    const targetScroll = element.offsetLeft - 16;
+    container.scrollTo({ left: targetScroll, behavior: 'smooth' });
+  };
+
+  const scrollBoard = (direction: 'left' | 'right') => {
+    const container = scrollContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const offset = Math.max(container.clientWidth * 0.85, 280);
+    container.scrollBy({
+      left: direction === 'left' ? -offset : offset,
+      behavior: 'smooth',
+    });
   };
 
   const handleScroll = () => {
-    if (!isMobile || !scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
-    const scrollLeft = container.scrollLeft;
-    const itemWidth = container.clientWidth - 32; // Approx width of one col including gaps
 
+    if (!container) {
+      return;
+    }
+
+    const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
+    const hasOverflow = maxScrollLeft > 8;
+
+    setBoardScrollState({
+      hasOverflow,
+      canScrollLeft: container.scrollLeft > 8,
+      canScrollRight: container.scrollLeft < maxScrollLeft - 8,
+    });
+
+    if (!isMobile) {
+      return;
+    }
+
+    const scrollLeft = container.scrollLeft;
+    const itemWidth = container.clientWidth - 32;
     const index = Math.round(scrollLeft / itemWidth);
+
     if (COLUMNS[index]) {
       setActiveTab(COLUMNS[index].status);
     }
@@ -88,11 +164,17 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
 
   const onDragEnd = (result: DropResult) => {
     const { destination, draggableId, source } = result;
-    if (!destination || destination.droppableId === source.droppableId) return;
+
+    if (!destination || destination.droppableId === source.droppableId) {
+      return;
+    }
 
     const newStatus = destination.droppableId as LeadStatus;
-    const lead = leads.find((l) => l.id === draggableId);
-    if (!lead) return;
+    const lead = leads.find((item) => item.id === draggableId);
+
+    if (!lead) {
+      return;
+    }
 
     const allowed = LEAD_STATUS_TRANSITIONS[lead.status];
     if (!allowed.includes(newStatus)) {
@@ -115,26 +197,28 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
 
   return (
     <>
-      {/* Mobile Column Selector */}
-      <div className="md:hidden flex overflow-x-auto no-scrollbar gap-1 mb-4 border-b border-white/5 pb-2 -mx-4 px-4 sticky top-20 bg-black/20 backdrop-blur-md z-10">
+      <div className="md:hidden sticky top-20 z-10 mb-4 flex gap-1 overflow-x-auto border-b border-white/5 bg-black/20 px-4 pb-2 backdrop-blur-md no-scrollbar -mx-4">
         {COLUMNS.map(({ status, label }) => {
-          const count = leads.filter((l) => l.status === status).length;
+          const count = leads.filter((lead) => lead.status === status).length;
+
           return (
             <button
               key={status}
               onClick={() => scrollToColumn(status)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all",
+                'flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold whitespace-nowrap transition-all',
                 activeTab === status
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
               )}
             >
               {label}
-              <span className={cn(
-                "rounded-full px-1.5 py-0.5 text-[10px]",
-                activeTab === status ? "bg-white/20" : "bg-white/5"
-              )}>
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[10px]',
+                  activeTab === status ? 'bg-white/20' : 'bg-white/5'
+                )}
+              >
                 {count}
               </span>
             </button>
@@ -142,75 +226,139 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
         })}
       </div>
 
+      {boardScrollState.hasOverflow && (
+        <div className="mb-4 hidden items-center justify-end gap-2 md:flex">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => scrollBoard('left')}
+            disabled={!boardScrollState.canScrollLeft}
+            className="h-9 w-9 rounded-full"
+            aria-label="Scroll kanban left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => scrollBoard('right')}
+            disabled={!boardScrollState.canScrollRight}
+            className="h-9 w-9 rounded-full"
+            aria-label="Scroll kanban right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       <DragDropContext onDragEnd={onDragEnd}>
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          className={cn(
-            "flex gap-6 overflow-x-auto pb-8 -mx-4 px-4 md:mx-0 md:px-0",
-            "snap-x snap-mandatory md:snap-none",
-            "scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20 transition-all"
-          )}
-          style={{
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent'
-          }}
-        >
-          {COLUMNS.map(({ status, label }) => {
-            const columnLeads = leads.filter((l) => l.status === status);
-            return (
+        <div className="relative">
+          {boardScrollState.hasOverflow && (
+            <>
               <div
-                key={status}
-                id={`kanban-col-${status}`}
-                className="flex flex-col min-h-[600px] w-[85vw] md:w-[340px] shrink-0 snap-center"
-              >
-                <div className={cn(
-                  "rounded-t-3xl border border-b-0 border-white/10 px-5 py-5 bg-white/[0.04] backdrop-blur-xl",
-                  COLUMN_COLORS[status],
-                  "border-t-[6px]"
-                )}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[12px] font-black uppercase tracking-[0.25em] text-foreground/80">{label}</span>
-                      <span className="text-[11px] font-bold bg-white/10 text-muted-foreground rounded-lg px-2.5 py-1 min-w-[24px] text-center backdrop-blur-md">
-                        {columnLeads.length}
-                      </span>
-                    </div>
-                    <div className="h-2 w-2 rounded-full bg-white/10 animate-pulse" />
-                  </div>
-                </div>
-                <Droppable droppableId={status} isDropDisabled={isMobile}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={cn(
-                        "flex-1 rounded-b-3xl border border-white/10 p-4 space-y-4 transition-all duration-500 ease-out",
-                        snapshot.isDraggingOver ? "bg-white/[0.08] border-white/30 shadow-inner" : "bg-white/[0.02]"
-                      )}
-                    >
-                      <div className="flex flex-col gap-4">
-                        {columnLeads.map((lead, i) => (
-                          <LeadsKanbanCard
-                            key={lead.id}
-                            lead={lead}
-                            index={i}
-                            onClick={onLeadClick}
-                            isDragDisabled={isMobile}
-                          />
-                        ))}
+                className={cn(
+                  'pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-16 bg-gradient-to-r from-[#09090d] to-transparent transition-opacity duration-200 md:block',
+                  boardScrollState.canScrollLeft ? 'opacity-100' : 'opacity-0'
+                )}
+              />
+              <div
+                className={cn(
+                  'pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-gradient-to-l from-[#09090d] to-transparent transition-opacity duration-200 md:block',
+                  boardScrollState.canScrollRight ? 'opacity-100' : 'opacity-0'
+                )}
+              />
+            </>
+          )}
+
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className={cn(
+              'flex gap-6 overflow-x-auto overflow-y-hidden pb-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10 transition-all hover:scrollbar-thumb-white/20 -mx-4 px-4 md:mx-0 md:px-0',
+              'snap-x snap-mandatory md:snap-none'
+            )}
+            style={{
+              ...boardViewportStyle,
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent',
+            }}
+          >
+            {COLUMNS.map(({ status, label }) => {
+              const columnLeads = leads.filter((lead) => lead.status === status);
+
+              return (
+                <div
+                  key={status}
+                  id={`kanban-col-${status}`}
+                  className="flex h-full w-[85vw] shrink-0 snap-center flex-col md:w-[340px]"
+                >
+                  <div
+                    className={cn(
+                      'rounded-t-3xl border border-b-0 border-white/10 bg-white/[0.04] px-5 py-5 backdrop-blur-xl',
+                      COLUMN_COLORS[status],
+                      'border-t-[6px]'
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[12px] font-black uppercase tracking-[0.25em] text-foreground/80">
+                          {label}
+                        </span>
+                        <span className="min-w-[24px] rounded-lg bg-white/10 px-2.5 py-1 text-center text-[11px] font-bold text-muted-foreground backdrop-blur-md">
+                          {columnLeads.length}
+                        </span>
                       </div>
-                      {provided.placeholder}
+                      <div className="h-2 w-2 rounded-full bg-white/10 animate-pulse" />
                     </div>
-                  )}
-                </Droppable>
-              </div>
-            );
-          })}
+                  </div>
+
+                  <Droppable droppableId={status} isDropDisabled={isMobile}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={cn(
+                          'flex-1 overflow-y-auto overscroll-contain rounded-b-3xl border border-white/10 p-4 transition-all duration-500 ease-out scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10',
+                          snapshot.isDraggingOver ? 'border-white/30 bg-white/[0.08] shadow-inner' : 'bg-white/[0.02]'
+                        )}
+                        style={{
+                          scrollbarWidth: 'thin',
+                          scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent',
+                        }}
+                      >
+                        <div className="flex flex-col gap-4 pr-1">
+                          {columnLeads.map((lead, index) => (
+                            <LeadsKanbanCard
+                              key={lead.id}
+                              lead={lead}
+                              index={index}
+                              onClick={onLeadClick}
+                              isDragDisabled={isMobile}
+                            />
+                          ))}
+                        </div>
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </DragDropContext>
 
-      <Dialog open={pendingFollowUp !== null} onOpenChange={(open) => { if (!open) setPendingFollowUp(null); }}>
+      <Dialog
+        open={pendingFollowUp !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingFollowUp(null);
+            setFollowUpDate('');
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Set Follow-Up Date</DialogTitle>
@@ -251,12 +399,15 @@ export function LeadsKanban({ leads, onLeadClick }: LeadsKanbanProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={pendingLost !== null} onOpenChange={(open) => {
-        if (!open) {
-          setPendingLost(null);
-          setLostReason('');
-        }
-      }}>
+      <Dialog
+        open={pendingLost !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingLost(null);
+            setLostReason('');
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Reason for Closing Lost</DialogTitle>

@@ -38,7 +38,9 @@ import {
   LeadActivityType,
   LEAD_STATUS_TRANSITIONS,
   LeadStatus,
+  LeadType,
   SaleType,
+  UserRole,
 } from '@sentra-core/types';
 import { ConvertLeadModal } from './convert-lead-modal';
 import { SaleFormModal } from '@/app/dashboard/sales/_components/sale-form-modal';
@@ -47,7 +49,6 @@ import {
   ArrowRightLeft,
   ClipboardList,
   GitBranch,
-  Globe,
   Mail,
   MessageSquare,
   Pencil,
@@ -62,6 +63,7 @@ import {
   X,
 } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
+import { cn } from '@/lib/utils';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
 import { TeamAssignmentSelect } from './team-assignment-select';
 import { LeadNoteEditor } from './lead-note-editor';
@@ -86,6 +88,14 @@ type ActivityMeta = {
   details?: Array<{ label: string; value: string }>;
   accentClassName?: string;
   icon: React.ReactNode;
+};
+
+type LeadDataField = {
+  id: string;
+  label: string;
+  value: string;
+  href?: string;
+  fullWidth?: boolean;
 };
 
 const tabConfig: Array<{ key: DetailTab; label: string; icon?: React.ReactNode }> = [
@@ -264,9 +274,15 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
     return (activities ?? []).filter((activity) => activity.type !== LeadActivityType.NOTE);
   }, [activities]);
 
+  const signupSubmissionData = useMemo(() => {
+    return lead ? extractSignupSubmissionData(lead) : null;
+  }, [lead]);
+
   const lastAssignmentActivity = useMemo(() => {
     return auditItems.find((activity) => activity.type === LeadActivityType.ASSIGNMENT_CHANGE);
   }, [auditItems]);
+
+  const canViewSensitiveSignupMeta = user?.role === UserRole.ADMIN || user?.role === UserRole.OWNER;
 
   const closeFollowUpDialog = () => {
     setFollowUpDialogOpen(false);
@@ -372,28 +388,14 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <ContactRow icon={<User className="h-4 w-4" />} toneClassName="bg-blue-500/10 text-blue-400" label="Name" value={lead.name ?? '-'} />
-                      <ContactRow icon={<Mail className="h-4 w-4" />} toneClassName="bg-emerald-500/10 text-emerald-400" label="Email" value={lead.email ?? '-'} />
                       <ContactRow icon={<Phone className="h-4 w-4" />} toneClassName="bg-amber-500/10 text-amber-400" label="Phone" value={lead.phone ?? '-'} />
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
-                          <Globe className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium uppercase text-muted-foreground">Website</p>
-                          {lead.website ? (
-                            <a
-                              href={lead.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block max-w-[150px] truncate text-sm font-medium text-primary hover:underline"
-                            >
-                              {lead.website.replace(/^https?:\/\//, '')}
-                            </a>
-                          ) : (
-                            <p className="text-sm font-medium">-</p>
-                          )}
-                        </div>
-                      </div>
+                      <ContactRow
+                        icon={<Mail className="h-4 w-4" />}
+                        toneClassName="bg-emerald-500/10 text-emerald-400"
+                        label="Email"
+                        value={lead.email ?? '-'}
+                        className="sm:col-span-2"
+                      />
                     </div>
                   </div>
                 </div>
@@ -418,6 +420,46 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
                 {lead.lostReason ? (
                   <InfoCard label="Lost Reason" value={<span className="text-sm">{lead.lostReason}</span>} />
                 ) : null}
+
+                {signupSubmissionData && (
+                  <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Signup Submission</h3>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                          {signupSubmissionData.submissionFields.length} extra field{signupSubmissionData.submissionFields.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Additional form fields captured from the signup campaign. Contact basics stay above to keep this section clean.
+                      </p>
+                    </div>
+
+                    {signupSubmissionData.submissionFields.length ? (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {signupSubmissionData.submissionFields.map((field) => (
+                          <LeadDataFieldCard key={field.id} field={field} />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No extra signup fields were captured for this lead.</p>
+                    )}
+
+                    {canViewSensitiveSignupMeta && signupSubmissionData.ipFields.length ? (
+                      <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">Admin Only</p>
+                          <h4 className="text-sm font-semibold text-foreground">Visitor IP Info</h4>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {signupSubmissionData.ipFields.map((field) => (
+                            <LeadDataFieldCard key={field.id} field={field} className="bg-black/10" />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {allowedTransitions.length > 0 ? (
                   <div>
@@ -924,14 +966,16 @@ function ContactRow({
   toneClassName,
   label,
   value,
+  className,
 }: {
   icon: React.ReactNode;
   toneClassName: string;
   label: string;
   value: string;
+  className?: string;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className={cn('flex items-center gap-2.5', className)}>
       <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClassName}`}>
         {icon}
       </div>
@@ -948,6 +992,32 @@ function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       {value}
+    </div>
+  );
+}
+
+function LeadDataFieldCard({
+  field,
+  className,
+}: {
+  field: LeadDataField;
+  className?: string;
+}) {
+  return (
+    <div className={cn('rounded-xl border border-white/10 bg-white/[0.03] p-3', field.fullWidth && 'sm:col-span-2', className)}>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{field.label}</p>
+      {field.href ? (
+        <a
+          href={field.href}
+          target="_blank"
+          rel="noreferrer"
+          className="block break-all text-sm font-medium text-primary hover:underline"
+        >
+          {field.value}
+        </a>
+      ) : (
+        <p className="whitespace-pre-wrap break-words text-sm font-medium text-foreground/90">{field.value}</p>
+      )}
     </div>
   );
 }
@@ -1134,6 +1204,212 @@ function compactDetails(
   return details
     .filter((detail): detail is { label: string; value: string } => Boolean(detail.value))
     .map((detail) => ({ label: detail.label, value: detail.value }));
+}
+
+function extractSignupSubmissionData(lead: ILeadDetail): {
+  submissionFields: LeadDataField[];
+  ipFields: LeadDataField[];
+} | null {
+  if (lead.leadType !== LeadType.SIGNUP) {
+    return null;
+  }
+
+  const data = asRecord(lead.data);
+  if (!data) {
+    return null;
+  }
+
+  const payload = asRecord(data.payload);
+  const payloadData = asRecord(payload?.data);
+  const rawFormData = asRecord(payloadData?.rawFormData);
+  const ipInfo = asRecord(rawFormData?.ipInfo);
+
+  const excludedLeadValues = new Set(
+    [lead.name, lead.email, lead.phone, lead.title]
+      .map(normalizeComparableValue)
+      .filter(Boolean)
+  );
+
+  const fieldMap = new Map<string, LeadDataField>();
+  const addedSubmissionValues = new Set<string>();
+  const addField = (
+    id: string,
+    label: string,
+    value: unknown,
+    options?: { allowDuplicateValue?: boolean }
+  ) => {
+    const displayValue = toDisplayValue(value);
+
+    if (!displayValue || fieldMap.has(id)) {
+      return;
+    }
+
+    const normalizedValue = normalizeComparableValue(displayValue);
+
+    if (!options?.allowDuplicateValue && excludedLeadValues.has(normalizedValue)) {
+      return;
+    }
+
+    if (addedSubmissionValues.has(normalizedValue)) {
+      return;
+    }
+
+    addedSubmissionValues.add(normalizedValue);
+    fieldMap.set(id, {
+      id,
+      label,
+      value: displayValue,
+      href: isLikelyUrl(displayValue) ? displayValue : undefined,
+      fullWidth: displayValue.length > 90 || displayValue.includes('\n'),
+    });
+  };
+
+  addField('form-label', 'Form Label', data.label, { allowDuplicateValue: true });
+  addField('collector', 'Collector', payloadData?.collector, { allowDuplicateValue: true });
+  addField('webhook-id', 'Webhook ID', data.webhookId, { allowDuplicateValue: true });
+  addField('website', 'Website', lead.website ?? payload?.website ?? rawFormData?.website ?? rawFormData?.fullPageUrl);
+
+  const preferredRawKeys = ['companyName', 'goal', 'message', 'manuscript_status', 'word_count', 'fullPageUrl'];
+
+  preferredRawKeys.forEach((key) => {
+    addField(
+      `raw-${key}`,
+      humanizeFieldLabel(key),
+      rawFormData?.[key] ?? payloadData?.[key] ?? payload?.[key]
+    );
+  });
+
+  collectScalarRecordFields(rawFormData, {
+    excludeKeys: new Set(['name', 'email', 'phone', 'website', 'title', 'ipInfo', ...preferredRawKeys]),
+    addField: (key, value) => addField(`raw-${key}`, humanizeFieldLabel(key), value),
+  });
+
+  collectScalarRecordFields(payloadData, {
+    excludeKeys: new Set(['rawFormData', 'collector', 'companyName']),
+    addField: (key, value) => addField(`payload-data-${key}`, humanizeFieldLabel(key), value),
+  });
+
+  collectScalarRecordFields(payload, {
+    excludeKeys: new Set(['data', 'name', 'email', 'phone', 'title', 'website']),
+    addField: (key, value) => addField(`payload-${key}`, humanizeFieldLabel(key), value),
+  });
+
+  collectScalarRecordFields(data, {
+    excludeKeys: new Set(['payload', 'label', 'webhookId']),
+    addField: (key, value) => addField(`data-${key}`, humanizeFieldLabel(key), value),
+  });
+
+  const ipFieldMap = new Map<string, LeadDataField>();
+  const addIpField = (key: string, value: unknown) => {
+    const displayValue = toDisplayValue(value);
+
+    if (!displayValue || ipFieldMap.has(key)) {
+      return;
+    }
+
+    ipFieldMap.set(key, {
+      id: `ip-${key}`,
+      label: humanizeFieldLabel(key),
+      value: displayValue,
+      fullWidth: displayValue.length > 90 || displayValue.includes('\n'),
+    });
+  };
+
+  ['ip', 'city', 'region', 'country', 'postal', 'org', 'timezone', 'loc'].forEach((key) => {
+    addIpField(key, ipInfo?.[key]);
+  });
+
+  collectScalarRecordFields(ipInfo, {
+    excludeKeys: new Set(['ip', 'city', 'region', 'country', 'postal', 'org', 'timezone', 'loc']),
+    addField: addIpField,
+  });
+
+  if (!fieldMap.size && !ipFieldMap.size) {
+    return null;
+  }
+
+  return {
+    submissionFields: Array.from(fieldMap.values()),
+    ipFields: Array.from(ipFieldMap.values()),
+  };
+}
+
+function collectScalarRecordFields(
+  source: Record<string, unknown> | undefined,
+  options: {
+    excludeKeys?: Set<string>;
+    addField: (key: string, value: unknown) => void;
+  },
+) {
+  if (!source) {
+    return;
+  }
+
+  Object.entries(source).forEach(([key, value]) => {
+    if (options.excludeKeys?.has(key) || asRecord(value)) {
+      return;
+    }
+
+    options.addField(key, value);
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return undefined;
+}
+
+function toDisplayValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    const items = value.map(toDisplayValue).filter(Boolean);
+    return items.length ? items.join(', ') : undefined;
+  }
+
+  return undefined;
+}
+
+function normalizeComparableValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function isLikelyUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function humanizeFieldLabel(key: string): string {
+  const normalizedKey = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim();
+  const specialLabels: Record<string, string> = {
+    fullPageUrl: 'Page URL',
+    word_count: 'Word Count',
+    manuscript_status: 'Manuscript Status',
+    companyName: 'Company Name',
+    webhookId: 'Webhook ID',
+    ip: 'IP Address',
+    org: 'Network Provider',
+    loc: 'Coordinates',
+  };
+
+  if (specialLabels[key]) {
+    return specialLabels[key];
+  }
+
+  return normalizedKey
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function readString(value: unknown): string | undefined {
