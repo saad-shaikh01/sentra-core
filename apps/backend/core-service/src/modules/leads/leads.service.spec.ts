@@ -5,7 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
-import { CacheService, PermissionsService, StorageService, StorageService } from '../../common';
+import { CacheService, PermissionsService, StorageService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 import { TeamBrandHelper } from '../scope/team-brand.helper';
 import { LeadsService } from './leads.service';
@@ -121,7 +121,6 @@ describe('LeadsService', () => {
     brand: {
       findFirst: jest.Mock;
       findUnique: jest.Mock;
-      findUnique: jest.Mock;
     };
     lead: {
       create: jest.Mock;
@@ -136,7 +135,6 @@ describe('LeadsService', () => {
     };
     team: {
       findFirst: jest.Mock;
-      findMany: jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
@@ -209,7 +207,6 @@ describe('LeadsService', () => {
       },
       team: {
         findFirst: jest.fn(),
-        findMany: jest.fn().mockResolvedValue([]),
       },
       user: {
         findUnique: jest.fn(),
@@ -255,10 +252,6 @@ describe('LeadsService', () => {
       }),
     };
 
-    storageServiceMock = {
-      buildUrl: jest.fn((value?: string | null) => value ?? ''),
-    };
-
     configServiceMock = {
       get: jest.fn().mockReturnValue(undefined),
     };
@@ -281,7 +274,6 @@ describe('LeadsService', () => {
         { provide: PermissionsService, useValue: permissionsServiceMock },
         { provide: StorageService, useValue: storageServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
-        { provide: StorageService, useValue: storageServiceMock },
         { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: notifQueueMock },
       ],
     }).compile();
@@ -473,7 +465,7 @@ describe('LeadsService', () => {
 
     await flushAsyncWork();
 
-    expect(prismaMock.teamMember.findMany).not.toHaveBeenCalled();
+    expect(teamBrandHelperMock.resolveTeamForBrand).not.toHaveBeenCalled();
     expect(permissionsServiceMock.getLegacyPermissionsForRole).not.toHaveBeenCalled();
     expect(permissionsServiceMock.matchesAnyPermission).not.toHaveBeenCalled();
     expect(permissionsServiceMock.userHasPermission).not.toHaveBeenCalled();
@@ -489,7 +481,7 @@ describe('LeadsService', () => {
     );
   });
 
-  it('TC-B0.2: create preserves an explicit team override when provided', async () => {
+  it('TC-B0.4: create preserves an explicit team override when provided', async () => {
     prismaMock.team.findFirst.mockResolvedValue({ id: 'team-manual' });
     prismaMock.lead.create.mockResolvedValue(
       makeLead({
@@ -792,8 +784,12 @@ describe('LeadsService', () => {
   });
 
   it('TC-B11: capture assigns the mapped team when the brand belongs to a team', async () => {
-    prismaMock.brand.findUnique.mockResolvedValue({ id: brandId, organizationId: orgId });
-    teamBrandHelperMock.resolveTeamForBrand.mockResolvedValue('team-brand');
+    prismaMock.brand.findUnique.mockResolvedValue({
+      id: brandId,
+      organizationId: orgId,
+      teamBrand: { teamId: 'team-brand' },
+    });
+    prismaMock.user.findMany.mockResolvedValue([{ id: adminId }]);
     prismaMock.lead.create.mockResolvedValue(
       makeLead({
         id: 'lead-captured',
@@ -808,7 +804,9 @@ describe('LeadsService', () => {
       email: 'webhook@example.com',
     });
 
-    expect(teamBrandHelperMock.resolveTeamForBrand).toHaveBeenCalledWith(brandId);
+    await flushAsyncWork();
+
+    expect(teamBrandHelperMock.resolveTeamForBrand).not.toHaveBeenCalled();
     expect(prismaMock.lead.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         brandId,
