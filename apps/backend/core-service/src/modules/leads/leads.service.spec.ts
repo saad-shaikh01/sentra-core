@@ -5,7 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { LeadSource, LeadStatus, LeadType, UserRole } from '@sentra-core/types';
-import { CacheService, PermissionsService } from '../../common';
+import { CacheService, PermissionsService, StorageService } from '../../common';
 import { ScopeService } from '../scope/scope.service';
 import { TeamBrandHelper } from '../scope/team-brand.helper';
 import { LeadsService } from './leads.service';
@@ -70,6 +70,7 @@ const otherUserId = 'user-2';
 const adminId = 'admin-1';
 const leadId = 'lead-1';
 const brandId = 'brand-1';
+const flushAsyncWork = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 function makeLead(overrides: Partial<LeadRecord> = {}): LeadRecord {
   return {
@@ -119,6 +120,7 @@ describe('LeadsService', () => {
   let prismaMock: {
     brand: {
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
     };
     lead: {
       create: jest.Mock;
@@ -133,6 +135,7 @@ describe('LeadsService', () => {
     };
     teamMember: {
       findFirst: jest.Mock;
+      findMany: jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
@@ -159,9 +162,14 @@ describe('LeadsService', () => {
   };
   let permissionsServiceMock: {
     userHasPermission: jest.Mock;
+    getLegacyPermissionsForRole: jest.Mock;
+    matchesAnyPermission: jest.Mock;
   };
   let configServiceMock: {
     get: jest.Mock;
+  };
+  let storageServiceMock: {
+    buildUrl: jest.Mock;
   };
   let transactionClient: TransactionClient;
 
@@ -183,6 +191,7 @@ describe('LeadsService', () => {
     prismaMock = {
       brand: {
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
       },
       lead: {
         create: jest.fn(),
@@ -197,6 +206,7 @@ describe('LeadsService', () => {
       },
       teamMember: {
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       user: {
         findUnique: jest.fn(),
@@ -231,10 +241,23 @@ describe('LeadsService', () => {
 
     permissionsServiceMock = {
       userHasPermission: jest.fn().mockResolvedValue(true),
+      getLegacyPermissionsForRole: jest.fn().mockReturnValue([]),
+      matchesAnyPermission: jest.fn((permissions: Iterable<string>, requiredPermission: string) => {
+        const [requiredApp] = requiredPermission.split(':');
+        return [...permissions].some((permission) =>
+          permission === '*:*:*' ||
+          permission === requiredPermission ||
+          permission === `${requiredApp}:*:*`,
+        );
+      }),
     };
 
     configServiceMock = {
       get: jest.fn().mockReturnValue(undefined),
+    };
+
+    storageServiceMock = {
+      buildUrl: jest.fn((value: string | null | undefined) => value ?? undefined),
     };
 
     notifQueueMock = {
@@ -250,6 +273,7 @@ describe('LeadsService', () => {
         { provide: TeamBrandHelper, useValue: teamBrandHelperMock },
         { provide: PermissionsService, useValue: permissionsServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
+        { provide: StorageService, useValue: storageServiceMock },
         { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: notifQueueMock },
       ],
     }).compile();
@@ -309,6 +333,151 @@ describe('LeadsService', () => {
     }));
     expect(result.assignedToId).toBe(otherUserId);
     expect(result.teamId).toBe('team-brand');
+  });
+
+  it('TC-B0.2: capture persists brand team mapping and notifies admins plus eligible signup team members', async () => {
+    prismaMock.brand.findUnique.mockResolvedValue({
+      id: brandId,
+      organizationId: orgId,
+      teamBrand: { teamId: 'team-signup' },
+    });
+    prismaMock.user.findMany
+      .mockResolvedValueOnce([{ id: adminId }])
+      .mockResolvedValueOnce([
+        {
+          id: 'frontsell-legacy',
+          role: UserRole.FRONTSELL_AGENT,
+          appRoles: [],
+        },
+        {
+          id: 'sales-manager-without-permission',
+          role: UserRole.SALES_MANAGER,
+          appRoles: [],
+        },
+        {
+          id: 'frontsell-explicit-off',
+          role: UserRole.FRONTSELL_AGENT,
+          appRoles: [
+            {
+              appRole: {
+                permissions: [{ permission: { key: 'sales:leads:view_own' } }],
+              },
+            },
+          ],
+        },
+        {
+          id: 'frontsell-explicit-on',
+          role: UserRole.FRONTSELL_AGENT,
+          appRoles: [
+            {
+              appRole: {
+                permissions: [{ permission: { key: 'sales:leads:notify_signup' } }],
+              },
+            },
+          ],
+        },
+      ]);
+    permissionsServiceMock.getLegacyPermissionsForRole.mockImplementation((role: string) =>
+      role === UserRole.FRONTSELL_AGENT ? ['sales:leads:notify_signup'] : [],
+    );
+    prismaMock.lead.create.mockResolvedValue(
+      makeLead({
+        id: 'lead-captured-signup',
+        assignedToId: null,
+        teamId: 'team-signup',
+        leadType: LeadType.SIGNUP,
+        source: LeadSource.PPC,
+      }),
+    );
+
+    const result = await service.capture({
+      brandId,
+      leadType: LeadType.SIGNUP,
+      source: LeadSource.PPC,
+      name: 'Signup Lead',
+    });
+
+    await flushAsyncWork();
+
+    expect(prismaMock.lead.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        brandId,
+        organizationId: orgId,
+        teamId: 'team-signup',
+        leadType: LeadType.SIGNUP,
+      }),
+    }));
+    expect(result).toEqual({
+      id: 'lead-captured-signup',
+      message: 'Lead captured successfully',
+    });
+    expect(notifQueueMock.add).toHaveBeenCalledTimes(2);
+    expect(notifQueueMock.add).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        organizationId: orgId,
+        recipientIds: [adminId],
+        type: 'LEAD_CREATED',
+      }),
+      expect.any(Object),
+    );
+    expect(notifQueueMock.add).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        organizationId: orgId,
+        recipientIds: ['frontsell-legacy', 'frontsell-explicit-on'],
+        type: 'LEAD_CREATED',
+        title: 'New Signup Lead',
+        body: 'A new signup lead "Test Lead" was captured for your team.',
+        data: expect.objectContaining({
+          leadId: 'lead-captured-signup',
+          trigger: 'signup_capture',
+          teamId: 'team-signup',
+        }),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('TC-B0.3: capture keeps non-signup notifications admin-only', async () => {
+    prismaMock.brand.findUnique.mockResolvedValue({
+      id: brandId,
+      organizationId: orgId,
+      teamBrand: { teamId: 'team-brand' },
+    });
+    prismaMock.user.findMany.mockResolvedValue([{ id: adminId }]);
+    prismaMock.lead.create.mockResolvedValue(
+      makeLead({
+        id: 'lead-captured-inbound',
+        assignedToId: null,
+        teamId: 'team-brand',
+        leadType: LeadType.INBOUND,
+      }),
+    );
+
+    await service.capture({
+      brandId,
+      leadType: LeadType.INBOUND,
+      source: LeadSource.WEBHOOK,
+      name: 'Inbound Lead',
+    });
+
+    await flushAsyncWork();
+
+    expect(prismaMock.teamMember.findMany).not.toHaveBeenCalled();
+    expect(permissionsServiceMock.getLegacyPermissionsForRole).not.toHaveBeenCalled();
+    expect(permissionsServiceMock.matchesAnyPermission).not.toHaveBeenCalled();
+    expect(permissionsServiceMock.userHasPermission).not.toHaveBeenCalled();
+    expect(notifQueueMock.add).toHaveBeenCalledTimes(1);
+    expect(notifQueueMock.add).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        organizationId: orgId,
+        recipientIds: [adminId],
+        type: 'LEAD_CREATED',
+      }),
+      expect.any(Object),
+    );
   });
 
   it('TC-B1: changeStatus to FOLLOW_UP without followUpDate throws BadRequestException', async () => {

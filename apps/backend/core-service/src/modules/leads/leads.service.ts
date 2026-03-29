@@ -50,6 +50,7 @@ import {
 } from './dto';
 
 const IMPORT_ROW_LIMIT = 1000;
+const SIGNUP_LEAD_NOTIFICATION_PERMISSION = 'sales:leads:notify_signup';
 const IMPORT_HEADER_ALIASES = {
   name: ['name', 'contact_name'],
   email: ['email'],
@@ -159,6 +160,27 @@ export class LeadsService {
     return admins.map((user) => user.id);
   }
 
+  private getEffectivePermissionsForNotificationCandidate(user: {
+    role: PrismaUserRole;
+    appRoles: Array<{
+      appRole: {
+        permissions: Array<{
+          permission: { key: string };
+        }>;
+      };
+    }>;
+  }): string[] {
+    const explicitPermissions = user.appRoles.flatMap((assignment) =>
+      assignment.appRole.permissions.map((link) => link.permission.key),
+    );
+
+    if (explicitPermissions.length > 0) {
+      return explicitPermissions;
+    }
+
+    return this.permissionsService.getLegacyPermissionsForRole(user.role);
+  }
+
   private async notifyLeadAssignment(
     organizationId: string,
     actorId: string,
@@ -228,6 +250,124 @@ export class LeadsService {
     const recipientIds = await this.resolveAdminRecipientIds(organizationId);
     if (recipientIds.length === 0) return;
 
+    await this.enqueueLeadCreatedNotification(organizationId, recipientIds, lead, actorId);
+  }
+
+  private async resolveSignupNotificationRecipientIds(
+    organizationId: string,
+    teamId: string,
+  ): Promise<string[]> {
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+        role: {
+          notIn: [PrismaUserRole.ADMIN, PrismaUserRole.OWNER],
+        },
+        OR: [
+          {
+            hrmsTeamMemberships: {
+              some: {
+                teamId,
+                team: {
+                  organizationId,
+                  deletedAt: null,
+                  isActive: true,
+                },
+              },
+            },
+          },
+          {
+            managedHrmsTeams: {
+              some: {
+                id: teamId,
+                organizationId,
+                deletedAt: null,
+                isActive: true,
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        role: true,
+        appRoles: {
+          where: { organizationId },
+          select: {
+            appRole: {
+              select: {
+                permissions: {
+                  select: {
+                    permission: {
+                      select: { key: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return candidates
+      .filter((candidate) =>
+        this.permissionsService.matchesAnyPermission(
+          this.getEffectivePermissionsForNotificationCandidate(candidate),
+          SIGNUP_LEAD_NOTIFICATION_PERMISSION,
+        ),
+      )
+      .map((candidate) => candidate.id);
+  }
+
+  private async notifyLeadCreatedToSignupTeam(
+    organizationId: string,
+    lead: {
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      email?: string | null;
+      teamId?: string | null;
+    },
+    actorId?: string,
+  ): Promise<void> {
+    if (!lead.teamId) return;
+
+    const recipientIds = await this.resolveSignupNotificationRecipientIds(organizationId, lead.teamId);
+    if (recipientIds.length === 0) return;
+
+    await this.notificationHelper.notify({
+      organizationId,
+      recipientIds,
+      actorId,
+      type: 'LEAD_CREATED',
+      module: 'SALES',
+      title: 'New Signup Lead',
+      body: `A new signup lead "${this.buildLeadLabel(lead)}" was captured for your team.`,
+      entityType: 'lead',
+      entityId: lead.id,
+      url: this.buildLeadUrl(lead.id),
+      data: {
+        leadId: lead.id,
+        trigger: 'signup_capture',
+        teamId: lead.teamId,
+      },
+    });
+  }
+
+  private async enqueueLeadCreatedNotification(
+    organizationId: string,
+    recipientIds: string[],
+    lead: {
+      id: string;
+      title?: string | null;
+      name?: string | null;
+      email?: string | null;
+    },
+    actorId?: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
     await this.notificationHelper.notify({
       organizationId,
       recipientIds,
@@ -239,7 +379,7 @@ export class LeadsService {
       entityType: 'lead',
       entityId: lead.id,
       url: this.buildLeadUrl(lead.id),
-      data: { leadId: lead.id },
+      data: { leadId: lead.id, ...data },
     });
   }
 
@@ -1617,7 +1757,13 @@ export class LeadsService {
   async capture(dto: CaptureLeadDto): Promise<{ id: string; message: string }> {
     const brand = await this.prisma.brand.findUnique({
       where: { id: dto.brandId },
-      select: { id: true, organizationId: true },
+      select: {
+        id: true,
+        organizationId: true,
+        teamBrand: {
+          select: { teamId: true },
+        },
+      },
     });
 
     if (!brand) throw new NotFoundException('Brand not found');
@@ -1627,6 +1773,7 @@ export class LeadsService {
       email: dto.email,
       source: dto.source,
     });
+    const teamId = brand.teamBrand?.teamId ?? null;
 
     const lead = await this.prisma.lead.create({
       data: {
@@ -1642,6 +1789,7 @@ export class LeadsService {
         status: LeadStatus.NEW,
         brandId: brand.id,
         organizationId: brand.organizationId,
+        teamId,
       },
     });
 
@@ -1650,6 +1798,12 @@ export class LeadsService {
     void this.notifyLeadCreatedToAdmins(brand.organizationId, lead).catch((err) =>
       this.logger.warn('captured lead notification failed (non-fatal):', err),
     );
+
+    if (lead.leadType === LeadType.SIGNUP && lead.teamId) {
+      void this.notifyLeadCreatedToSignupTeam(brand.organizationId, lead).catch((err) =>
+        this.logger.warn('captured signup lead team notification failed (non-fatal):', err),
+      );
+    }
 
     return { id: lead.id, message: 'Lead captured successfully' };
   }

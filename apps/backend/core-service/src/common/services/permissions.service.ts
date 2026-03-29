@@ -32,7 +32,7 @@ const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   FRONTSELL_AGENT: [
     'sales:leads:view_own', 'sales:leads:create', 'sales:leads:edit_own',
-    'sales:leads:claim', 'sales:leads:collaborate',
+    'sales:leads:claim', 'sales:leads:collaborate', 'sales:leads:notify_signup',
     'sales:sales:view_own', 'sales:sales:create', 'sales:sales:edit_own',
     'sales:sales:note', 'sales:invoices:view', 'sales:invoices:pay',
     'sales:page:leads', 'sales:page:sales', 'sales:page:invoices',
@@ -105,6 +105,14 @@ export class PermissionsService {
   async userHasPermission(userId: string, orgId: string, permission: string): Promise<boolean> {
     const permissions = await this.getUserPermissions(userId, orgId);
     return this.matchesAnyPermission(permissions, permission);
+  }
+
+  getLegacyPermissionsForRole(role: string | null | undefined): string[] {
+    if (!role) {
+      return [];
+    }
+
+    return [...(LEGACY_ROLE_PERMISSIONS[role] ?? [])];
   }
 
   matchesAnyPermission(permissions: Iterable<string>, requiredPermission: string): boolean {
