@@ -58,6 +58,9 @@ export function useCreateSale() {
     mutationFn: (dto: CreateSaleInput) => api.createSale(dto),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
 
       if (variables.leadId) {
         queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
@@ -78,9 +81,11 @@ export function useUpdateSale() {
   return useMutation({
     mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
       api.updateSale(id, dto),
-    onSuccess: (data, { id }) => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
-      queryClient.setQueryData(salesKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Sale updated');
     },
     onError: (e: Error) => toast.error('Failed to update sale', e.message),
@@ -93,6 +98,9 @@ export function useDeleteSale() {
     mutationFn: (id: string) => api.deleteSale(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Sale deleted');
     },
     onError: (e: Error) => {
@@ -119,6 +127,9 @@ export function useChargeSale() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Payment charged successfully');
     },
     onError: (e: Error) => toast.error('Charge failed', e.message),
@@ -133,6 +144,8 @@ export function useCreateSubscription() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Subscription created');
     },
     onError: (e: Error) => toast.error('Failed to create subscription', e.message),
@@ -146,6 +159,7 @@ export function useCancelSubscription() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
       toast.success('Subscription cancelled');
     },
     onError: (e: Error) => toast.error('Failed to cancel subscription', e.message),
@@ -169,6 +183,8 @@ export function useRefundSale() {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
       queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Refund issued successfully');
     },
     onError: (e: Error) => toast.error('Refund failed', e.message),
@@ -182,6 +198,9 @@ export function useChargebackSale() {
       api.chargebackSale(id, dto),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Chargeback recorded');
     },
     onError: (e: Error) => toast.error('Chargeback failed', e.message),
@@ -196,6 +215,9 @@ export function useRecordPayment() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: salesKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: salesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: [...salesKeys.all, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Payment recorded successfully');
     },
     onError: (e: Error) => toast.error('Failed to record payment', e.message),

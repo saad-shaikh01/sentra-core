@@ -84,6 +84,7 @@ export function RichTextEditor({
   }, [placeholder]);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: buildExtensions(),
     content,
     editable,

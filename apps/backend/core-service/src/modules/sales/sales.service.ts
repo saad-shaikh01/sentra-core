@@ -38,8 +38,14 @@ import {
   ClientActivityType,
   InvoiceStatus,
   GatewayType,
+  SalePaymentStatus,
 } from '@sentra-core/types';
 import { buildPaginationResponse, CacheService, StorageService } from '../../common';
+import {
+  BOOKED_SALE_STATUSES,
+  computeSaleFinancialSnapshot,
+  deriveInvoiceStatus,
+} from '../../common/helpers/sales-domain.helper';
 import { PaymentGatewayFactory } from '../payment-gateway';
 import { ScopeService } from '../scope/scope.service';
 import { SalesNotificationService } from './sales-notification.service';
@@ -54,6 +60,8 @@ import {
   CreateChargebackDto,
   RecordManualPaymentDto,
 } from './dto';
+
+type PrismaLike = Prisma.TransactionClient | PrismaService;
 
 const ALLOWED_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
   [SaleStatus.DRAFT]: [SaleStatus.PENDING, SaleStatus.CANCELLED],
@@ -91,6 +99,161 @@ export class SalesService {
     @InjectQueue(NOTIFICATION_QUEUE) private readonly notifQueue: Queue,
   ) {
     this.notificationHelper = new NotificationHelper(notifQueue);
+  }
+
+  private resolveBusinessDate(input?: string | Date | null): Date {
+    if (!input) {
+      return new Date();
+    }
+
+    const value =
+      typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)
+        ? new Date(`${input}T00:00:00.000Z`)
+        : new Date(input);
+
+    if (Number.isNaN(value.getTime())) {
+      throw new BadRequestException('Invalid business date');
+    }
+
+    return value;
+  }
+
+  private addMonthsToDate(baseDate: Date, months: number): Date {
+    const nextDate = new Date(baseDate);
+    nextDate.setUTCMonth(nextDate.getUTCMonth() + months);
+    return nextDate;
+  }
+
+  private getSaleBusinessDate(sale: { saleDate?: Date | null; createdAt?: Date | null }): Date {
+    return sale.saleDate ?? sale.createdAt ?? new Date();
+  }
+
+  async applySuccessfulPayment(params: {
+    saleId: string;
+    amount: number;
+    actorId: string;
+    gateway: GatewayType;
+    invoiceId?: string | null;
+    transactionId?: string | null;
+    responseCode?: string | null;
+    responseMessage?: string | null;
+    externalRef?: string | null;
+    source: 'invoice_module' | 'manual_record' | 'gateway_charge';
+  }): Promise<{
+    transaction: any;
+    saleStatus: SaleStatus;
+    paymentStatus: SalePaymentStatus;
+    collectedAmount: number;
+    outstandingAmount: number;
+  }> {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id: params.saleId },
+        include: { invoices: true },
+      });
+      if (!sale) {
+        throw new NotFoundException('Sale not found');
+      }
+
+      const invoice = params.invoiceId
+        ? sale.invoices.find((item) => item.id === params.invoiceId)
+        : undefined;
+
+      if (params.invoiceId && !invoice) {
+        throw new BadRequestException('Invoice does not belong to this sale');
+      }
+
+      if (invoice && deriveInvoiceStatus(invoice) === InvoiceStatus.PAID) {
+        throw new BadRequestException('Invoice is already paid');
+      }
+
+      if (invoice && Math.abs(Number(invoice.amount) - Number(params.amount)) > 0.01) {
+        throw new BadRequestException('Invoice payments must match the invoice amount');
+      }
+
+      const paymentTimestamp = new Date();
+      const transaction = await tx.paymentTransaction.create({
+        data: {
+          transactionId: params.transactionId ?? null,
+          type: TransactionType.ONE_TIME,
+          amount: params.amount,
+          status: TransactionStatus.SUCCESS,
+          gateway: params.gateway,
+          responseCode: params.responseCode ?? null,
+          responseMessage: params.responseMessage ?? null,
+          externalRef: params.externalRef ?? null,
+          saleId: sale.id,
+          invoiceId: invoice?.id ?? null,
+        },
+      });
+
+      if (invoice) {
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            status: InvoiceStatus.PAID,
+            paidAt: paymentTimestamp,
+          },
+        });
+
+        await this.logActivity(tx, sale.id, params.actorId, SaleActivityType.INVOICE_UPDATED, {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          status: InvoiceStatus.PAID,
+          paidAt: paymentTimestamp.toISOString(),
+          trigger: params.source,
+        });
+      }
+
+      await this.logActivity(tx, sale.id, params.actorId, SaleActivityType.PAYMENT_RECEIVED, {
+        transactionId: transaction.transactionId ?? transaction.id,
+        amount: Number(params.amount),
+        invoiceId: invoice?.id ?? null,
+        gateway: params.gateway,
+        source: params.source,
+        externalRef: params.externalRef ?? null,
+      });
+
+      let saleStatus = sale.status as SaleStatus;
+      if (sale.status === SaleStatus.PENDING) {
+        await tx.sale.update({
+          where: { id: sale.id },
+          data: { status: SaleStatus.ACTIVE },
+        });
+
+        saleStatus = SaleStatus.ACTIVE;
+        await this.logActivity(tx, sale.id, params.actorId, SaleActivityType.STATUS_CHANGE, {
+          from: SaleStatus.PENDING,
+          to: SaleStatus.ACTIVE,
+          trigger: params.source,
+          gateway: params.gateway,
+        });
+      }
+
+      const refreshedSale = await tx.sale.findUnique({
+        where: { id: sale.id },
+        include: { invoices: true, transactions: true },
+      });
+
+      const financials = computeSaleFinancialSnapshot(refreshedSale ?? sale);
+      return {
+        organizationId: sale.organizationId,
+        transaction,
+        saleStatus,
+        financials,
+      };
+    });
+
+    await this.cache.delByPrefix(`sales:${result.organizationId}:`);
+    await this.cache.delByPrefix(`invoices:${result.organizationId}:`);
+
+    return {
+      transaction: result.transaction,
+      saleStatus: result.saleStatus,
+      paymentStatus: result.financials.paymentStatus,
+      collectedAmount: result.financials.collectedAmount,
+      outstandingAmount: result.financials.outstandingAmount,
+    };
   }
 
   private async resolveSalePackageContent(
@@ -137,7 +300,7 @@ export class SalesService {
     const installmentMode = paymentPlan === PaymentPlanType.INSTALLMENTS
       ? (dto.installmentMode ?? InstallmentMode.EQUAL)
       : undefined;
-    const createdAt = dto.saleDate ? new Date(`${dto.saleDate}T00:00:00.000Z`) : undefined;
+    const saleDate = this.resolveBusinessDate(dto.saleDate);
 
     // Calculate totalAmount from items if not provided
     let totalAmount = dto.totalAmount;
@@ -198,7 +361,7 @@ export class SalesService {
     const sale = await this.prisma.$transaction(async (tx) => {
       const createdSale = await tx.sale.create({
         data: {
-          ...(createdAt ? { createdAt } : {}),
+          saleDate,
           totalAmount,
           status: dto.status,
           saleType: dto.saleType ?? null,
@@ -238,6 +401,7 @@ export class SalesService {
         tx,
         createdSale.id,
         discountedTotal ?? totalAmount,
+        createdSale.saleDate,
         paymentPlan,
         createdSale.installmentCount,
         createdSale.currency,
@@ -472,6 +636,7 @@ export class SalesService {
     tx: Prisma.TransactionClient,
     saleId: string,
     totalAmount: number,
+    saleDate: Date,
     plan: PaymentPlanType,
     installmentCount: number | null,
     currency: string,
@@ -479,15 +644,14 @@ export class SalesService {
     installmentMode?: InstallmentMode,
     customInstallments?: ICustomInstallment[],
   ): Promise<Array<{ id: string; invoiceNumber: string; amount: any; dueDate: Date }>> {
-    const now = new Date();
-
     if (plan === PaymentPlanType.ONE_TIME) {
-      const dueDate = new Date(now);
+      const dueDate = new Date(saleDate);
       dueDate.setDate(dueDate.getDate() + 7); // due in 7 days
       const invoice = await tx.invoice.create({
         data: {
           invoiceNumber: await this.getNextInvoiceNumber(tx, brandId),
           amount: totalAmount,
+          invoiceDate: saleDate,
           dueDate,
           saleId,
           paymentToken: crypto.randomBytes(32).toString('hex'),
@@ -506,11 +670,12 @@ export class SalesService {
           const item = customInstallments[i];
           const dueDate = item.dueDate
             ? new Date(item.dueDate)
-            : (() => { const d = new Date(now); d.setMonth(d.getMonth() + i + 1); return d; })();
+            : this.addMonthsToDate(saleDate, i);
           const invoice = await tx.invoice.create({
             data: {
               invoiceNumber: await this.getNextInvoiceNumber(tx, brandId),
               amount: item.amount,
+              invoiceDate: saleDate,
               dueDate,
               saleId,
               paymentToken: crypto.randomBytes(32).toString('hex'),
@@ -527,8 +692,7 @@ export class SalesService {
         const installmentAmount = Math.round((totalAmount / installmentCount) * 100) / 100;
         const invoices: Array<{ id: string; invoiceNumber: string; amount: any; dueDate: Date }> = [];
         for (let i = 0; i < installmentCount; i++) {
-          const dueDate = new Date(now);
-          dueDate.setMonth(dueDate.getMonth() + i + 1);
+          const dueDate = this.addMonthsToDate(saleDate, i);
           // Last installment absorbs rounding difference
           const amount =
             i === installmentCount - 1
@@ -538,6 +702,7 @@ export class SalesService {
             data: {
               invoiceNumber: await this.getNextInvoiceNumber(tx, brandId),
               amount,
+              invoiceDate: saleDate,
               dueDate,
               saleId,
               paymentToken: crypto.randomBytes(32).toString('hex'),
@@ -644,6 +809,7 @@ export class SalesService {
         where: { id: lead.id },
         data: {
           convertedClientId: client.id,
+          convertedAt: new Date(),
           status: LeadStatus.WON,
         },
       });
@@ -688,42 +854,89 @@ export class SalesService {
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
     const scopeWhere = scope.toSaleFilter();
 
-    const where: Record<string, any> = {
-      ...scopeWhere,
-      deletedAt: null,
-    };
+    const whereClauses: Prisma.SaleWhereInput[] = [
+      {
+        ...scopeWhere,
+        deletedAt: null,
+      },
+    ];
 
     if (search) {
-      where.OR = [
-        { client: { contactName: { contains: search, mode: 'insensitive' } } },
-        { client: { email: { contains: search, mode: 'insensitive' } } },
-      ];
+      whereClauses.push({
+        OR: [
+          { client: { contactName: { contains: search, mode: 'insensitive' } } },
+          { client: { email: { contains: search, mode: 'insensitive' } } },
+        ],
+      });
     }
-    if (status) where.status = status as SaleStatus;
-    if (clientId) where.clientId = clientId;
+    if (status) whereClauses.push({ status: status as SaleStatus });
+    if (clientId) whereClauses.push({ clientId });
     if (brandId) {
       const scopeBrandIds = (scopeWhere as any).brandId?.in as string[] | undefined;
       if (scopeBrandIds && !scopeBrandIds.includes(brandId)) {
-        where.id = { in: [] }; // out-of-scope brand → guaranteed empty result
+        whereClauses.push({ id: { in: [] } });
       } else {
-        where.brandId = brandId;
+        whereClauses.push({ brandId });
       }
     }
     if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo) where.createdAt.lte = new Date(dateTo);
+      whereClauses.push({
+        saleDate: {
+          ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+          ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999Z`) } : {}),
+        },
+      });
     }
-    if (salesAgentId) where.salesAgentId = salesAgentId;
-    if (saleType) where.saleType = saleType;
+    if (salesAgentId) whereClauses.push({ salesAgentId });
+    if (saleType) whereClauses.push({ saleType });
+
+    const where: Prisma.SaleWhereInput =
+      whereClauses.length === 1 ? whereClauses[0] : { AND: whereClauses };
 
     const [sales, total] = await Promise.all([
       this.prisma.sale.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * limit,
         take: limit,
-        include: { client: true, items: true, salePackage: { include: { services: { orderBy: { order: 'asc' } } } } },
+        include: {
+          client: true,
+          items: true,
+          invoices: {
+            select: {
+              id: true,
+              invoiceNumber: true,
+              amount: true,
+              invoiceDate: true,
+              dueDate: true,
+              paidAt: true,
+              status: true,
+              saleId: true,
+              paymentToken: true,
+              notes: true,
+              pdfUrl: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          transactions: {
+            select: {
+              id: true,
+              transactionId: true,
+              type: true,
+              amount: true,
+              status: true,
+              responseCode: true,
+              responseMessage: true,
+              saleId: true,
+              invoiceId: true,
+              createdAt: true,
+              gateway: true,
+              externalRef: true,
+            },
+          },
+          salePackage: { include: { services: { orderBy: { order: 'asc' } } } },
+        },
       }),
       this.prisma.sale.count({ where }),
     ]);
@@ -755,9 +968,9 @@ export class SalesService {
       ...(brandId ? { brandId } : {}),
       ...(dateFrom || dateTo
         ? {
-            createdAt: {
-              ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-              ...(dateTo ? { lte: new Date(dateTo) } : {}),
+            saleDate: {
+              ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+              ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999Z`) } : {}),
             },
           }
         : {}),
@@ -830,51 +1043,11 @@ export class SalesService {
     if (sale.deletedAt) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
 
-    try {
-      for (const invoice of sale.invoices ?? []) {
-        if (
-          invoice.status === InvoiceStatus.UNPAID
-          && invoice.dueDate
-          && invoice.dueDate < new Date()
-        ) {
-          await this.prisma.invoice.update({
-            where: { id: invoice.id },
-            data: { status: InvoiceStatus.OVERDUE },
-          });
-
-          await this.logActivity(this.prisma, sale.id, 'system', SaleActivityType.INVOICE_UPDATED, {
-            invoiceId: invoice.id,
-            status: InvoiceStatus.OVERDUE,
-          });
-
-          this.salesNotificationService
-            .resolveRecipientsByRole(sale.organizationId, [
-              PrismaUserRole.OWNER,
-              PrismaUserRole.ADMIN,
-              PrismaUserRole.SALES_MANAGER,
-            ])
-            .then((recipients) =>
-              this.salesNotificationService.dispatch({
-                type: 'INVOICE_OVERDUE',
-                message: `Invoice ${invoice.id} for sale ${sale.id} is overdue.`,
-                saleId: sale.id,
-                organizationId: sale.organizationId,
-                recipientIds: recipients,
-                data: { invoiceId: invoice.id },
-              }),
-            )
-            .catch((err) => this.logger.error('Notification dispatch failed', err));
-        }
-      }
-    } catch (err) {
-      this.logger.error('Overdue invoice detection failed', err);
-    }
-
     const mappedSale = {
       ...this.mapToISale(sale),
       client: sale.client ?? undefined,
-      invoices: sale.invoices ?? [],
-      transactions: sale.transactions ?? [],
+      invoices: (sale.invoices ?? []).map((invoice) => this.mapToIInvoice(invoice)),
+      transactions: (sale.transactions ?? []).map((transaction) => this.mapToIPaymentTransaction(transaction)),
     };
     await this.cache.set(cacheKey, mappedSale);
     return mappedSale;
@@ -1179,26 +1352,27 @@ export class SalesService {
       invoiceNumber: dto.invoiceNumber,
     });
 
-    const transaction = await this.prisma.paymentTransaction.create({
-      data: {
-        transactionId: result.gatewayTransactionId,
-        type: TransactionType.ONE_TIME,
-        amount: dto.amount,
-        status: result.success ? TransactionStatus.SUCCESS : TransactionStatus.FAILED,
-        gateway: gatewayType,
-        responseCode: result.responseCode,
-        responseMessage: result.message,
-        saleId: id,
-        invoiceId: dto.invoiceId,
-      },
-    });
-
     if (!result.success) {
+      const failedTransaction = await this.prisma.paymentTransaction.create({
+        data: {
+          transactionId: result.gatewayTransactionId,
+          type: TransactionType.ONE_TIME,
+          amount: dto.amount,
+          status: TransactionStatus.FAILED,
+          gateway: gatewayType,
+          responseCode: result.responseCode,
+          responseMessage: result.message,
+          saleId: id,
+          invoiceId: dto.invoiceId,
+        },
+      });
+
       await this.logActivity(this.prisma, id, actorId, SaleActivityType.PAYMENT_FAILED, {
         amount: Number(dto.amount),
         reason: result.message ?? 'Unknown error',
         responseCode: result.responseCode ?? null,
         gateway: gatewayType,
+        transactionId: failedTransaction.transactionId ?? failedTransaction.id,
       });
 
       this.salesNotificationService
@@ -1222,36 +1396,19 @@ export class SalesService {
       throw new BadRequestException(`Payment failed: ${result.message}`);
     }
 
-    await this.logActivity(this.prisma, id, actorId, SaleActivityType.PAYMENT_RECEIVED, {
-      transactionId: result.gatewayTransactionId,
-      amount: Number(dto.amount),
-      invoiceId: dto.invoiceId ?? null,
+    const paymentResult = await this.applySuccessfulPayment({
+      saleId: id,
+      amount: dto.amount,
+      actorId,
       gateway: gatewayType,
+      invoiceId: dto.invoiceId ?? null,
+      transactionId: result.gatewayTransactionId ?? null,
+      responseCode: result.responseCode ?? null,
+      responseMessage: result.message ?? null,
+      source: 'gateway_charge',
     });
 
-    if (dto.invoiceId) {
-      await this.prisma.invoice.update({
-        where: { id: dto.invoiceId },
-        data: { status: 'PAID' },
-      });
-    }
-
-    if (sale.status === SaleStatus.PENDING) {
-      await this.prisma.sale.update({
-        where: { id },
-        data: { status: SaleStatus.ACTIVE },
-      });
-      await this.logActivity(this.prisma, id, actorId, SaleActivityType.STATUS_CHANGE, {
-        from: SaleStatus.PENDING,
-        to: SaleStatus.ACTIVE,
-        trigger: 'gateway_payment_received',
-        gateway: gatewayType,
-      });
-    }
-
-    await this.cache.del(`sales:${orgId}:${id}`);
-
-    return { transaction, gatewayResponse: result };
+    return { transaction: paymentResult.transaction, gatewayResponse: result };
   }
 
   async recordPayment(
@@ -1267,50 +1424,19 @@ export class SalesService {
     if (!sale) throw new NotFoundException('Sale not found');
     if (sale.organizationId !== orgId) throw new ForbiddenException('Sale belongs to another organization');
 
-    const transaction = await this.prisma.paymentTransaction.create({
-      data: {
-        transactionId: null,
-        type: TransactionType.ONE_TIME,
-        amount: dto.amount,
-        status: TransactionStatus.SUCCESS,
-        gateway: 'MANUAL',
-        externalRef: dto.externalRef ?? null,
-        responseMessage: dto.note,
-        saleId: id,
-        invoiceId: dto.invoiceId ?? null,
-      },
-    });
-
-    if (dto.invoiceId) {
-      await this.prisma.invoice.update({
-        where: { id: dto.invoiceId },
-        data: { status: 'PAID' },
-      });
-    }
-
-    if (sale.status === SaleStatus.PENDING) {
-      await this.prisma.sale.update({
-        where: { id },
-        data: { status: SaleStatus.ACTIVE },
-      });
-      await this.logActivity(this.prisma, id, actorId, SaleActivityType.STATUS_CHANGE, {
-        from: SaleStatus.PENDING,
-        to: SaleStatus.ACTIVE,
-        trigger: 'manual_payment_recorded',
-      });
-    }
-
-    await this.logActivity(this.prisma, id, actorId, SaleActivityType.PAYMENT_RECEIVED, {
-      amount: Number(dto.amount),
+    const paymentResult = await this.applySuccessfulPayment({
+      saleId: id,
+      amount: dto.amount,
+      actorId,
+      gateway: GatewayType.MANUAL,
       invoiceId: dto.invoiceId ?? null,
-      source: 'manual',
+      transactionId: null,
+      responseMessage: dto.note,
       externalRef: dto.externalRef ?? null,
-      note: dto.note,
+      source: 'manual_record',
     });
 
-    await this.cache.delByPrefix(`sales:${orgId}:`);
-
-    return { transaction, message: 'Payment recorded successfully' };
+    return { transaction: paymentResult.transaction, message: 'Payment recorded successfully' };
   }
 
   async subscribe(id: string, orgId: string, actorId: string, dto: CreateSubscriptionDto): Promise<any> {
@@ -1629,21 +1755,35 @@ export class SalesService {
   }
 
   private mapToISale(sale: any): ISale {
+    const financials = computeSaleFinancialSnapshot({
+      totalAmount: sale.totalAmount,
+      discountedTotal: sale.discountedTotal,
+      invoices: sale.invoices ?? [],
+      transactions: sale.transactions ?? [],
+    });
+
     return {
       id: sale.id,
       totalAmount: Number(sale.totalAmount),
       status: sale.status as SaleStatus,
+      paymentStatus: financials.paymentStatus,
       saleType: sale.saleType ?? undefined,
       salesAgentId: sale.salesAgentId ?? undefined,
       currency: sale.currency,
       description: sale.description ?? undefined,
       contractUrl: this.storage.buildUrl(sale.contractUrl),
+      saleDate: this.getSaleBusinessDate(sale),
       paymentPlan: sale.paymentPlan as PaymentPlanType,
       installmentCount: sale.installmentCount ?? undefined,
       installmentMode: (sale.installmentMode as InstallmentMode | null) ?? undefined,
       discountType: sale.discountType ?? undefined,
       discountValue: sale.discountValue != null ? Number(sale.discountValue) : undefined,
       discountedTotal: sale.discountedTotal != null ? Number(sale.discountedTotal) : undefined,
+      netAmount: financials.netAmount,
+      collectedAmount: financials.collectedAmount,
+      outstandingAmount: financials.outstandingAmount,
+      paidInvoiceCount: financials.paidInvoiceCount,
+      totalInvoiceCount: financials.totalInvoiceCount,
       clientId: sale.clientId,
       brandId: sale.brandId,
       organizationId: sale.organizationId,
@@ -1651,6 +1791,9 @@ export class SalesService {
       customerProfileId: sale.customerProfileId ?? undefined,
       paymentProfileId: sale.paymentProfileId ?? undefined,
       subscriptionId: sale.subscriptionId ?? undefined,
+      gatewayCustomerId: sale.gatewayCustomerId ?? undefined,
+      gatewayPaymentMethodId: sale.gatewayPaymentMethodId ?? undefined,
+      gatewaySubscriptionId: sale.gatewaySubscriptionId ?? undefined,
       items: sale.items ? sale.items.map((i: any): ISaleItem => ({
         id: i.id,
         name: i.name,
@@ -1689,6 +1832,41 @@ export class SalesService {
       }))() : undefined,
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
+    };
+  }
+
+  private mapToIInvoice(invoice: any) {
+    return {
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      amount: Number(invoice.amount),
+      invoiceDate: invoice.invoiceDate ?? invoice.createdAt,
+      dueDate: invoice.dueDate,
+      paidAt: invoice.paidAt ?? undefined,
+      status: deriveInvoiceStatus(invoice),
+      pdfUrl: invoice.pdfUrl ?? undefined,
+      notes: invoice.notes ?? undefined,
+      paymentToken: invoice.paymentToken ?? undefined,
+      saleId: invoice.saleId,
+      createdAt: invoice.createdAt,
+      updatedAt: invoice.updatedAt,
+    };
+  }
+
+  private mapToIPaymentTransaction(transaction: any) {
+    return {
+      id: transaction.id,
+      transactionId: transaction.transactionId ?? undefined,
+      type: transaction.type,
+      amount: Number(transaction.amount),
+      status: transaction.status,
+      responseCode: transaction.responseCode ?? undefined,
+      responseMessage: transaction.responseMessage ?? undefined,
+      saleId: transaction.saleId,
+      invoiceId: transaction.invoiceId ?? undefined,
+      createdAt: transaction.createdAt,
+      gateway: transaction.gateway ?? undefined,
+      externalRef: transaction.externalRef ?? undefined,
     };
   }
 }

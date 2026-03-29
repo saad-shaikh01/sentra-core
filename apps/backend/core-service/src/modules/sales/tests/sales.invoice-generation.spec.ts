@@ -1,21 +1,23 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '@sentra-core/prisma-client';
+import { NOTIFICATION_QUEUE, PrismaService } from '@sentra-core/prisma-client';
 import { PaymentPlanType } from '@sentra-core/types';
-import { CacheService } from '../../../common';
-import { AuthorizeNetService } from '../../authorize-net';
-import { TeamsService } from '../../teams';
+import { CacheService, StorageService } from '../../../common';
+import { PaymentGatewayFactory } from '../../payment-gateway';
+import { ScopeService } from '../../scope/scope.service';
 import { SalesNotificationService } from '../sales-notification.service';
 import { SalesService } from '../sales.service';
 
 describe('SalesService invoice generation', () => {
   let service: SalesService;
+  const saleDate = new Date('2025-11-15T00:00:00.000Z');
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesService,
         { provide: PrismaService, useValue: {} },
-        { provide: AuthorizeNetService, useValue: {} },
+        { provide: PaymentGatewayFactory, useValue: { resolve: jest.fn() } },
         {
           provide: CacheService,
           useValue: {
@@ -26,7 +28,8 @@ describe('SalesService invoice generation', () => {
             hashQuery: jest.fn().mockReturnValue('hash'),
           },
         },
-        { provide: TeamsService, useValue: { getMemberIds: jest.fn().mockResolvedValue([]) } },
+        { provide: ScopeService, useValue: { getUserScope: jest.fn() } },
+        { provide: StorageService, useValue: { buildUrl: jest.fn((value) => value) } },
         {
           provide: SalesNotificationService,
           useValue: {
@@ -34,6 +37,7 @@ describe('SalesService invoice generation', () => {
             resolveRecipientsByRole: jest.fn().mockResolvedValue([]),
           },
         },
+        { provide: getQueueToken(NOTIFICATION_QUEUE), useValue: {} },
       ],
     }).compile();
 
@@ -46,7 +50,10 @@ describe('SalesService invoice generation', () => {
     let invoiceCount = 0;
 
     return {
-      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockImplementation(async () => {
+        sequence += 1;
+        return [{ lastSeq: sequence }];
+      }),
       invoiceSequence: {
         findUnique: jest.fn().mockImplementation(async () => {
           sequence += 1;
@@ -72,12 +79,12 @@ describe('SalesService invoice generation', () => {
 
   it('ONE_TIME creates one invoice with paymentToken and INV-YYYY-NNNN number', async () => {
     const tx = createTx();
-    const before = Date.now();
 
     const invoices = await (service as any).generateInvoices(
       tx,
       'sale-1',
       250,
+      saleDate,
       PaymentPlanType.ONE_TIME,
       null,
       'USD',
@@ -86,17 +93,20 @@ describe('SalesService invoice generation', () => {
 
     const [invoice] = invoices;
     expect(invoices).toHaveLength(1);
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.invoice.create).toHaveBeenCalledTimes(1);
     expect(invoice.paymentToken).toMatch(/^[a-f0-9]{64}$/);
     expect(invoice.invoiceNumber).toMatch(/^INV-\d{4}-\d{4}$/);
     expect(invoice.amount).toBe(250);
-
-    const dueDateDiffMs = invoice.dueDate.getTime() - before;
-    const sixDays = 6 * 24 * 60 * 60 * 1000;
-    const eightDays = 8 * 24 * 60 * 60 * 1000;
-    expect(dueDateDiffMs).toBeGreaterThan(sixDays);
-    expect(dueDateDiffMs).toBeLessThan(eightDays);
+    expect(invoice.dueDate).toEqual(new Date('2025-11-22T00:00:00.000Z'));
+    expect(tx.invoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          invoiceDate: saleDate,
+          dueDate: new Date('2025-11-22T00:00:00.000Z'),
+        }),
+      }),
+    );
   });
 
   it('INSTALLMENTS(3, 100) creates 3 invoices with unique payment tokens and sequential numbers', async () => {
@@ -107,6 +117,7 @@ describe('SalesService invoice generation', () => {
       tx,
       'sale-1',
       100,
+      saleDate,
       PaymentPlanType.INSTALLMENTS,
       3,
       'USD',
@@ -123,6 +134,11 @@ describe('SalesService invoice generation', () => {
       `INV-${currentYear}-0002`,
       `INV-${currentYear}-0003`,
     ]);
+    expect(invoices.map((invoice: any) => invoice.dueDate.toISOString())).toEqual([
+      '2025-11-15T00:00:00.000Z',
+      '2025-12-15T00:00:00.000Z',
+      '2026-01-15T00:00:00.000Z',
+    ]);
   });
 
   it('INSTALLMENTS rounding splits 1.00 into 0.33, 0.33, 0.34', async () => {
@@ -132,6 +148,7 @@ describe('SalesService invoice generation', () => {
       tx,
       'sale-1',
       1,
+      saleDate,
       PaymentPlanType.INSTALLMENTS,
       3,
       'USD',
@@ -148,6 +165,7 @@ describe('SalesService invoice generation', () => {
       tx,
       'sale-1',
       500,
+      saleDate,
       PaymentPlanType.SUBSCRIPTION,
       null,
       'USD',
@@ -155,7 +173,7 @@ describe('SalesService invoice generation', () => {
     );
 
     expect(invoices).toEqual([]);
-    expect(tx.$executeRaw).not.toHaveBeenCalled();
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
     expect(tx.invoice.create).not.toHaveBeenCalled();
   });
 });

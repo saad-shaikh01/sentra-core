@@ -1073,6 +1073,7 @@ model Lead {
   leadType LeadType? // CHAT, SIGNUP, SOCIAL, REFERRAL, INBOUND
   source   LeadSource? // PPC, SMM, COLD_REFERRAL
   leadDate DateTime? // When the lead was originally captured
+  convertedAt DateTime? // When the lead was converted into a client
   lostReason String? // Reason when status = LOST
   data     Json? // Flexible Form Data (Extra fields)
 
@@ -1100,6 +1101,8 @@ model Lead {
 
   @@index([organizationId, brandId, status]) // Performance Index for Dashboard
   @@index([organizationId, deletedAt])       // Soft-delete filter index
+  @@index([organizationId, leadDate])
+  @@index([organizationId, convertedAt])
   @@index([teamId])
   @@index([organizationId, teamId])
   @@index([organizationId, assignedToId])
@@ -1228,6 +1231,7 @@ model Sale {
   currency    String     @default("USD")
   description String?
   contractUrl String? // Optional uploaded contract file URL
+  saleDate    DateTime   @default(now()) // Canonical business/reporting date for the sale
 
   // Payment plan config
   paymentPlan      PaymentPlanType  @default(ONE_TIME)
@@ -1269,6 +1273,7 @@ model Sale {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, brandId, status])
+  @@index([organizationId, saleDate])
   @@index([clientId])
   @@index([subscriptionId])
 }
@@ -1296,7 +1301,9 @@ model Invoice {
   id            String        @id @default(uuid())
   invoiceNumber String        @unique
   amount        Decimal       @db.Decimal(10, 2)
+  invoiceDate   DateTime      @default(now()) // Canonical business/reporting date for invoice issuance
   dueDate       DateTime
+  paidAt        DateTime?
   status        InvoiceStatus @default(UNPAID)
   pdfUrl        String?
   notes         String?
@@ -1311,7 +1318,9 @@ model Invoice {
   updatedAt DateTime @updatedAt
 
   @@index([saleId])
+  @@index([saleId, invoiceDate])
   @@index([status, dueDate])
+  @@index([status, paidAt])
 }
 
 model PaymentTransaction {

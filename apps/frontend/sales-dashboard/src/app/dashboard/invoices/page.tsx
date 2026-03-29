@@ -149,10 +149,20 @@ export default function InvoicesPage() {
         render: (inv) => <span className="font-bold text-[14px]">${inv.amount.toLocaleString()}</span>,
       },
       {
-        key:    'createdAt',
-        header: 'Date',
+        key:    'invoiceDate',
+        header: 'Invoice Date',
         className: 'w-[120px]',
-        render: (inv) => <span className="text-muted-foreground/80">{new Date(inv.createdAt).toLocaleDateString()}</span>,
+        render: (inv) => <span className="text-muted-foreground/80">{new Date(inv.invoiceDate).toLocaleDateString()}</span>,
+      },
+      {
+        key:    'paidAt',
+        header: 'Paid Date',
+        className: 'w-[120px]',
+        render: (inv) => (
+          <span className="text-muted-foreground/80">
+            {inv.paidAt ? new Date(inv.paidAt).toLocaleDateString() : '—'}
+          </span>
+        ),
       },
       {
         key:    'status',

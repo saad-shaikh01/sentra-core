@@ -179,7 +179,7 @@ export function SaleFormModal({
     if (open) {
       setApiError(null);
       reset({
-        saleDate: sale?.createdAt ? new Date(sale.createdAt).toISOString().slice(0, 10) : '',
+        saleDate: sale?.saleDate ? new Date(sale.saleDate).toISOString().slice(0, 10) : '',
         clientId: sale?.clientId ?? prefillClientId ?? '',
         brandId: sale?.brandId ?? prefillBrandId ?? '',
         saleType: (sale?.saleType as SaleType) ?? prefillSaleType ?? '',

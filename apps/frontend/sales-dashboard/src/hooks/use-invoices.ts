@@ -36,6 +36,8 @@ export function useCreateInvoice() {
     mutationFn: (dto: Record<string, unknown>) => api.createInvoice(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoicesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Invoice created');
     },
     onError: (e: Error) => toast.error('Failed to create invoice', e.message),
@@ -47,9 +49,11 @@ export function useUpdateInvoice() {
   return useMutation({
     mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
       api.updateInvoice(id, dto),
-    onSuccess: (data, { id }) => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: invoicesKeys.lists() });
-      queryClient.setQueryData(invoicesKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: invoicesKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Invoice updated');
     },
     onError: (e: Error) => toast.error('Failed to update invoice', e.message),
@@ -62,6 +66,8 @@ export function useDeleteInvoice() {
     mutationFn: (id: string) => api.deleteInvoice(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoicesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Invoice deleted');
     },
     onError: (e: Error) => toast.error('Failed to delete invoice', e.message),
@@ -80,9 +86,11 @@ export function usePayInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.payInvoice(id),
-    onSuccess: (data, id) => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: invoicesKeys.lists() });
-      queryClient.setQueryData(invoicesKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: invoicesKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Invoice paid successfully');
     },
     onError: (e: Error) => toast.error('Payment failed', e.message),

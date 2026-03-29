@@ -53,6 +53,7 @@ interface SaleRecord {
   invoices?: InvoiceRecord[];
   transactions?: unknown[];
   activities?: unknown[];
+  saleDate?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,10 +62,12 @@ interface InvoiceRecord {
   id: string;
   invoiceNumber: string;
   amount: number;
+  invoiceDate?: Date;
   dueDate: Date;
   saleId: string;
   status?: InvoiceStatus | string;
   notes?: string;
+  paidAt?: Date | null;
 }
 
 const orgId = 'org-1';
@@ -112,6 +115,7 @@ function makeSale(overrides: Partial<SaleRecord> = {}): SaleRecord {
         saleId,
       },
     ],
+    saleDate: new Date('2026-01-01T00:00:00.000Z'),
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
@@ -534,7 +538,7 @@ describe('SalesService', () => {
     expect(result.items?.[0]?.packageName).toBe('Test Package');
   });
 
-  it('TC-B3.3.0: create maps saleDate to createdAt when provided', async () => {
+  it('TC-B3.3.0: create persists saleDate when provided without mutating createdAt', async () => {
     prismaMock.client.findFirst.mockResolvedValue(makeClient());
     prismaMock.sale.create.mockResolvedValue(makeSale());
     prismaMock.invoice.create.mockResolvedValue({
@@ -555,6 +559,13 @@ describe('SalesService', () => {
     );
 
     expect(prismaMock.sale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          saleDate: new Date('2026-03-15T00:00:00.000Z'),
+        }),
+      }),
+    );
+    expect(prismaMock.sale.create).not.toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           createdAt: new Date('2026-03-15T00:00:00.000Z'),
@@ -813,7 +824,7 @@ describe('SalesService', () => {
     );
   });
 
-  it('TC-B10: findOne marks overdue invoices and dispatches INVOICE_OVERDUE notification', async () => {
+  it('TC-B10: findOne derives overdue invoices without mutating stored status', async () => {
     prismaMock.sale.findUnique.mockResolvedValue({
       ...makeSale(),
       invoices: [
@@ -829,29 +840,19 @@ describe('SalesService', () => {
       transactions: [],
       activities: [],
     } as any);
-    prismaMock.invoice.update.mockResolvedValue({
-      id: 'invoice-overdue',
-      invoiceNumber: 'INV-OVERDUE',
-      amount: 200,
-      dueDate: new Date('2026-01-01T00:00:00.000Z'),
-      saleId,
-      status: InvoiceStatus.OVERDUE,
-    });
 
-    await service.findOne(saleId, orgId);
+    const result: any = await service.findOne(saleId, orgId);
 
-    await Promise.resolve();
-
-    expect(prismaMock.invoice.update).toHaveBeenCalledWith({
-      where: { id: 'invoice-overdue' },
-      data: { status: InvoiceStatus.OVERDUE },
-    });
-    expect(salesNotificationServiceMock.dispatch).toHaveBeenCalledWith(
+    expect(prismaMock.invoice.update).not.toHaveBeenCalled();
+    expect(salesNotificationServiceMock.dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'INVOICE_OVERDUE',
-        saleId,
-        organizationId: orgId,
-        data: { invoiceId: 'invoice-overdue' },
+      }),
+    );
+    expect(result.invoices?.[0]).toEqual(
+      expect.objectContaining({
+        id: 'invoice-overdue',
+        status: InvoiceStatus.OVERDUE,
       }),
     );
   });

@@ -49,7 +49,7 @@ export default function LeadsPage() {
     unassigned:   parseAsBoolean.withDefault(false),
     dateFrom:     parseAsString,
     dateTo:       parseAsString,
-    view:         parseAsStringEnum<ViewMode>(['kanban', 'table']).withDefault('kanban'),
+    view:         parseAsStringEnum<ViewMode>(['kanban', 'table']).withDefault('table'),
     leadView:     parseAsStringEnum<LeadViewTab>(['my', 'collaborating', 'pool', 'team']),
   });
 

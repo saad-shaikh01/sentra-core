@@ -903,8 +903,22 @@ class ApiClient {
   }
 
   // Analytics
-  async getAnalyticsSummary() {
-    return this.fetch<any>('/analytics/summary');
+  async getAnalyticsSummary(filters?: {
+    fromDate?: string;
+    toDate?: string;
+    preset?: string;
+    granularity?: string;
+    compareMode?: string;
+    month?: string;
+    year?: string;
+  }) {
+    const params = filters
+      ? Object.entries(filters)
+          .filter(([, v]) => v != null && v !== '')
+          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+          .join('&')
+      : '';
+    return this.fetch<any>(`/analytics/summary${params ? `?${params}` : ''}`);
   }
 
   // Push notifications

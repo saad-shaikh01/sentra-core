@@ -44,6 +44,7 @@ export function useCreateLead() {
     mutationFn: (dto: Record<string, unknown>) => api.createLead(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Lead created');
     },
     onError: (e: Error) => toast.error('Failed to create lead', e.message),
@@ -56,6 +57,7 @@ export function useImportLeads() {
     mutationFn: (formData: FormData) => api.importLeads(formData) as Promise<ILeadImportResult>,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success(
         'Lead import completed',
         `${data.created} created, ${data.duplicates} duplicates, ${data.errors} errors`,
@@ -70,9 +72,10 @@ export function useUpdateLead() {
   return useMutation({
     mutationFn: ({ id, ...dto }: { id: string } & Record<string, unknown>) =>
       api.updateLead(id, dto),
-    onSuccess: (data, { id }) => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
-      queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Lead updated');
     },
     onError: (e: Error) => toast.error('Failed to update lead', e.message),
@@ -85,6 +88,7 @@ export function useDeleteLead() {
     mutationFn: (id: string) => api.deleteLead(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Lead deleted');
     },
     onError: (e: Error) => toast.error('Failed to delete lead', e.message),
@@ -96,9 +100,10 @@ export function useChangeLeadStatus() {
   return useMutation({
     mutationFn: ({ id, ...dto }: ChangeLeadStatusVariables) =>
       api.changeLeadStatus(id, dto),
-    onSuccess: (data, { id, status }) => {
+    onSuccess: (_, { id, status }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
-      queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success(`Lead moved to ${status}`);
     },
     onError: (e: Error) => toast.error('Status change failed', e.message),
@@ -110,10 +115,11 @@ export function useAssignLead() {
   return useMutation({
     mutationFn: ({ id, assignedToId }: { id: string; assignedToId: string }) =>
       api.assignLead(id, assignedToId),
-    onSuccess: (data, { id }) => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
-      queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Lead assigned');
     },
     onError: (e: Error) => toast.error('Failed to assign lead', e.message),
@@ -169,6 +175,8 @@ export function useConvertLead() {
       api.convertLead(id, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Client created. Grant portal access from the client profile when ready.');
     },
     onError: (e: Error) => toast.error('Conversion failed', e.message),
@@ -188,10 +196,11 @@ export function useClaimLead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.claimLead(id) as Promise<ILead>,
-    onSuccess: (data, id) => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
-      queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Lead claimed');
     },
     onError: (e: Error) => toast.error('Failed to claim lead', e.message),
@@ -202,10 +211,11 @@ export function useUnclaimLead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.unclaimLead(id) as Promise<ILead>,
-    onSuccess: (data, id) => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: leadsKeys.lists() });
-      queryClient.setQueryData(leadsKeys.detail(id), data);
+      queryClient.invalidateQueries({ queryKey: leadsKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadsKeys.activities(id) });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Lead returned to pool');
     },
     onError: (e: Error) => toast.error('Failed to unclaim lead', e.message),

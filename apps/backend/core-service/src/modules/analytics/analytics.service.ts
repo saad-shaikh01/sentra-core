@@ -1,169 +1,463 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@sentra-core/prisma-client';
+import {
+  AnalyticsGranularity,
+  IAnalyticsFilter,
+  IAnalyticsSummary,
+  InvoiceStatus,
+  SaleStatus,
+  TransactionStatus,
+  TransactionType,
+  UserRole,
+} from '@sentra-core/types';
+import {
+  BOOKED_SALE_STATUSES,
+  toNumber,
+} from '../../common/helpers/sales-domain.helper';
 import { PrismaService } from '@sentra-core/prisma-client';
-import { IAnalyticsSummary, UserRole } from '@sentra-core/types';
 import { ScopeService } from '../scope/scope.service';
+
+interface ResolvedFilters {
+  fromDate: Date;
+  toDate: Date;
+  periodLabel: string;
+  granularity: AnalyticsGranularity;
+  compareMode: 'previous_period' | 'previous_month' | null;
+  compFromDate: Date | null;
+  compToDate: Date | null;
+  compPeriodLabel: string | null;
+}
+
+type SaleMetricRow = {
+  saleDate: Date;
+  totalAmount: unknown;
+  discountedTotal: unknown;
+  brandId: string;
+  brand: { name: string } | null;
+};
+
+type TransactionMetricRow = {
+  amount: unknown;
+  type: string;
+  createdAt: Date;
+};
+
+function startOfWeek(date: Date): Date {
+  const nextDate = new Date(date);
+  const day = nextDate.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  nextDate.setDate(nextDate.getDate() + diff);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function isoWeekKey(date: Date): string {
+  const weekStart = startOfWeek(date);
+  const year = weekStart.getFullYear();
+  const startOfYear = new Date(year, 0, 1);
+  const weekNum = Math.ceil(
+    ((weekStart.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7,
+  );
+  return `${year}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatDateLabel(date: Date): string {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function resolveFilters(filters: IAnalyticsFilter): ResolvedFilters {
+  const now = new Date();
+  const granularity: AnalyticsGranularity = filters.granularity === 'weekly' ? 'weekly' : 'monthly';
+  const compareMode =
+    !filters.compareMode || filters.compareMode === 'none' ? null : filters.compareMode;
+
+  let fromDate: Date;
+  let toDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  let periodLabel: string;
+
+  if (filters.preset === 'this_week') {
+    fromDate = startOfWeek(now);
+    periodLabel = 'This Week';
+  } else if (filters.preset === 'this_month') {
+    fromDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    periodLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  } else if (filters.preset === 'specific_month' && filters.month && filters.year) {
+    const month = parseInt(filters.month, 10) - 1;
+    const year = parseInt(filters.year, 10);
+    fromDate = new Date(year, month, 1, 0, 0, 0, 0);
+    toDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    periodLabel = new Date(year, month).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  } else if (filters.fromDate && filters.toDate) {
+    fromDate = new Date(filters.fromDate);
+    fromDate.setHours(0, 0, 0, 0);
+    toDate = new Date(filters.toDate);
+    toDate.setHours(23, 59, 59, 999);
+    periodLabel = `${formatDateLabel(fromDate)} - ${formatDateLabel(toDate)}`;
+  } else {
+    fromDate = new Date(now);
+    fromDate.setDate(fromDate.getDate() - 30);
+    fromDate.setHours(0, 0, 0, 0);
+    periodLabel = 'Last 30 Days';
+  }
+
+  let compFromDate: Date | null = null;
+  let compToDate: Date | null = null;
+  let compPeriodLabel: string | null = null;
+
+  if (compareMode === 'previous_month') {
+    const referenceMonth = fromDate.getMonth();
+    const referenceYear = fromDate.getFullYear();
+    compFromDate = new Date(referenceYear, referenceMonth - 1, 1, 0, 0, 0, 0);
+    compToDate = new Date(referenceYear, referenceMonth, 0, 23, 59, 59, 999);
+    compPeriodLabel = compFromDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  } else if (compareMode === 'previous_period') {
+    const rangeMs = toDate.getTime() - fromDate.getTime();
+    compToDate = new Date(fromDate.getTime() - 1);
+    compFromDate = new Date(compToDate.getTime() - rangeMs);
+    compPeriodLabel = `${formatDateLabel(compFromDate)} - ${formatDateLabel(compToDate)}`;
+  }
+
+  return {
+    fromDate,
+    toDate,
+    periodLabel,
+    granularity,
+    compareMode,
+    compFromDate,
+    compToDate,
+    compPeriodLabel,
+  };
+}
+
+function withClauses(
+  base: Prisma.SaleWhereInput | Prisma.LeadWhereInput,
+  clauses: Array<Prisma.SaleWhereInput | Prisma.LeadWhereInput>,
+) {
+  return clauses.length === 0 ? base : { AND: [base, ...clauses] };
+}
+
+function getBookedAmount(sale: Pick<SaleMetricRow, 'discountedTotal' | 'totalAmount'>): number {
+  return toNumber(sale.discountedTotal ?? sale.totalAmount);
+}
+
+function sumBookedSales(sales: SaleMetricRow[]): number {
+  return Math.round(sales.reduce((sum, sale) => sum + getBookedAmount(sale), 0) * 100) / 100;
+}
+
+function sumCollectedTransactions(transactions: TransactionMetricRow[]): number {
+  const total = transactions.reduce((sum, transaction) => {
+    const amount = toNumber(transaction.amount);
+    if (transaction.type === TransactionType.REFUND) {
+      return sum - amount;
+    }
+
+    if (
+      transaction.type === TransactionType.ONE_TIME ||
+      transaction.type === TransactionType.RECURRING
+    ) {
+      return sum + amount;
+    }
+
+    return sum;
+  }, 0);
+
+  return Math.round(total * 100) / 100;
+}
+
+function buildRevenueBuckets(
+  sales: SaleMetricRow[],
+  granularity: AnalyticsGranularity,
+): Map<string, number> {
+  const buckets = new Map<string, number>();
+
+  for (const sale of sales) {
+    const key = granularity === 'weekly' ? isoWeekKey(sale.saleDate) : monthKey(sale.saleDate);
+    buckets.set(key, (buckets.get(key) ?? 0) + getBookedAmount(sale));
+  }
+
+  return buckets;
+}
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService, private readonly scopeService: ScopeService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scopeService: ScopeService,
+  ) {}
 
-  async getSummary(orgId: string, userId: string, role: UserRole): Promise<IAnalyticsSummary> {
+  async getSummary(
+    orgId: string,
+    userId: string,
+    role: UserRole,
+    filters: IAnalyticsFilter = {},
+  ): Promise<IAnalyticsSummary> {
+    const {
+      fromDate,
+      toDate,
+      periodLabel,
+      granularity,
+      compareMode,
+      compFromDate,
+      compToDate,
+      compPeriodLabel,
+    } = resolveFilters(filters);
+
     const now = new Date();
-    const twelveMonthsAgo = new Date(now);
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-    twelveMonthsAgo.setDate(1);
-    twelveMonthsAgo.setHours(0, 0, 0, 0);
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     const scope = await this.scopeService.getUserScope(userId, orgId, role);
-    const leadWhere = scope.toLeadFilter();
-    const saleWhere = scope.toSaleFilter();
+    const leadScope = scope.toLeadFilter();
+    const saleScope = scope.toSaleFilter();
+    const invoiceSaleWhere: Prisma.SaleWhereInput = { ...saleScope, deletedAt: null };
 
-    const invoiceSaleWhere = { organizationId: orgId, deletedAt: null };
+    const periodLeadWhere = withClauses(leadScope, [
+      { deletedAt: null },
+      { leadDate: { gte: fromDate, lte: toDate } },
+    ]) as Prisma.LeadWhereInput;
+    const periodConversionWhere = withClauses(leadScope, [
+      { deletedAt: null },
+      { convertedClientId: { not: null } },
+      { convertedAt: { gte: fromDate, lte: toDate } },
+    ]) as Prisma.LeadWhereInput;
+    const periodSaleWhere = withClauses(saleScope, [
+      { deletedAt: null },
+      { status: { in: BOOKED_SALE_STATUSES } },
+      { saleDate: { gte: fromDate, lte: toDate } },
+    ]) as Prisma.SaleWhereInput;
+    const activeSalesWhere = withClauses(saleScope, [
+      { deletedAt: null },
+      { status: SaleStatus.ACTIVE },
+    ]) as Prisma.SaleWhereInput;
 
     const [
-      totalLeads, convertedLeads, activeSales, revenueAgg,
-      leads, sales, brands,
-      thisMonthRevenueAgg, lastMonthRevenueAgg,
-      newLeadsThisMonth, newLeadsLastMonth,
-      leadStatusGroups,
-      overdueInvoiceAgg, unpaidInvoiceAgg, paidThisMonthInvoiceAgg,
+      leadCount,
+      convertedLeadCount,
+      activeSales,
+      periodSales,
+      createdLeadsByAgent,
+      convertedLeadsByAgent,
+      leadStatusBreakdown,
+      outstandingAgg,
+      overdueAgg,
+      unpaidUpcomingAgg,
+      collectedTransactions,
     ] = await Promise.all([
-      this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null } }),
-      this.prisma.lead.count({ where: { ...leadWhere, convertedClientId: { not: null }, deletedAt: null } }),
-      this.prisma.sale.count({ where: { ...saleWhere, status: 'ACTIVE', deletedAt: null } }),
-      this.prisma.sale.aggregate({
-        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, deletedAt: null },
-        _sum: { totalAmount: true },
+      this.prisma.lead.count({ where: periodLeadWhere }),
+      this.prisma.lead.count({ where: periodConversionWhere }),
+      this.prisma.sale.count({ where: activeSalesWhere }),
+      this.prisma.sale.findMany({
+        where: periodSaleWhere,
+        select: {
+          saleDate: true,
+          totalAmount: true,
+          discountedTotal: true,
+          brandId: true,
+          brand: { select: { name: true } },
+        },
       }),
-      // Leads by agent (last 12 months)
       this.prisma.lead.groupBy({
         by: ['assignedToId'],
-        where: { ...leadWhere, deletedAt: null, createdAt: { gte: twelveMonthsAgo } },
+        where: periodLeadWhere,
         _count: { id: true },
       }),
-      // Sales by month
-      this.prisma.sale.findMany({
-        where: { ...saleWhere, deletedAt: null, createdAt: { gte: twelveMonthsAgo } },
-        select: { totalAmount: true, createdAt: true, brandId: true, brand: { select: { name: true } } },
+      this.prisma.lead.groupBy({
+        by: ['assignedToId'],
+        where: periodConversionWhere,
+        _count: { id: true },
       }),
-      // Brands for distribution
-      this.prisma.brand.findMany({
-        where: { organizationId: orgId },
-        select: { id: true, name: true, _count: { select: { sales: true } } },
-      }),
-      // This month revenue
-      this.prisma.sale.aggregate({
-        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, deletedAt: null, createdAt: { gte: startOfMonth } },
-        _sum: { totalAmount: true },
-      }),
-      // Last month revenue
-      this.prisma.sale.aggregate({
-        where: { ...saleWhere, status: { in: ['ACTIVE', 'COMPLETED'] }, deletedAt: null, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
-        _sum: { totalAmount: true },
-      }),
-      // New leads this month
-      this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null, createdAt: { gte: startOfMonth } } }),
-      // New leads last month
-      this.prisma.lead.count({ where: { ...leadWhere, deletedAt: null, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } } }),
-      // Lead status breakdown
       this.prisma.lead.groupBy({
         by: ['status'],
-        where: { ...leadWhere, deletedAt: null },
+        where: periodLeadWhere,
         _count: { id: true },
       }),
-      // Overdue invoices
       this.prisma.invoice.aggregate({
         where: {
-          OR: [{ status: 'OVERDUE' }, { status: 'UNPAID', dueDate: { lt: now } }],
+          status: { in: [InvoiceStatus.UNPAID, InvoiceStatus.OVERDUE] },
           sale: { is: invoiceSaleWhere },
         },
         _sum: { amount: true },
         _count: { id: true },
       }),
-      // Unpaid invoices (not yet due)
-      this.prisma.invoice.aggregate({
-        where: { status: 'UNPAID', dueDate: { gte: now }, sale: { is: invoiceSaleWhere } },
-        _sum: { amount: true },
-        _count: { id: true },
-      }),
-      // Paid this month
       this.prisma.invoice.aggregate({
         where: {
-          status: 'PAID',
-          updatedAt: { gte: startOfMonth },
+          OR: [
+            { status: InvoiceStatus.OVERDUE },
+            { status: InvoiceStatus.UNPAID, dueDate: { lt: now } },
+          ],
           sale: { is: invoiceSaleWhere },
         },
         _sum: { amount: true },
         _count: { id: true },
+      }),
+      this.prisma.invoice.aggregate({
+        where: {
+          status: InvoiceStatus.UNPAID,
+          dueDate: { gte: now },
+          sale: { is: invoiceSaleWhere },
+        },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.paymentTransaction.findMany({
+        where: {
+          status: TransactionStatus.SUCCESS,
+          type: { in: [TransactionType.ONE_TIME, TransactionType.RECURRING, TransactionType.REFUND] },
+          createdAt: { gte: fromDate, lte: toDate },
+          sale: { is: invoiceSaleWhere },
+        },
+        select: {
+          amount: true,
+          type: true,
+          createdAt: true,
+        },
       }),
     ]);
 
-    // Build revenue by month
-    const monthMap = new Map<string, number>();
-    for (const sale of sales) {
-      const key = `${sale.createdAt.getFullYear()}-${String(sale.createdAt.getMonth() + 1).padStart(2, '0')}`;
-      monthMap.set(key, (monthMap.get(key) ?? 0) + Number(sale.totalAmount));
-    }
-    const revenueByMonth = Array.from(monthMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, revenue]) => ({ month, revenue }));
+    let comparison: IAnalyticsSummary['comparison'] = null;
+    let comparisonSales: SaleMetricRow[] = [];
 
-    // Build leads by agent
-    const agentIds = leads.map((l) => l.assignedToId).filter((id): id is string => id !== null);
-    const agentUsers = await this.prisma.user.findMany({
-      where: { id: { in: agentIds } },
-      select: { id: true, name: true },
-    });
-    const convertedByAgent = await this.prisma.lead.groupBy({
-      by: ['assignedToId'],
-      where: {
-        ...leadWhere,
-        deletedAt: null,
-        convertedClientId: { not: null },
-        createdAt: { gte: twelveMonthsAgo },
-      },
-      _count: { id: true },
-    });
-    const convertedMap = new Map(convertedByAgent.map((r) => [r.assignedToId, r._count.id]));
-    const agentMap = new Map(agentUsers.map((u) => [u.id, u.name]));
-    const leadsByAgent = leads.map((r) => ({
-      agentName: agentMap.get(r.assignedToId ?? '') ?? 'Unassigned',
-      total: r._count.id,
-      converted: convertedMap.get(r.assignedToId) ?? 0,
-    }));
+    if (compareMode && compFromDate && compToDate) {
+      const compLeadWhere = withClauses(leadScope, [
+        { deletedAt: null },
+        { leadDate: { gte: compFromDate, lte: compToDate } },
+      ]) as Prisma.LeadWhereInput;
+      const compConversionWhere = withClauses(leadScope, [
+        { deletedAt: null },
+        { convertedClientId: { not: null } },
+        { convertedAt: { gte: compFromDate, lte: compToDate } },
+      ]) as Prisma.LeadWhereInput;
+      const compSaleWhere = withClauses(saleScope, [
+        { deletedAt: null },
+        { status: { in: BOOKED_SALE_STATUSES } },
+        { saleDate: { gte: compFromDate, lte: compToDate } },
+      ]) as Prisma.SaleWhereInput;
 
-    // Sales by brand
-    const brandRevMap = new Map<string, number>();
-    for (const sale of sales) {
-      brandRevMap.set(sale.brandId, (brandRevMap.get(sale.brandId) ?? 0) + Number(sale.totalAmount));
+      const [
+        compLeads,
+        compConverted,
+        compCollectedTransactions,
+        compSalesRows,
+      ] = await Promise.all([
+        this.prisma.lead.count({ where: compLeadWhere }),
+        this.prisma.lead.count({ where: compConversionWhere }),
+        this.prisma.paymentTransaction.findMany({
+          where: {
+            status: TransactionStatus.SUCCESS,
+            type: { in: [TransactionType.ONE_TIME, TransactionType.RECURRING, TransactionType.REFUND] },
+            createdAt: { gte: compFromDate, lte: compToDate },
+            sale: { is: invoiceSaleWhere },
+          },
+          select: {
+            amount: true,
+            type: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.sale.findMany({
+          where: compSaleWhere,
+          select: {
+            saleDate: true,
+            totalAmount: true,
+            discountedTotal: true,
+            brandId: true,
+            brand: { select: { name: true } },
+          },
+        }),
+      ]);
+
+      comparisonSales = compSalesRows;
+      comparison = {
+        bookedRevenue: sumBookedSales(compSalesRows),
+        collectedCash: sumCollectedTransactions(compCollectedTransactions),
+        leadCount: compLeads,
+        convertedLeadCount: compConverted,
+        salesCount: compSalesRows.length,
+        periodLabel: compPeriodLabel ?? 'Comparison Period',
+      };
     }
-    const salesByBrand = brands.map((b) => ({
-      brandName: b.name,
-      total: b._count.sales,
-      revenue: brandRevMap.get(b.id) ?? 0,
+
+    const mainBuckets = buildRevenueBuckets(periodSales, granularity);
+    const comparisonBuckets = buildRevenueBuckets(comparisonSales, granularity);
+    const allPeriodKeys = new Set([...mainBuckets.keys(), ...comparisonBuckets.keys()]);
+
+    const revenueByPeriod = Array.from(allPeriodKeys)
+      .sort()
+      .map((period) => ({
+        period,
+        bookedRevenue: Math.round((mainBuckets.get(period) ?? 0) * 100) / 100,
+        ...(compareMode ? { compBookedRevenue: Math.round((comparisonBuckets.get(period) ?? 0) * 100) / 100 } : {}),
+      }));
+
+    const brandMap = new Map<string, { brandName: string; total: number; bookedRevenue: number }>();
+    for (const sale of periodSales) {
+      const brandName = sale.brand?.name ?? sale.brandId;
+      const previous = brandMap.get(brandName) ?? { brandName, total: 0, bookedRevenue: 0 };
+      previous.total += 1;
+      previous.bookedRevenue += getBookedAmount(sale);
+      brandMap.set(brandName, previous);
+    }
+
+    const agentIds = Array.from(
+      new Set(
+        [...createdLeadsByAgent, ...convertedLeadsByAgent]
+          .map((group) => group.assignedToId)
+          .filter((id): id is string => id !== null),
+      ),
+    );
+
+    const users = agentIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: agentIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const userMap = new Map(users.map((user) => [user.id, user.name]));
+    const convertedMap = new Map(convertedLeadsByAgent.map((group) => [group.assignedToId, group._count.id]));
+
+    const leadsByAgent = createdLeadsByAgent.map((group) => ({
+      agentName: userMap.get(group.assignedToId ?? '') ?? 'Unassigned',
+      total: group._count.id,
+      converted: convertedMap.get(group.assignedToId) ?? 0,
     }));
 
     return {
-      totalRevenue: Number(revenueAgg._sum.totalAmount ?? 0),
-      totalLeads,
-      convertedLeads,
+      periodLabel,
+      granularity,
+      compareMode,
+      bookedRevenue: sumBookedSales(periodSales),
+      collectedCash: sumCollectedTransactions(collectedTransactions),
+      leadCount,
+      convertedLeadCount,
+      salesCount: periodSales.length,
       activeSales,
-      revenueByMonth,
+      outstandingReceivables: toNumber(outstandingAgg._sum.amount),
+      comparison,
+      revenueByPeriod,
       leadsByAgent,
-      salesByBrand,
-      thisMonthRevenue: Number(thisMonthRevenueAgg._sum.totalAmount ?? 0),
-      lastMonthRevenue: Number(lastMonthRevenueAgg._sum.totalAmount ?? 0),
-      newLeadsThisMonth,
-      newLeadsLastMonth,
-      invoiceSummary: {
-        overdue:       { count: overdueInvoiceAgg._count.id,      total: Number(overdueInvoiceAgg._sum.amount ?? 0) },
-        unpaid:        { count: unpaidInvoiceAgg._count.id,       total: Number(unpaidInvoiceAgg._sum.amount ?? 0) },
-        paidThisMonth: { count: paidThisMonthInvoiceAgg._count.id, total: Number(paidThisMonthInvoiceAgg._sum.amount ?? 0) },
+      salesByBrand: Array.from(brandMap.values()).map((brand) => ({
+        ...brand,
+        bookedRevenue: Math.round(brand.bookedRevenue * 100) / 100,
+      })),
+      leadStatusBreakdown: leadStatusBreakdown.map((group) => ({
+        status: group.status,
+        count: group._count.id,
+      })),
+      receivablesSummary: {
+        outstanding: {
+          count: outstandingAgg._count.id,
+          total: toNumber(outstandingAgg._sum.amount),
+        },
+        overdue: {
+          count: overdueAgg._count.id,
+          total: toNumber(overdueAgg._sum.amount),
+        },
+        unpaidUpcoming: {
+          count: unpaidUpcomingAgg._count.id,
+          total: toNumber(unpaidUpcomingAgg._sum.amount),
+        },
       },
-      leadStatusBreakdown: leadStatusGroups.map((g) => ({ status: g.status, count: g._count.id })),
     };
   }
 }

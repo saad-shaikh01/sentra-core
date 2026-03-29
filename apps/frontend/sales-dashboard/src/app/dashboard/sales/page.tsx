@@ -190,7 +190,7 @@ export default function SalesPage() {
         {
           key:    'totalAmount',
           header: 'Amount',
-          className: 'w-[140px]',
+          className: 'w-[180px]',
           render: (s) => (
             <div>
               <span className="font-bold">
@@ -201,6 +201,11 @@ export default function SalesPage() {
                   {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.discountedTotal)} net
                 </div>
               ) : null}
+              <div className="text-[11px] text-muted-foreground/80 leading-tight">
+                Collected {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.collectedAmount ?? 0)}
+                {' · '}
+                Outstanding {new Intl.NumberFormat('en-US', { style: 'currency', currency: s.currency ?? 'USD' }).format(s.outstandingAmount ?? 0)}
+              </div>
             </div>
           ),
         },
@@ -220,15 +225,21 @@ export default function SalesPage() {
         },
         {
           key:    'status',
-          header: 'Status',
+          header: 'Lifecycle',
           className: 'w-[120px]',
           render: (s) => <StatusBadge status={s.status} />,
         },
         {
-          key:    'createdAt',
-          header: 'Created',
+          key:    'paymentStatus',
+          header: 'Payment',
+          className: 'w-[150px]',
+          render: (s) => <StatusBadge status={s.paymentStatus ?? 'UNPAID'} />,
+        },
+        {
+          key:    'saleDate',
+          header: 'Sale Date',
           className: 'w-[120px]',
-          render: (s) => new Date(s.createdAt).toLocaleDateString(),
+          render: (s) => new Date(s.saleDate ?? s.createdAt).toLocaleDateString(),
         },
       ];
 

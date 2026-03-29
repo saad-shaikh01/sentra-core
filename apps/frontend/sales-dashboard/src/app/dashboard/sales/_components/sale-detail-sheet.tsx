@@ -58,7 +58,7 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
         open={!!saleId}
         onClose={onClose}
         title={`Sale — $${sale?.totalAmount ?? ''} ${sale?.currency ?? ''}`}
-        description={sale ? `Status: ${sale.status}` : undefined}
+        description={sale ? `Lifecycle: ${sale.status} · Payment: ${sale.paymentStatus ?? 'UNPAID'}` : undefined}
       >
         {isLoading ? (
           <div className="space-y-3 animate-pulse">
@@ -72,11 +72,24 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
         ) : sale ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <InfoCard label="Status" value={<StatusBadge status={sale.status} />} />
+              <InfoCard label="Lifecycle" value={<StatusBadge status={sale.status} />} />
+              <InfoCard label="Payment Status" value={<StatusBadge status={sale.paymentStatus ?? 'UNPAID'} />} />
               <InfoCard label="Currency" value={<span className="text-sm">{sale.currency}</span>} />
-              <InfoCard label="Amount" value={<span className="text-sm font-bold">${sale.totalAmount}</span>} />
+              <InfoCard
+                label="Financials"
+                value={(
+                  <div className="space-y-1 text-sm">
+                    <div className="font-bold">${sale.totalAmount}</div>
+                    <div className="text-muted-foreground">Net ${sale.netAmount ?? sale.discountedTotal ?? sale.totalAmount}</div>
+                    <div className="text-muted-foreground">Collected ${sale.collectedAmount ?? 0}</div>
+                    <div className="text-muted-foreground">Outstanding ${sale.outstandingAmount ?? 0}</div>
+                  </div>
+                )}
+              />
               <InfoCard label="Client" value={<span className="text-sm">{sale.client.contactName ?? sale.client.email}</span>} />
               <InfoCard label="Agent" value={<span className="text-sm">{agentName ?? 'Unassigned'}</span>} />
+              <InfoCard label="Sale Date" value={<span className="text-sm">{new Date(sale.saleDate ?? sale.createdAt).toLocaleDateString()}</span>} />
+              <InfoCard label="Created At" value={<span className="text-sm">{new Date(sale.createdAt).toLocaleDateString()}</span>} />
             </div>
 
             {sale.description && (
@@ -202,12 +215,19 @@ export function SaleDetailSheet({ saleId, onClose }: SaleDetailSheetProps) {
                   {sale.invoices.map((inv) => (
                     <div key={inv.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
                       <div>
-                        <p className="text-sm font-medium">{inv.invoiceNumber}</p>
-                        <p className="text-xs text-muted-foreground">Due {new Date(inv.dueDate).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{inv.invoiceNumber}</p>
+                          <StatusBadge status={inv.status} />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Issued {new Date(inv.invoiceDate).toLocaleDateString()} · Due {new Date(inv.dueDate).toLocaleDateString()}
+                        </p>
+                        {inv.paidAt ? (
+                          <p className="text-xs text-emerald-400/80">Paid {new Date(inv.paidAt).toLocaleDateString()}</p>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold">${inv.amount}</span>
-                        <StatusBadge status={inv.status} />
                       </div>
                     </div>
                   ))}
