@@ -832,27 +832,61 @@ export interface IInvoiceSummary {
 // ANALYTICS
 // ==========================================
 
+export type AnalyticsPreset = 'this_week' | 'this_month' | 'last_30_days' | 'specific_month' | 'custom';
+export type AnalyticsGranularity = 'weekly' | 'monthly';
+export type AnalyticsCompareMode = 'previous_period' | 'previous_month' | 'none';
+
+export interface IAnalyticsFilter {
+  fromDate?: string;
+  toDate?: string;
+  preset?: AnalyticsPreset;
+  granularity?: AnalyticsGranularity;
+  compareMode?: AnalyticsCompareMode;
+  month?: string;  // '1'-'12'
+  year?: string;   // e.g. '2026'
+}
+
 export interface IAnalyticsSummary {
+  // === PERIOD METADATA ===
+  periodLabel: string;
+  granularity: AnalyticsGranularity;
+  compareMode: 'previous_period' | 'previous_month' | null;
+
+  // === PERIOD METRICS (filtered by selected date range) ===
   totalRevenue: number;
   totalLeads: number;
   convertedLeads: number;
-  activeSales: number;
-  revenueByMonth: Array<{ month: string; revenue: number }>;
+  activeSales: number; // snapshot: current active sales
+
+  // === COMPARISON SUMMARY ===
+  comparison: {
+    revenue: number;
+    leads: number;
+    convertedLeads: number;
+    periodLabel: string;
+  } | null;
+
+  // === CHART DATA ===
+  revenueByMonth: Array<{ month: string; revenue: number }>; // legacy compat (monthly buckets)
+  revenueByPeriod: Array<{ period: string; revenue: number; compRevenue?: number }>; // primary (weekly or monthly)
+
+  // === BREAKDOWNS ===
   leadsByAgent: Array<{ agentName: string; total: number; converted: number }>;
   salesByBrand: Array<{ brandName: string; total: number; revenue: number }>;
-  // Month-over-month
-  thisMonthRevenue: number;
-  lastMonthRevenue: number;
-  newLeadsThisMonth: number;
-  newLeadsLastMonth: number;
-  // Invoice summary
-  invoiceSummary: {
-    overdue: { count: number; total: number };
-    unpaid: { count: number; total: number };
-    paidThisMonth: { count: number; total: number };
-  };
-  // Lead pipeline breakdown
   leadStatusBreakdown: Array<{ status: string; count: number }>;
+
+  // === PERIOD-AWARE COMPARISON HELPERS ===
+  thisMonthRevenue: number;   // revenue in selected period
+  lastMonthRevenue: number;   // revenue in comparison period
+  newLeadsThisMonth: number;  // leads in selected period
+  newLeadsLastMonth: number;  // leads in comparison period
+
+  // === INVOICE SUMMARY ===
+  invoiceSummary: {
+    overdue: { count: number; total: number };       // snapshot
+    unpaid: { count: number; total: number };         // snapshot
+    paidThisMonth: { count: number; total: number };  // period: paid within selected range
+  };
 }
 
 // ==========================================

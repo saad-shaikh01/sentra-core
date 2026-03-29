@@ -6,3 +6,4 @@ export * from './badge';
 export * from './avatar';
 export * from './dialog';
 export * from './select';
+export * from './dropdown-menu';
