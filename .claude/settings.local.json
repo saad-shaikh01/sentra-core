@@ -59,7 +59,9 @@
       "Bash(find 'D:\\\\Repositories/new crm/sentra-core' -type f \\\\\\(-name .env* -o -name *.env \\\\\\))",
       "Bash(grep -iE \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(grep -r \"NCE\\\\|INVALID\\\\|LeadStatus\" '/d/Repositories/new crm/sentra-core/apps/frontend/pm-dashboard/src' --include=*.ts --include=*.tsx)",
-      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(npx dotenv:*)",
+      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-lead-converted-at.ts)"
     ]
   }
 }
