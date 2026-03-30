@@ -61,7 +61,8 @@
       "Bash(grep -r \"NCE\\\\|INVALID\\\\|LeadStatus\" '/d/Repositories/new crm/sentra-core/apps/frontend/pm-dashboard/src' --include=*.ts --include=*.tsx)",
       "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
       "Bash(npx dotenv:*)",
-      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-lead-converted-at.ts)"
+      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-lead-converted-at.ts)",
+      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-sale-invoice-transaction-dates.ts)"
     ]
   }
 }
