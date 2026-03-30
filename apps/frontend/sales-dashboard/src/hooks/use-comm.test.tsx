@@ -1,16 +1,18 @@
 import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useMarkThreadRead, useUnreadCount } from './use-comm';
+import { useCommIntelligenceSummary, useMarkThreadRead, useUnreadCount } from './use-comm';
 import { useUIStore } from '@/stores/ui-store';
 
 const mockApiFetch = jest.fn();
 const mockMarkCommThreadRead = jest.fn();
+const mockGetCommIntelligenceSummary = jest.fn();
 
 jest.mock('@/lib/api', () => ({
   api: {
     fetch: (...args: unknown[]) => mockApiFetch(...args),
     markCommThreadRead: (...args: unknown[]) => mockMarkCommThreadRead(...args),
+    getCommIntelligenceSummary: (...args: unknown[]) => mockGetCommIntelligenceSummary(...args),
   },
 }));
 
@@ -66,10 +68,24 @@ function MarkReadProbe() {
   );
 }
 
+function IntelligenceSummaryProbe() {
+  const summary = useCommIntelligenceSummary({
+    dateFrom: '2026-03-01T00:00:00.000Z',
+    dateTo: '2026-03-30T23:59:59.000Z',
+  });
+
+  if (summary.isLoading) {
+    return <div>Loading</div>;
+  }
+
+  return <div>{summary.data?.queues.hotLeads ?? 0}</div>;
+}
+
 describe('use-comm unread hooks', () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockMarkCommThreadRead.mockReset();
+    mockGetCommIntelligenceSummary.mockReset();
     window.localStorage.clear();
     useUIStore.setState({
       commUnreadCount: 0,
@@ -81,12 +97,15 @@ describe('use-comm unread hooks', () => {
   });
 
   it('fetches unread count on mount and reconciles the stored value', async () => {
-    window.localStorage.setItem('comm:unread', JSON.stringify({ count: 2, timestamp: 123 }));
+    window.localStorage.setItem(
+      'comm:unread',
+      JSON.stringify({ count: 2, timestamp: 123 }),
+    );
     mockApiFetch.mockResolvedValue({ total: 5, byIdentity: { 'identity-1': 5 } });
 
     renderWithClient(<UnreadCountProbe />);
 
-    expect(screen.getByText('2')).not.toBeNull();
+    expect(screen.getByText('0')).not.toBeNull();
 
     await waitFor(() =>
       expect(mockApiFetch).toHaveBeenCalledWith('/threads/unread-count', { service: 'comm' }),
@@ -118,5 +137,45 @@ describe('use-comm unread hooks', () => {
     await waitFor(() => expect(mockMarkCommThreadRead).toHaveBeenCalledWith('thread-1'));
     await waitFor(() => expect(useUIStore.getState().commUnreadCount).toBe(2));
     expect(JSON.parse(window.localStorage.getItem('comm:unread') ?? '{}').count).toBe(2);
+  });
+
+  it('fetches the intelligence summary through the comm API helper', async () => {
+    mockGetCommIntelligenceSummary.mockResolvedValue({
+      data: {
+        dateRange: {
+          dateFrom: '2026-03-01T00:00:00.000Z',
+          dateTo: '2026-03-30T23:59:59.000Z',
+        },
+        totals: {
+          trackedSends: 4,
+          replies: 2,
+          estimatedOpens: 3,
+          suspiciousOpens: 1,
+          bounces: 0,
+          sendFailures: 0,
+        },
+        responseTimes: {
+          sampleSize: 2,
+          signalQuality: 'weak',
+        },
+        queues: {
+          needsFollowUp: 1,
+          hotLeads: 3,
+          overdue: 2,
+          openedNoReply: 1,
+          suspiciousOnly: 0,
+        },
+      },
+    });
+
+    renderWithClient(<IntelligenceSummaryProbe />);
+
+    await waitFor(() =>
+      expect(mockGetCommIntelligenceSummary).toHaveBeenCalledWith({
+        dateFrom: '2026-03-01T00:00:00.000Z',
+        dateTo: '2026-03-30T23:59:59.000Z',
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('3')).not.toBeNull());
   });
 });

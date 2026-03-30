@@ -7,6 +7,7 @@ import { useEntityTimeline } from '@/hooks/use-comm';
 import { timeAgo } from '@/lib/format-date';
 import { ThreadViewDrawer } from './thread-view-drawer';
 import { ComposeDrawer } from './compose-drawer';
+import { CommIntelligenceBadges, CommTrackingBadges } from './tracking-state';
 import type { CommMessageSummary } from '@/types/comm.types';
 import Link from 'next/link';
 import { COMM_ENABLED } from '@/lib/feature-flags';
@@ -84,7 +85,7 @@ export function EntityEmailTimeline({ entityType, entityId, recipientEmail, enti
           <p className="text-sm text-muted-foreground">No emails yet</p>
           {COMM_ENABLED && (
             <p className="text-xs text-muted-foreground/60">
-              Compose an email above, or link one from your{' '}
+              Compose an email above, or link one from {entityLabel ?? 'this record'}{' '}
               <span className="text-primary/70">inbox</span>
             </p>
           )}
@@ -195,6 +196,18 @@ function EmailCard({ message, onClick }: { message: CommMessageSummary; onClick:
       {message.snippet && (
         <p className="text-xs text-muted-foreground truncate">{message.snippet}</p>
       )}
+      <CommTrackingBadges
+        source={message}
+        compact
+        showTiming
+        className="pt-1"
+      />
+      <CommIntelligenceBadges
+        source={message}
+        compact
+        showReasons={false}
+        className="pt-1"
+      />
     </button>
   );
 }

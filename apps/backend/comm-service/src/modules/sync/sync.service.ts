@@ -24,7 +24,14 @@ import { CommGateway } from '../gateway/comm.gateway';
 import { WatchRenewalService } from './watch-renewal.service';
 import { COMM_ATTACHMENT_QUEUE, COMM_SYNC_QUEUE } from './sync.constants';
 import { EntityLinksService } from '../entity-links/entity-links.service';
-import sanitizeHtml from 'sanitize-html';
+import {
+  deriveThreadState,
+  mergeAttachments,
+  parseGmailMessage as parseCanonicalGmailMessage,
+  ParsedGmailMessage,
+} from './gmail-message.utils';
+import { TrackingService } from '../tracking/tracking.service';
+import { IntelligenceService } from '../intelligence/intelligence.service';
 
 type RateLimitedError = Error & {
   retryAfterSeconds?: number;
@@ -41,6 +48,11 @@ type InitialSyncJobData = SyncJobData & {
 
 type ProcessMessageJobData = SyncJobData & {
   messageId: string;
+};
+
+type SyncMessageOptions = {
+  emitInboundEvent?: boolean;
+  sentByUserId?: string;
 };
 
 @Injectable()
@@ -62,6 +74,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     @InjectQueue(COMM_ATTACHMENT_QUEUE)
     private readonly attachmentQueue: Queue,
     private readonly gmailApi: GmailApiService,
+    private readonly trackingService: TrackingService,
+    private readonly intelligenceService: IntelligenceService,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly watchRenewal?: WatchRenewalService,
     private readonly entityLinksService?: EntityLinksService,
@@ -315,168 +329,250 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
    * Called by the sync processor.
    */
   async processMessage(identity: CommIdentityDocument, gmailMessageId: string): Promise<void> {
-    const gmail = await this.gmailApi.getGmailClient(identity);
+    await this.syncGmailMessage(identity, gmailMessageId);
+  }
 
-    // Skip if already processed
+  async syncGmailMessage(
+    identity: CommIdentityDocument,
+    gmailMessageId: string,
+    options: SyncMessageOptions = {},
+  ): Promise<{
+    isNew: boolean;
+    message: CommMessageDocument;
+    thread: CommThreadDocument;
+    parsed: ParsedGmailMessage;
+  }> {
+    const gmail = await this.gmailApi.getGmailClient(identity);
     const existing = await this.messageModel.findOne({
       organizationId: identity.organizationId,
       gmailMessageId,
-    });
-    if (existing) return;
-
+    }).exec();
     const raw = await this.executeGmailCall(
       String(identity._id),
       () => this.gmailApi.getMessage(gmail, gmailMessageId),
     );
     const parsed = this.parseGmailMessage(raw, identity);
+    const mergedAttachments = mergeAttachments(existing?.attachments, parsed.attachments);
+    const sentByUserId = existing?.sentByUserId ?? options.sentByUserId;
+    const isNew = !existing;
 
-    const isNew = !(await this.messageModel.exists({ organizationId: identity.organizationId, gmailMessageId }));
-
-    await this.messageModel.findOneAndUpdate(
+    const message = (await this.messageModel.findOneAndUpdate(
       { organizationId: identity.organizationId, gmailMessageId },
-      { $setOnInsert: parsed },
-      { upsert: true },
+      {
+        $set: {
+          ...parsed,
+          attachments: mergedAttachments,
+          ...(sentByUserId ? { sentByUserId } : {}),
+        },
+        $setOnInsert: {
+          organizationId: identity.organizationId,
+          gmailMessageId,
+          gmailThreadId: parsed.gmailThreadId,
+          identityId: parsed.identityId,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ))!;
+
+    await this.applyBounceDetection(identity.organizationId, message);
+    const thread = await this.refreshThreadState(
+      identity.organizationId,
+      parsed.gmailThreadId,
+      String(identity._id),
     );
 
-    // Upsert thread
-    const thread = await this.upsertThread(identity, raw, parsed);
+    if (isNew && !parsed.isSentByIdentity && !parsed.isBounceDetected && thread.replyState === 'replied') {
+      try {
+        await this.trackingService.recordReplyDetected(message, thread);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to record reply-detected event for ${gmailMessageId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
     if (parsed.gmailThreadId) {
       await this.entityLinksService?.autoLinkThreads(identity.organizationId, [parsed.gmailThreadId]);
     }
 
-    // Emit realtime event for newly inbound messages
-    if (isNew && !parsed.isSentByIdentity) {
+    if (options.emitInboundEvent !== false && isNew && !parsed.isSentByIdentity) {
       this.gateway?.emitToOrg(identity.organizationId, 'message:new', {
         threadId: String(thread._id),
         gmailThreadId: parsed.gmailThreadId,
         direction: 'inbound',
         message: {
-          id: gmailMessageId,
+          id: String(message._id),
           gmailMessageId,
           gmailThreadId: parsed.gmailThreadId,
           from: parsed.from,
           subject: parsed.subject,
-          snippet: parsed.bodyText?.slice(0, 200) ?? '',
+          snippet: parsed.bodyText?.slice(0, 200) ?? parsed.subject ?? '',
           sentAt: parsed.sentAt,
           identityId: parsed.identityId,
         },
       });
     }
 
-    // Queue attachment archival if S3 is configured
-    const s3Bucket = process.env.S3_BUCKET;
-    if (s3Bucket && parsed.attachments.length > 0) {
-      for (const att of parsed.attachments) {
-        if (att.gmailAttachmentId) {
+    const archiveBucket = process.env.WASABI_BUCKET ?? process.env.S3_BUCKET;
+    if (archiveBucket && mergedAttachments.length > 0) {
+      for (const attachment of mergedAttachments) {
+        if (attachment.gmailAttachmentId) {
           await this.attachmentQueue.add('archive-attachment', {
             organizationId: identity.organizationId,
             identityId: String(identity._id),
             gmailMessageId,
-            attachmentId: att.gmailAttachmentId,
-            filename: att.filename,
+            attachmentId: attachment.gmailAttachmentId,
+            filename: attachment.filename,
           });
         }
       }
+    }
+
+    return { isNew, message, thread, parsed };
+  }
+
+  async refreshThreadState(
+    organizationId: string,
+    gmailThreadId: string,
+    identityId: string,
+  ): Promise<CommThreadDocument> {
+    const [existingThread, messages] = await Promise.all([
+      this.threadModel.findOne({ organizationId, gmailThreadId }).exec(),
+      this.messageModel
+        .find({ organizationId, gmailThreadId })
+        .sort({ sentAt: 1, _id: 1 })
+        .lean()
+        .exec(),
+    ]);
+
+    const derived = deriveThreadState(messages, existingThread ?? undefined);
+    const thread = (await this.threadModel.findOneAndUpdate(
+      { organizationId, gmailThreadId },
+      {
+        $setOnInsert: {
+          organizationId,
+          gmailThreadId,
+          identityId,
+          entityLinks: [],
+        },
+        $set: {
+          identityId,
+          participants: derived.participants,
+          messageCount: derived.messageCount,
+          lastMessageAt: derived.lastMessageAt,
+          lastOutboundAt: derived.lastOutboundAt,
+          lastInboundAt: derived.lastInboundAt,
+          repliedAt: derived.repliedAt,
+          replyState: derived.replyState,
+          deliveryState: derived.deliveryState,
+          bounceState: derived.bounceState,
+          bounceDetectedAt: derived.bounceDetectedAt,
+          bounceReason: derived.bounceReason,
+          hasUnread: derived.hasUnread,
+          hasSent: derived.hasSent,
+          subject: derived.subject ?? existingThread?.subject,
+          snippet: derived.snippet ?? existingThread?.snippet,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ).exec())!;
+
+    try {
+      return (await this.intelligenceService.refreshThreadIntelligence(
+        organizationId,
+        gmailThreadId,
+      )) ?? thread;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to refresh thread intelligence for ${gmailThreadId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return thread;
+    }
+  }
+
+  async recordThreadSendFailure(
+    organizationId: string,
+    gmailThreadId: string,
+    errorMessage: string,
+  ): Promise<void> {
+    await this.threadModel.findOneAndUpdate(
+      { organizationId, gmailThreadId },
+      {
+        $set: {
+          lastSendFailureAt: new Date(),
+          lastSendFailureReason: errorMessage,
+          deliveryState: 'send_failed',
+        },
+      },
+    ).exec();
+
+    try {
+      await this.intelligenceService.refreshThreadIntelligence(organizationId, gmailThreadId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to refresh send-failure intelligence for ${gmailThreadId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
   private parseGmailMessage(
     raw: gmail_v1.Schema$Message,
     identity: CommIdentityDocument,
-  ): Partial<CommMessage> {
-    const headers = raw.payload?.headers ?? [];
-    const getHeader = (name: string) =>
-      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? '';
+  ): ParsedGmailMessage {
+    return parseCanonicalGmailMessage(raw, identity);
+  }
 
-    const parseEmailList = (header: string) => {
-      return header
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => {
-          const match = s.match(/^"?([^"<]*)"?\s*<?([^>]*)>?$/);
-          if (match) {
-            return { name: match[1].trim() || undefined, email: match[2].trim() || s };
-          }
-          return { email: s };
-        });
-    };
-
-    const from = parseEmailList(getHeader('from'))[0] ?? { email: '' };
-    const to = parseEmailList(getHeader('to'));
-    const cc = parseEmailList(getHeader('cc'));
-    const bcc = parseEmailList(getHeader('bcc'));
-    const subject = getHeader('subject') || undefined;
-    const dateStr = getHeader('date');
-    const sentAt = dateStr ? new Date(dateStr) : undefined;
-
-    // Extract body
-    let bodyText: string | undefined;
-    let rawBodyHtml: string | undefined;
-    const attachments: CommMessage['attachments'] = [];
-
-    const extractParts = (parts: gmail_v1.Schema$MessagePart[] = []) => {
-      for (const part of parts) {
-        if (part.mimeType === 'text/plain' && part.body?.data) {
-          bodyText = Buffer.from(part.body.data, 'base64url').toString('utf8');
-        } else if (part.mimeType === 'text/html' && part.body?.data) {
-          rawBodyHtml = Buffer.from(part.body.data, 'base64url').toString('utf8');
-        } else if (part.filename && part.body?.attachmentId) {
-          attachments.push({
-            filename: part.filename,
-            mimeType: part.mimeType ?? 'application/octet-stream',
-            size: part.body.size ?? 0,
-            gmailAttachmentId: part.body.attachmentId,
-          });
-        }
-        if (part.parts) extractParts(part.parts);
-      }
-    };
-
-    if (raw.payload?.parts) {
-      extractParts(raw.payload.parts);
-    } else if (raw.payload?.body?.data) {
-      const mime = raw.payload.mimeType ?? 'text/plain';
-      const text = Buffer.from(raw.payload.body.data, 'base64url').toString('utf8');
-      if (mime === 'text/html') rawBodyHtml = text;
-      else bodyText = text;
+  private async applyBounceDetection(
+    organizationId: string,
+    message: CommMessageDocument,
+  ): Promise<void> {
+    if (!message.isBounceDetected) {
+      return;
     }
 
-    const bodyHtml = rawBodyHtml
-      ? sanitizeHtml(rawBodyHtml, {
-          allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2']),
-          allowedAttributes: {
-            ...sanitizeHtml.defaults.allowedAttributes,
-            img: ['src', 'alt', 'width', 'height'],
-            a: ['href', 'target', 'rel'],
-          },
-          allowedSchemes: ['https', 'data'],
-          allowedSchemesByTag: { img: ['https', 'data'] },
-        }) || undefined
-      : undefined;
+    const referenceIds = [
+      message.inReplyToRfcMessageId,
+      ...(message.referenceIds ?? []),
+    ].filter((candidate): candidate is string => Boolean(candidate));
 
-    const labels = raw.labelIds ?? [];
-    const isRead = !labels.includes('UNREAD');
-    const isSentByIdentity = labels.includes('SENT');
+    if (referenceIds.length === 0) {
+      return;
+    }
 
-    return {
-      organizationId: identity.organizationId,
-      gmailThreadId: raw.threadId!,
-      gmailMessageId: raw.id!,
-      identityId: String(identity._id),
-      from,
-      to,
-      cc,
-      bcc,
-      subject,
-      bodyText,
-      bodyHtml,
-      attachments,
-      sentAt,
-      isRead,
-      isSentByIdentity,
-      gmailLabels: labels,
-    };
+    const outbound = await this.messageModel.findOne({
+      organizationId,
+      isSentByIdentity: true,
+      rfcMessageId: { $in: referenceIds },
+    }).exec();
+
+    if (!outbound) {
+      return;
+    }
+
+    await this.messageModel.findByIdAndUpdate(outbound._id, {
+      $set: {
+        deliveryState: 'bounce_detected',
+        bounceDetectedAt: message.bounceDetectedAt ?? message.sentAt ?? new Date(),
+        bounceReason: message.bounceReason ?? outbound.bounceReason ?? 'Bounce detected from mailbox sync',
+      },
+    });
+
+    const thread = await this.refreshThreadState(organizationId, outbound.gmailThreadId, outbound.identityId);
+    try {
+      await this.trackingService.recordBounceDetected(outbound, thread, message);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to record bounce-detected event for ${outbound.gmailMessageId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private async upsertThread(

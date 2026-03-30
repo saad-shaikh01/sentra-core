@@ -14,8 +14,10 @@ import { AttachmentsService } from '../../src/modules/attachments/attachments.se
 import { EntityLinksService } from '../../src/modules/entity-links/entity-links.service';
 import { IdentitiesService } from '../../src/modules/identities/identities.service';
 import { MessagesService } from '../../src/modules/messages/messages.service';
+import { IntelligenceService } from '../../src/modules/intelligence/intelligence.service';
 import { GmailApiService } from '../../src/modules/sync/gmail-api.service';
 import { SyncService } from '../../src/modules/sync/sync.service';
+import { TrackingService } from '../../src/modules/tracking/tracking.service';
 import { ThreadsService } from '../../src/modules/threads/threads.service';
 
 type TokensHandler = (tokens: {
@@ -91,6 +93,16 @@ type ThreadRecord = {
   messageCount: number;
   hasUnread: boolean;
   hasSent: boolean;
+  replyState?: string;
+  deliveryState?: string;
+  bounceState?: string;
+  lastOutboundAt?: Date;
+  lastInboundAt?: Date;
+  repliedAt?: Date;
+  bounceDetectedAt?: Date;
+  bounceReason?: string;
+  lastSendFailureAt?: Date;
+  lastSendFailureReason?: string;
   isArchived: boolean;
   lastMessageAt?: Date;
   toObject?: () => ThreadRecord;
@@ -111,8 +123,18 @@ type MessageRecord = {
   bodyHtml?: string;
   attachments: AttachmentRecord[];
   sentAt?: Date;
+  gmailInternalDate?: Date;
+  rfcMessageId?: string;
+  inReplyToRfcMessageId?: string;
+  referenceIds?: string[];
+  headers?: Record<string, string>;
   isRead: boolean;
   isSentByIdentity: boolean;
+  isBounceDetected?: boolean;
+  deliveryState?: string;
+  bounceDetectedAt?: Date;
+  bounceReason?: string;
+  sentByUserId?: string;
   gmailLabels: string[];
 };
 
@@ -524,6 +546,9 @@ function createHarness() {
           gmailLabels: [],
         };
         applyUpdate(message as unknown as Record<string, unknown>, update, true);
+        if (update.$set) {
+          applyUpdate(message as unknown as Record<string, unknown>, update);
+        }
         messages.push(message);
       } else if (message && update.$set) {
         applyUpdate(message as unknown as Record<string, unknown>, update);
@@ -677,6 +702,13 @@ describe('COMM regression e2e', () => {
         };
       }),
     };
+    const trackingService = {
+      recordReplyDetected: jest.fn().mockResolvedValue(undefined),
+      recordBounceDetected: jest.fn().mockResolvedValue(undefined),
+    };
+    const intelligenceService = {
+      refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
+    };
 
     const service = new SyncService(
       harness.identityModel as unknown as Model<CommIdentityDocument>,
@@ -686,6 +718,8 @@ describe('COMM regression e2e', () => {
       harness.syncQueue as never,
       { add: jest.fn() } as never,
       gmailApi as unknown as GmailApiService,
+      trackingService as unknown as TrackingService,
+      intelligenceService as unknown as IntelligenceService,
       undefined,
       undefined,
       entityLinksService,
@@ -711,7 +745,12 @@ describe('COMM regression e2e', () => {
       hasSent: true,
       hasUnread: true,
       messageCount: 2,
+      replyState: 'replied',
+      deliveryState: 'sent',
     });
+    expect(harness.threads[0].lastOutboundAt).toEqual(new Date('2026-03-11T10:00:00.000Z'));
+    expect(harness.threads[0].lastInboundAt).toEqual(new Date('2026-03-11T11:00:00.000Z'));
+    expect(harness.threads[0].repliedAt).toEqual(new Date('2026-03-11T11:00:00.000Z'));
     expect(harness.entityLinks).toEqual([
       expect.objectContaining({
         gmailThreadId: 'gmail-thread-1',
@@ -763,8 +802,53 @@ describe('COMM regression e2e', () => {
         },
       }),
       getMessage: jest.fn().mockResolvedValue({
+        id: 'gmail-message-1',
+        threadId: 'gmail-thread-1',
+        internalDate: String(new Date('2026-03-11T10:00:00.000Z').getTime()),
+        labelIds: ['SENT'],
+        payload: {
+          headers: [
+            { name: 'From', value: 'Agent <agent@example.com>' },
+            { name: 'To', value: 'Client <client@example.com>' },
+            { name: 'Subject', value: 'Hello' },
+            { name: 'Date', value: 'Wed, 11 Mar 2026 10:00:00 +0000' },
+            { name: 'Message-ID', value: '<sent-1@example.com>' },
+          ],
+          mimeType: 'text/plain',
+          body: {
+            data: Buffer.from('Hello there').toString('base64url'),
+          },
+        },
+      }),
+    };
+
+    gmailApi.getMessage.mockImplementation(async (_gmail: unknown, messageId: string) => {
+      if (messageId === 'gmail-message-1') {
+        return {
+          id: 'gmail-message-1',
+          threadId: 'gmail-thread-1',
+          internalDate: String(new Date('2026-03-11T10:00:00.000Z').getTime()),
+          labelIds: ['SENT'],
+          payload: {
+            headers: [
+              { name: 'From', value: 'Agent <agent@example.com>' },
+              { name: 'To', value: 'Client <client@example.com>' },
+              { name: 'Subject', value: 'Hello' },
+              { name: 'Date', value: 'Wed, 11 Mar 2026 10:00:00 +0000' },
+              { name: 'Message-ID', value: '<sent-1@example.com>' },
+            ],
+            mimeType: 'text/plain',
+            body: {
+              data: Buffer.from('Hello there').toString('base64url'),
+            },
+          },
+        };
+      }
+
+      return {
         id: 'gmail-message-2',
         threadId: 'gmail-thread-1',
+        internalDate: String(new Date('2026-03-11T11:00:00.000Z').getTime()),
         labelIds: ['INBOX', 'UNREAD'],
         payload: {
           headers: [
@@ -772,14 +856,46 @@ describe('COMM regression e2e', () => {
             { name: 'To', value: 'Agent <agent@example.com>' },
             { name: 'Subject', value: 'Hello' },
             { name: 'Date', value: 'Wed, 11 Mar 2026 11:00:00 +0000' },
+            { name: 'In-Reply-To', value: '<sent-1@example.com>' },
+            { name: 'References', value: '<sent-1@example.com>' },
           ],
           mimeType: 'text/plain',
           body: {
             data: Buffer.from('Reply body').toString('base64url'),
           },
         },
-      }),
+      };
+    });
+    const trackingService = {
+      prepareOpenTracking: jest.fn().mockResolvedValue(null),
+      injectOpenTrackingPixel: jest.fn((bodyHtml: string) => bodyHtml),
+      activateOpenTracking: jest.fn().mockResolvedValue(undefined),
+      abandonPreparedOpenTracking: jest.fn().mockResolvedValue(undefined),
+      recordSentEvent: jest.fn().mockResolvedValue(undefined),
+      recordSendFailedEvent: jest.fn().mockResolvedValue(undefined),
+      recordReplyDetected: jest.fn().mockResolvedValue(undefined),
+      recordBounceDetected: jest.fn().mockResolvedValue(undefined),
     };
+    const intelligenceService = {
+      refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
+    };
+
+    const syncService = new SyncService(
+      harness.identityModel as unknown as Model<CommIdentityDocument>,
+      harness.threadModel as unknown as Model<CommThreadDocument>,
+      harness.messageModel as unknown as Model<CommMessageDocument>,
+      {} as Model<CommSyncJobDocument>,
+      harness.syncQueue as never,
+      { add: jest.fn() } as never,
+      gmailApi as unknown as GmailApiService,
+      trackingService as unknown as TrackingService,
+      intelligenceService as unknown as IntelligenceService,
+      undefined,
+      undefined,
+      {
+        autoLinkThreads: jest.fn().mockResolvedValue(undefined),
+      } as never,
+    );
 
     const messagesService = new MessagesService(
       harness.messageModel as unknown as Model<CommMessageDocument>,
@@ -791,6 +907,8 @@ describe('COMM regression e2e', () => {
         resolveUserIdentityIds: jest.fn().mockResolvedValue(['identity-1']),
       } as never,
       gmailApi as unknown as GmailApiService,
+      syncService,
+      trackingService as unknown as TrackingService,
       {
         fetchAttachmentBuffers: jest.fn().mockResolvedValue([]),
       } as unknown as AttachmentsService,
@@ -799,21 +917,6 @@ describe('COMM regression e2e', () => {
       } as unknown as AuditService,
       undefined,
       undefined,
-    );
-
-    const syncService = new SyncService(
-      harness.identityModel as unknown as Model<CommIdentityDocument>,
-      harness.threadModel as unknown as Model<CommThreadDocument>,
-      harness.messageModel as unknown as Model<CommMessageDocument>,
-      {} as Model<CommSyncJobDocument>,
-      harness.syncQueue as never,
-      { add: jest.fn() } as never,
-      gmailApi as unknown as GmailApiService,
-      undefined,
-      undefined,
-      {
-        autoLinkThreads: jest.fn().mockResolvedValue(undefined),
-      } as never,
     );
 
     const threadsService = new ThreadsService(
@@ -835,7 +938,14 @@ describe('COMM regression e2e', () => {
       'gmail-message-2',
     );
 
+    expect(harness.messages[0]).toMatchObject({
+      gmailMessageId: 'gmail-message-1',
+      rfcMessageId: 'sent-1@example.com',
+      deliveryState: 'sent',
+      sentByUserId: 'user-1',
+    });
     expect(harness.threads[0].hasUnread).toBe(true);
+    expect(harness.threads[0].replyState).toBe('replied');
 
     await threadsService.markThreadRead(
       'org-1',

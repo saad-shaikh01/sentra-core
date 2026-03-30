@@ -47,6 +47,7 @@ describe('ThreadsService', () => {
   let messageModel: {
     find: jest.Mock;
     findOne: jest.Mock;
+    countDocuments: jest.Mock;
     updateMany: jest.Mock;
     findByIdAndUpdate: jest.Mock;
   };
@@ -73,6 +74,7 @@ describe('ThreadsService', () => {
     messageModel = {
       find: jest.fn(),
       findOne: jest.fn(),
+      countDocuments: jest.fn(),
       updateMany: jest.fn(),
       findByIdAndUpdate: jest.fn(),
     };
@@ -142,7 +144,7 @@ describe('ThreadsService', () => {
       'org-1',
       'admin-1',
       UserRole.ADMIN,
-      { page: 1, limit: 20, filter: 'all' },
+      { page: 1, limit: 20, filter: 'all', scope: 'all' },
     );
 
     expect(identityModel.find).not.toHaveBeenCalled();
@@ -164,7 +166,7 @@ describe('ThreadsService', () => {
       'org-1',
       'admin-1',
       UserRole.ADMIN,
-      { page: 1, limit: 20, filter: 'sent' },
+      { page: 1, limit: 20, filter: 'sent', scope: 'all' },
     );
 
     expect(threadModel.find).toHaveBeenCalledWith({
@@ -174,6 +176,60 @@ describe('ThreadsService', () => {
     });
     expect(result.data).toEqual([
       { _id: 'thread-1', identityId: 'identity-1', hasSent: true, isArchived: false },
+    ]);
+  });
+
+  it('listThreads with the opened filter applies hasOpenSignal true and excludes archived threads', async () => {
+    const threadsQuery = createQueryChain([
+      { _id: 'thread-1', identityId: 'identity-1', hasOpenSignal: true, isArchived: false },
+    ]);
+    threadModel.find.mockReturnValue(threadsQuery);
+    threadModel.countDocuments.mockResolvedValue(1);
+
+    const result = await service.listThreads(
+      'org-1',
+      'admin-1',
+      UserRole.ADMIN,
+      { page: 1, limit: 20, filter: 'opened', scope: 'all' },
+    );
+
+    expect(threadModel.find).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      hasOpenSignal: true,
+      isArchived: { $ne: true },
+    });
+    expect(result.data).toEqual([
+      { _id: 'thread-1', identityId: 'identity-1', hasOpenSignal: true, isArchived: false },
+    ]);
+  });
+
+  it('listThreads with the hot_lead filter prioritizes stored engagement queues', async () => {
+    const threadsQuery = createQueryChain([
+      { _id: 'thread-1', identityId: 'identity-1', hotLead: true, engagementScore: 82, isArchived: false },
+    ]);
+    threadModel.find.mockReturnValue(threadsQuery);
+    threadModel.countDocuments.mockResolvedValue(1);
+
+    const result = await service.listThreads(
+      'org-1',
+      'admin-1',
+      UserRole.ADMIN,
+      { page: 1, limit: 20, filter: 'hot_lead', scope: 'all' } as never,
+    );
+
+    expect(threadModel.find).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      hotLead: true,
+      isArchived: { $ne: true },
+    });
+    expect(threadsQuery.sort).toHaveBeenCalledWith({
+      hotLead: -1,
+      engagementScore: -1,
+      lastOpenedAt: -1,
+      lastMessageAt: -1,
+    });
+    expect(result.data).toEqual([
+      { _id: 'thread-1', identityId: 'identity-1', hotLead: true, engagementScore: 82, isArchived: false },
     ]);
   });
 
@@ -202,10 +258,18 @@ describe('ThreadsService', () => {
       _id: 'thread-2',
       identityId: 'identity-2',
       gmailThreadId: 'gmail-thread-2',
+      replyState: 'waiting',
+      deliveryState: 'bounce_detected',
+      bounceState: 'detected',
+      lastOutboundAt: '2026-03-20T09:00:00.000Z',
       toObject: () => ({
         _id: 'thread-2',
         identityId: 'identity-2',
         gmailThreadId: 'gmail-thread-2',
+        replyState: 'waiting',
+        deliveryState: 'bounce_detected',
+        bounceState: 'detected',
+        lastOutboundAt: '2026-03-20T09:00:00.000Z',
       }),
     };
     threadModel.findOne.mockReturnValue(createQueryChain(thread));
@@ -215,12 +279,75 @@ describe('ThreadsService', () => {
 
     const result = await service.getThread('org-1', 'gmail-thread-2', 'admin-1', UserRole.ADMIN);
 
-    expect(result).toEqual({
+    expect(result).toEqual(
+      expect.objectContaining({
+        _id: 'thread-2',
+        identityId: 'identity-2',
+        gmailThreadId: 'gmail-thread-2',
+        replyState: 'waiting',
+        deliveryState: 'bounce_detected',
+        bounceState: 'detected',
+        lastOutboundAt: '2026-03-20T09:00:00.000Z',
+        messages: [
+          expect.objectContaining({
+            _id: 'message-1',
+            gmailThreadId: 'gmail-thread-2',
+            replyState: 'waiting',
+            deliveryState: 'bounce_detected',
+            bounceState: 'detected',
+            lastOutboundAt: '2026-03-20T09:00:00.000Z',
+            tracking: expect.objectContaining({
+              replyState: 'waiting',
+              deliveryState: 'bounce_detected',
+              bounceState: 'detected',
+              lastOutboundAt: '2026-03-20T09:00:00.000Z',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('listMessages returns thread tracking state on each message', async () => {
+    const thread = {
       _id: 'thread-2',
       identityId: 'identity-2',
       gmailThreadId: 'gmail-thread-2',
-      messages: [{ _id: 'message-1', gmailThreadId: 'gmail-thread-2' }],
-    });
+      replyState: 'replied',
+      deliveryState: 'sent',
+      bounceState: 'none',
+      repliedAt: '2026-03-21T12:00:00.000Z',
+    };
+    threadModel.findOne.mockReturnValue(createQueryChain(thread));
+    messageModel.find.mockReturnValue(
+      createQueryChain([{ _id: 'message-1', gmailThreadId: 'gmail-thread-2' }]),
+    );
+    messageModel.countDocuments.mockResolvedValue(1);
+
+    const result = await service.listMessages(
+      'org-1',
+      'gmail-thread-2',
+      'admin-1',
+      UserRole.ADMIN,
+      { page: 1, limit: 20 },
+    );
+
+    expect(result.data).toEqual([
+      expect.objectContaining({
+        _id: 'message-1',
+        gmailThreadId: 'gmail-thread-2',
+        replyState: 'replied',
+        deliveryState: 'sent',
+        bounceState: 'none',
+        repliedAt: '2026-03-21T12:00:00.000Z',
+        tracking: expect.objectContaining({
+          replyState: 'replied',
+          deliveryState: 'sent',
+          bounceState: 'none',
+          repliedAt: '2026-03-21T12:00:00.000Z',
+        }),
+      }),
+    ]);
   });
 
   it('getUnreadCount returns totals for a non-privileged user across their identities', async () => {

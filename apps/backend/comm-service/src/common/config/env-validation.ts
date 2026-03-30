@@ -16,6 +16,7 @@ const REQUIRED_ENV_VARS = [
 const OPTIONAL_ENV_VARS = [
   'GOOGLE_PUBSUB_TOPIC',
   'COMM_PUBSUB_AUDIENCE',
+  'COMM_TRACKING_BASE_URL',
 ] as const;
 
 export function validateCommEnv(env: NodeJS.ProcessEnv, logger = new Logger('EnvValidation')): void {

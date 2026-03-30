@@ -5,6 +5,8 @@ import { CommSyncJobDocument } from '../../schemas/comm-sync-job.schema';
 import { CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { GmailApiService } from './gmail-api.service';
 import { SyncService } from './sync.service';
+import { TrackingService } from '../tracking/tracking.service';
+import { IntelligenceService } from '../intelligence/intelligence.service';
 
 describe('SyncService', () => {
   let service: SyncService;
@@ -14,9 +16,12 @@ describe('SyncService', () => {
   let messageModel: {
     findOne: jest.Mock;
     exists: jest.Mock;
+    find: jest.Mock;
     findOneAndUpdate: jest.Mock;
+    findByIdAndUpdate: jest.Mock;
   };
   let threadModel: {
+    findOne: jest.Mock;
     findOneAndUpdate: jest.Mock;
   };
   let syncQueue: {
@@ -28,17 +33,75 @@ describe('SyncService', () => {
     listMessages: jest.Mock;
     getMessage: jest.Mock;
   };
+  let trackingService: {
+    recordReplyDetected: jest.Mock;
+    recordBounceDetected: jest.Mock;
+  };
+  let intelligenceService: {
+    refreshThreadIntelligence: jest.Mock;
+  };
 
   beforeEach(() => {
     identityModel = {
       findByIdAndUpdate: jest.fn(),
     };
     messageModel = {
-      findOne: jest.fn().mockResolvedValue(null),
+      findOne: jest.fn(() => ({
+        exec: jest.fn().mockResolvedValue(null),
+      })),
       exists: jest.fn().mockResolvedValue(false),
-      findOneAndUpdate: jest.fn().mockResolvedValue(undefined),
+      find: jest.fn(() => {
+        const query = {
+          sort: jest.fn(),
+          lean: jest.fn(),
+          exec: jest.fn().mockResolvedValue([
+            {
+              organizationId: 'org-1',
+              gmailThreadId: 'gmail-thread-1',
+              gmailMessageId: 'gmail-message-1',
+              identityId: 'identity-1',
+              from: { email: 'agent@example.com', name: 'Agent' },
+              to: [{ email: 'client@example.com', name: 'Client' }],
+              cc: [],
+              bodyText: 'Hello',
+              attachments: [],
+              sentAt: new Date('2026-03-11T10:00:00.000Z'),
+              isRead: true,
+              isSentByIdentity: true,
+              deliveryState: 'sent',
+              isBounceDetected: false,
+            },
+          ]),
+        };
+        query.sort.mockReturnValue(query);
+        query.lean.mockReturnValue(query);
+        return query;
+      }),
+      findOneAndUpdate: jest.fn().mockResolvedValue({
+        _id: 'message-1',
+        organizationId: 'org-1',
+        gmailThreadId: 'gmail-thread-1',
+        gmailMessageId: 'gmail-message-1',
+        identityId: 'identity-1',
+        from: { email: 'agent@example.com', name: 'Agent' },
+        to: [{ email: 'client@example.com', name: 'Client' }],
+        cc: [],
+        bcc: [],
+        attachments: [],
+        sentAt: new Date('2026-03-11T10:00:00.000Z'),
+        isRead: true,
+        isSentByIdentity: true,
+        deliveryState: 'sent',
+        isBounceDetected: false,
+        referenceIds: [],
+        gmailLabels: ['SENT'],
+      }),
+      findByIdAndUpdate: jest.fn().mockResolvedValue(undefined),
     };
     threadModel = {
+      findOne: jest.fn(() => ({
+        exec: jest.fn().mockResolvedValue(null),
+      })),
       findOneAndUpdate: jest.fn(() => ({
         exec: jest.fn().mockResolvedValue({ _id: 'thread-1' }),
       })),
@@ -72,6 +135,13 @@ describe('SyncService', () => {
       messages: [],
       nextPageToken: undefined,
     });
+    trackingService = {
+      recordReplyDetected: jest.fn().mockResolvedValue(undefined),
+      recordBounceDetected: jest.fn().mockResolvedValue(undefined),
+    };
+    intelligenceService = {
+      refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
+    };
 
     service = new SyncService(
       identityModel as unknown as Model<CommIdentityDocument>,
@@ -81,6 +151,8 @@ describe('SyncService', () => {
       syncQueue as never,
       { add: jest.fn() } as never,
       gmailApi as unknown as GmailApiService,
+      trackingService as unknown as TrackingService,
+      intelligenceService as unknown as IntelligenceService,
       undefined,
       undefined,
       {
@@ -263,6 +335,7 @@ describe('SyncService', () => {
       bodyText: 'Plain body',
       isRead: false,
       isSentByIdentity: false,
+      deliveryState: 'none',
       gmailLabels: ['INBOX', 'UNREAD'],
     });
     expect(parsed.bodyHtml).toContain('<h1>Quarterly update</h1>');

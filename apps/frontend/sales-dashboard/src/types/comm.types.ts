@@ -39,6 +39,61 @@ export interface CommIdentity {
   };
 }
 
+export type CommReplyState = 'none' | 'fresh' | 'waiting' | 'ghosted' | 'replied';
+export type CommResponseTimeSignalQuality = 'insufficient' | 'weak' | 'usable';
+export type CommResponseTimeScope = 'none' | 'recipient_email' | 'entity' | 'organization';
+export type CommSilenceState = 'none' | 'watch' | 'overdue' | 'at_risk' | 'ghosted';
+export type CommEngagementBand = 'low' | 'medium' | 'high';
+export type CommEngagementConfidence = 'low' | 'medium' | 'high';
+export type CommOpenTrackingState =
+  | 'disabled'
+  | 'enabled'
+  | 'open_signal_detected'
+  | 'suspicious_signal_detected'
+  | 'unknown'
+  | 'detected'
+  | 'estimated'
+  | 'suspicious';
+
+export interface CommTrackingSummary {
+  replyState?: CommReplyState;
+  deliveryState?: string;
+  bounceState?: string;
+  lastOutboundAt?: string;
+  lastInboundAt?: string;
+  repliedAt?: string;
+  firstOpenedAt?: string;
+  lastOpenedAt?: string;
+  openCount?: number;
+  trackedOpenCount?: number;
+  estimatedHumanOpenCount?: number;
+  suspiciousOpenCount?: number;
+  hasOpenSignal?: boolean;
+  openTrackingState?: CommOpenTrackingState | string;
+  lastOpenSource?: string;
+  trackingEnabled?: boolean;
+  primaryRecipientEmail?: string;
+  recentEstimatedHumanOpenCount?: number;
+  recentSuspiciousOpenCount?: number;
+  responseTimeComparableCount?: number;
+  responseTimeMedianMs?: number;
+  responseTimeP75Ms?: number;
+  responseTimeAverageMs?: number;
+  responseTimeSignalQuality?: CommResponseTimeSignalQuality | string;
+  responseTimeScope?: CommResponseTimeScope | string;
+  expectedReplyWindowMs?: number;
+  silenceState?: CommSilenceState | string;
+  silenceOverdueFactor?: number;
+  engagementScore?: number;
+  engagementBand?: CommEngagementBand | string;
+  engagementScoreConfidence?: CommEngagementConfidence | string;
+  scoreReasons?: string[];
+  needsFollowUpNow?: boolean;
+  hotLead?: boolean;
+  openedButNotReplied?: boolean;
+  suspiciousTrackingOnly?: boolean;
+}
+
 export interface CommThread {
   id: string;
   subject?: string;
@@ -55,6 +110,43 @@ export interface CommThread {
   entityLinks: EntityLink[];
   identityId?: string;
   gmailThreadId?: string;
+  replyState?: CommReplyState;
+  deliveryState?: string;
+  bounceState?: string;
+  lastOutboundAt?: string;
+  lastInboundAt?: string;
+  repliedAt?: string;
+  firstOpenedAt?: string;
+  lastOpenedAt?: string;
+  openCount?: number;
+  trackedOpenCount?: number;
+  estimatedHumanOpenCount?: number;
+  suspiciousOpenCount?: number;
+  hasOpenSignal?: boolean;
+  openTrackingState?: CommOpenTrackingState | string;
+  lastOpenSource?: string;
+  trackingEnabled?: boolean;
+  primaryRecipientEmail?: string;
+  recentEstimatedHumanOpenCount?: number;
+  recentSuspiciousOpenCount?: number;
+  responseTimeComparableCount?: number;
+  responseTimeMedianMs?: number;
+  responseTimeP75Ms?: number;
+  responseTimeAverageMs?: number;
+  responseTimeSignalQuality?: CommResponseTimeSignalQuality | string;
+  responseTimeScope?: CommResponseTimeScope | string;
+  expectedReplyWindowMs?: number;
+  silenceState?: CommSilenceState | string;
+  silenceOverdueFactor?: number;
+  engagementScore?: number;
+  engagementBand?: CommEngagementBand | string;
+  engagementScoreConfidence?: CommEngagementConfidence | string;
+  scoreReasons?: string[];
+  needsFollowUpNow?: boolean;
+  hotLead?: boolean;
+  openedButNotReplied?: boolean;
+  suspiciousTrackingOnly?: boolean;
+  tracking?: CommTrackingSummary;
 }
 
 export interface CommMessage {
@@ -77,6 +169,43 @@ export interface CommMessage {
   labelIds?: string[];
   identityId?: string;
   sentByUserId?: string;
+  replyState?: CommReplyState;
+  deliveryState?: string;
+  bounceState?: string;
+  lastOutboundAt?: string;
+  lastInboundAt?: string;
+  repliedAt?: string;
+  firstOpenedAt?: string;
+  lastOpenedAt?: string;
+  openCount?: number;
+  trackedOpenCount?: number;
+  estimatedHumanOpenCount?: number;
+  suspiciousOpenCount?: number;
+  hasOpenSignal?: boolean;
+  openTrackingState?: CommOpenTrackingState | string;
+  lastOpenSource?: string;
+  trackingEnabled?: boolean;
+  primaryRecipientEmail?: string;
+  recentEstimatedHumanOpenCount?: number;
+  recentSuspiciousOpenCount?: number;
+  responseTimeComparableCount?: number;
+  responseTimeMedianMs?: number;
+  responseTimeP75Ms?: number;
+  responseTimeAverageMs?: number;
+  responseTimeSignalQuality?: CommResponseTimeSignalQuality | string;
+  responseTimeScope?: CommResponseTimeScope | string;
+  expectedReplyWindowMs?: number;
+  silenceState?: CommSilenceState | string;
+  silenceOverdueFactor?: number;
+  engagementScore?: number;
+  engagementBand?: CommEngagementBand | string;
+  engagementScoreConfidence?: CommEngagementConfidence | string;
+  scoreReasons?: string[];
+  needsFollowUpNow?: boolean;
+  hotLead?: boolean;
+  openedButNotReplied?: boolean;
+  suspiciousTrackingOnly?: boolean;
+  tracking?: CommTrackingSummary;
 }
 
 export interface CommMessageSummary {
@@ -90,6 +219,73 @@ export interface CommMessageSummary {
   snippet?: string;
   sentAt?: string;
   hasAttachments?: boolean;
+  replyState?: CommReplyState;
+  deliveryState?: string;
+  bounceState?: string;
+  lastOutboundAt?: string;
+  lastInboundAt?: string;
+  repliedAt?: string;
+  firstOpenedAt?: string;
+  lastOpenedAt?: string;
+  openCount?: number;
+  trackedOpenCount?: number;
+  estimatedHumanOpenCount?: number;
+  suspiciousOpenCount?: number;
+  hasOpenSignal?: boolean;
+  openTrackingState?: CommOpenTrackingState | string;
+  lastOpenSource?: string;
+  trackingEnabled?: boolean;
+  primaryRecipientEmail?: string;
+  recentEstimatedHumanOpenCount?: number;
+  recentSuspiciousOpenCount?: number;
+  responseTimeComparableCount?: number;
+  responseTimeMedianMs?: number;
+  responseTimeP75Ms?: number;
+  responseTimeAverageMs?: number;
+  responseTimeSignalQuality?: CommResponseTimeSignalQuality | string;
+  responseTimeScope?: CommResponseTimeScope | string;
+  expectedReplyWindowMs?: number;
+  silenceState?: CommSilenceState | string;
+  silenceOverdueFactor?: number;
+  engagementScore?: number;
+  engagementBand?: CommEngagementBand | string;
+  engagementScoreConfidence?: CommEngagementConfidence | string;
+  scoreReasons?: string[];
+  needsFollowUpNow?: boolean;
+  hotLead?: boolean;
+  openedButNotReplied?: boolean;
+  suspiciousTrackingOnly?: boolean;
+  tracking?: CommTrackingSummary;
+}
+
+export interface CommIntelligenceSummary {
+  dateRange: {
+    dateFrom: string;
+    dateTo: string;
+  };
+  totals: {
+    trackedSends: number;
+    replies: number;
+    estimatedOpens: number;
+    suspiciousOpens: number;
+    bounces: number;
+    sendFailures: number;
+  };
+  responseTimes: {
+    sampleSize: number;
+    medianMs?: number;
+    averageMs?: number;
+    p75Ms?: number;
+    signalQuality: CommResponseTimeSignalQuality | string;
+    humanWindow?: string;
+  };
+  queues: {
+    needsFollowUp: number;
+    hotLeads: number;
+    overdue: number;
+    openedNoReply: number;
+    suspiciousOnly: number;
+  };
 }
 
 export interface PaginatedResponse<T> {
@@ -110,7 +306,25 @@ export interface ListThreadsParams {
   page?: number;
   limit?: number;
   search?: string;
-  filter?: 'all' | 'unread' | 'sent' | 'archived';
+  filter?:
+    | 'all'
+    | 'unread'
+    | 'sent'
+    | 'archived'
+    | 'fresh'
+    | 'waiting'
+    | 'ghosted'
+    | 'replied'
+    | 'bounced'
+    | 'failed'
+    | 'opened'
+    | 'unopened'
+    | 'suspicious'
+    | 'needs_follow_up'
+    | 'hot_lead'
+    | 'overdue'
+    | 'opened_no_reply'
+    | 'suspicious_only';
   identityId?: string;
   scope?: 'all';
 }
@@ -124,6 +338,11 @@ export interface ListMessagesParams {
 export interface PaginationParams {
   page?: number;
   limit?: number;
+}
+
+export interface CommIntelligenceSummaryParams {
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface SendMessageDto {

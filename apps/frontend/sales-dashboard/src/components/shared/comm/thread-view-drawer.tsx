@@ -8,7 +8,7 @@ import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import DOMPurify from 'dompurify';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Archive, ChevronDown, ChevronRight, Paperclip, Link2, XCircle, Loader2, AlertCircle, RefreshCw, Bold, Italic, List, ListOrdered, Strikethrough, Type, Underline as UnderlineIcon, ArrowLeft } from 'lucide-react';
+import { X, Archive, ChevronDown, ChevronRight, Paperclip, Link2, XCircle, Loader2, AlertCircle, RefreshCw, Bold, Italic, List, Underline as UnderlineIcon, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useIdentities, useLinkThread, useUnlinkThread } from '@/hooks/use-comm';
 import { toast } from '@/hooks/use-toast';
@@ -16,6 +16,7 @@ import { timeAgo } from '@/lib/format-date';
 import { api } from '@/lib/api';
 import type { CommMessage, CommAttachment, CommIdentity } from '@/types/comm.types';
 import { cn } from '@/lib/utils';
+import { CommIntelligenceBadges, CommTrackingBadges } from './tracking-state';
 
 interface AliasOption {
   value: string;
@@ -393,6 +394,10 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
                 </Button>
               </div>
             </div>
+            <div className="px-4 sm:px-6 py-3 border-b border-white/10 bg-black/30">
+              <CommTrackingBadges source={thread} showTiming />
+              <CommIntelligenceBadges source={thread} className="mt-2" />
+            </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 overscroll-contain">
@@ -631,6 +636,8 @@ function MessageItem({
               <p className="truncate"><span className="font-medium text-foreground/70">To:</span> {message.to.map((a) => a.email).join(', ')}</p>
             )}
           </div>
+          <CommTrackingBadges source={message} compact showTiming />
+          <CommIntelligenceBadges source={message} compact showReasons={false} />
           <div className="rounded-lg overflow-hidden border border-white/10 bg-white shadow-lg">
             {hasSafeHtml ? (
               <iframe
@@ -750,7 +757,9 @@ function LinkWidget({
       </div>
       <div className="flex flex-wrap gap-2">
         {entityLinks.length === 0 && (
-          <span className="text-[10px] text-muted-foreground/50">No links yet</span>
+          <span className="text-[10px] text-muted-foreground/50">
+            No links yet for this {currentEntityType} ({currentEntityId.slice(0, 8)}…)
+          </span>
         )}
         {entityLinks.map((link) => (
           <span

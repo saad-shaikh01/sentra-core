@@ -818,6 +818,11 @@ class ApiClient {
     return this.fetch<any>(`/messages${qs}`, { service: 'comm' });
   }
 
+  async getCommIntelligenceSummary(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/intelligence/summary${qs}`, { service: 'comm' });
+  }
+
   // Comm — Entity Links
   async linkCommThread(threadId: string, entityType: string, entityId: string) {
     return this.fetch<void>(`/entity-links`, {

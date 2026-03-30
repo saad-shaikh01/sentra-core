@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -11,26 +11,45 @@ import {
   Search, Mail, Archive, Paperclip, AlertCircle, RefreshCw,
   Bold, Italic, List, Link2, Underline as UnderlineIcon,
   SquarePen, MailOpen, ArrowLeft, X, Loader2, ChevronDown,
-  ChevronRight, Star, Trash2, MoreHorizontal, Reply, CornerUpRight,
+  ChevronRight, Reply, CornerUpRight, TriangleAlert, CircleDot, Clock3, BadgeCheck,
   Inbox as InboxIcon,
 } from 'lucide-react';
 import {
   useThreads, useThread, useMessages, useReplyToMessage,
-  useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities,
+  useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities, useCommIntelligenceSummary,
 } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
+import { CommIntelligenceBadges, CommTrackingBadges } from '@/components/shared/comm/tracking-state';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { CommThread, CommMessage, CommIdentity, CommAttachment } from '@/types/comm.types';
+import type { CommThread, CommMessage, CommIdentity, CommAttachment, CommIntelligenceSummary } from '@/types/comm.types';
 import { COMM_ENABLED } from '@/lib/feature-flags';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
-type Filter = 'all' | 'unread' | 'sent' | 'archived';
+type Filter =
+  | 'all'
+  | 'unread'
+  | 'sent'
+  | 'archived'
+  | 'fresh'
+  | 'waiting'
+  | 'ghosted'
+  | 'replied'
+  | 'bounced'
+  | 'failed'
+  | 'opened'
+  | 'unopened'
+  | 'suspicious'
+  | 'needs_follow_up'
+  | 'hot_lead'
+  | 'overdue'
+  | 'opened_no_reply'
+  | 'suspicious_only';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -168,8 +187,17 @@ function InboxContent() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [identityFilter, setIdentityFilter] = useState('');
+  const [summaryRange] = useState(() => {
+    const dateTo = new Date();
+    const dateFrom = new Date(dateTo.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return {
+      dateFrom: dateFrom.toISOString(),
+      dateTo: dateTo.toISOString(),
+    };
+  });
   const debouncedSearch = useDebounce(search, 300);
   const { data: identities } = useIdentities();
+  const { data: intelligenceSummary } = useCommIntelligenceSummary(summaryRange);
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
 
@@ -201,8 +229,26 @@ function InboxContent() {
   const filters: { label: string; value: Filter; icon: typeof InboxIcon }[] = [
     { label: 'All Mail', value: 'all', icon: InboxIcon },
     { label: 'Unread', value: 'unread', icon: MailOpen },
+    { label: 'Fresh', value: 'fresh', icon: CircleDot },
+    { label: 'Waiting', value: 'waiting', icon: Clock3 },
+    { label: 'Ghosted', value: 'ghosted', icon: AlertCircle },
+    { label: 'Replied', value: 'replied', icon: BadgeCheck },
     { label: 'Sent', value: 'sent', icon: CornerUpRight },
+    { label: 'Bounced', value: 'bounced', icon: TriangleAlert },
+    { label: 'Failed', value: 'failed', icon: AlertCircle },
     { label: 'Archived', value: 'archived', icon: Archive },
+  ];
+  const trackingFilters: { label: string; value: Filter; icon: typeof InboxIcon }[] = [
+    { label: 'Opened', value: 'opened', icon: CircleDot },
+    { label: 'Unopened', value: 'unopened', icon: MailOpen },
+    { label: 'Suspicious', value: 'suspicious', icon: TriangleAlert },
+  ];
+  const queueFilters: { label: string; value: Filter; icon: typeof InboxIcon }[] = [
+    { label: 'Needs Follow-up', value: 'needs_follow_up', icon: Clock3 },
+    { label: 'Hot Leads', value: 'hot_lead', icon: BadgeCheck },
+    { label: 'Overdue', value: 'overdue', icon: AlertCircle },
+    { label: 'Opened, No Reply', value: 'opened_no_reply', icon: MailOpen },
+    { label: 'Suspicious Only', value: 'suspicious_only', icon: TriangleAlert },
   ];
 
   return (
@@ -242,6 +288,48 @@ function InboxContent() {
             </button>
           ))}
         </nav>
+
+        <div className="px-2 pb-2 pt-3 border-t border-white/10">
+          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Open tracking</p>
+          <div className="space-y-0.5">
+            {trackingFilters.map(({ label, value, icon: Icon }) => (
+              <button
+                key={value}
+                onClick={() => setFilter(value)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-full text-sm transition-colors',
+                  filter === value
+                    ? 'bg-cyan-500/15 text-cyan-300 font-semibold'
+                    : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-2 pb-2 pt-3 border-t border-white/10">
+          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Priority queues</p>
+          <div className="space-y-0.5">
+            {queueFilters.map(({ label, value, icon: Icon }) => (
+              <button
+                key={value}
+                onClick={() => setFilter(value)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-full text-sm transition-colors',
+                  filter === value
+                    ? 'bg-emerald-500/15 text-emerald-300 font-semibold'
+                    : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Account selector */}
         {identities && identities.length > 0 && (
@@ -306,6 +394,10 @@ function InboxContent() {
           </div>
         </div>
 
+        <div className="px-3 py-3 border-b border-white/10 bg-white/[0.02]">
+          <InboxSummaryCards summary={intelligenceSummary} />
+        </div>
+
         {/* Mobile: filter chips + compose */}
         <div className="sm:hidden flex items-center gap-2 px-3 py-2 border-b border-white/10">
           <Button size="sm" onClick={() => setComposeOpen(true)} className="gap-1.5 h-7 text-xs">
@@ -325,6 +417,34 @@ function InboxContent() {
               </button>
             ))}
           </div>
+        </div>
+        <div className="sm:hidden flex items-center gap-1 px-3 pb-2 border-b border-white/10 overflow-x-auto no-scrollbar">
+          {trackingFilters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all',
+                filter === f.value ? 'bg-cyan-500/15 text-cyan-300' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="sm:hidden flex items-center gap-1 px-3 pb-2 border-b border-white/10 overflow-x-auto no-scrollbar">
+          {queueFilters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all',
+                filter === f.value ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         {/* Thread list body */}
@@ -488,6 +608,19 @@ function ThreadRow({
         <p className="text-xs text-muted-foreground/50 truncate mt-0.5 leading-tight">
           {thread.snippet}
         </p>
+        <CommTrackingBadges
+          source={thread}
+          compact
+          showTiming={false}
+          className="mt-1"
+        />
+        <CommIntelligenceBadges
+          source={thread}
+          compact
+          showReasons={false}
+          showMetrics={false}
+          className="mt-1"
+        />
         {identityEmail && (
           <p className="text-[10px] text-primary/50 truncate">{identityEmail}</p>
         )}
@@ -497,6 +630,44 @@ function ThreadRow({
 }
 
 // ─── Thread detail view ────────────────────────────────────────────────────────
+
+function InboxSummaryCards({ summary }: { summary?: CommIntelligenceSummary }) {
+  const cards = [
+    { label: 'Tracked sends', value: summary?.totals.trackedSends ?? 0, tone: 'text-foreground' },
+    { label: 'Replies', value: summary?.totals.replies ?? 0, tone: 'text-emerald-300' },
+    { label: 'Estimated opens', value: summary?.totals.estimatedOpens ?? 0, tone: 'text-cyan-300' },
+    { label: 'Needs follow-up', value: summary?.queues.needsFollowUp ?? 0, tone: 'text-amber-300' },
+    { label: 'Hot leads', value: summary?.queues.hotLeads ?? 0, tone: 'text-emerald-300' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Intelligence Snapshot
+        </p>
+        <p className="text-[10px] text-muted-foreground/70">Last 30d</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-5">
+        {cards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
+          >
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{card.label}</p>
+            <p className={cn('mt-1 text-lg font-semibold', card.tone)}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+      {summary?.responseTimes && (
+        <p className="text-[10px] text-muted-foreground/70">
+          Typical response window {summary.responseTimes.humanWindow ?? 'not enough history'}.
+          {summary.responseTimes.signalQuality !== 'usable' && ' Signal quality is still building.'}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function ThreadView({
   threadId, onClose, identities, userId,
@@ -557,9 +728,19 @@ function ThreadView({
           {threadLoading ? (
             <div className="h-6 w-64 bg-white/10 rounded animate-pulse" />
           ) : (
-            <h1 className="text-base sm:text-lg font-semibold truncate leading-tight">
-              {thread?.subject || '(no subject)'}
-            </h1>
+            <>
+              <h1 className="text-base sm:text-lg font-semibold truncate leading-tight">
+                {thread?.subject || '(no subject)'}
+              </h1>
+              <CommTrackingBadges
+                source={thread}
+                className="mt-2"
+              />
+              <CommIntelligenceBadges
+                source={thread}
+                className="mt-2"
+              />
+            </>
           )}
         </div>
 
@@ -648,7 +829,6 @@ function ThreadView({
         {replyOpen && (
           <div className="px-4 sm:px-6 pb-6">
             <ReplyBox
-              threadId={threadId}
               lastMessage={lastMessage}
               identities={identities}
               userId={userId}
@@ -673,9 +853,9 @@ function ThreadView({
 // ─── Reply box (Gmail-style bottom compose) ────────────────────────────────────
 
 function ReplyBox({
-  threadId, lastMessage, identities, userId, onClose,
+  lastMessage, identities, userId, onClose,
 }: {
-  threadId: string; lastMessage: CommMessage | undefined;
+  lastMessage: CommMessage | undefined;
   identities: CommIdentity[]; userId: string; onClose: () => void;
 }) {
   const replyMutation = useReplyToMessage();
@@ -911,6 +1091,11 @@ export function InlineMessageItem({
             <Button variant="outline" size="sm" onClick={onForward} className="h-7 text-[11px] px-2.5 shrink-0">
               <CornerUpRight className="h-3 w-3 mr-1" /> Forward
             </Button>
+          </div>
+
+          <div className="px-4 pb-3 space-y-2">
+            <CommTrackingBadges source={message} compact showTiming={false} />
+            <CommIntelligenceBadges source={message} compact showReasons={false} />
           </div>
 
           {/* Email body */}

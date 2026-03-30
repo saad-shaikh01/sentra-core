@@ -31,6 +31,7 @@ export class ThreadsService {
   ) {
     const { page = 1, limit = 20, entityType, entityId, search, filter, identityId, scope } = query;
     const mongoFilter: Record<string, unknown> = { organizationId };
+    let sort: Record<string, 1 | -1> = { lastMessageAt: -1 };
     // Admin with scope=all sees every thread in the org (explicit opt-in).
     // Admin without scope=all sees only their own threads — same scoping as a regular user.
     const isAdminViewAll = this.isPrivileged(role) && scope === 'all';
@@ -75,6 +76,45 @@ export class ThreadsService {
     } else if (filter === 'sent') {
       mongoFilter.hasSent = true;
       mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'fresh' || filter === 'waiting' || filter === 'ghosted' || filter === 'replied') {
+      mongoFilter.replyState = filter;
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'bounced') {
+      mongoFilter.deliveryState = 'bounce_detected';
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'failed') {
+      mongoFilter.deliveryState = 'send_failed';
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'opened') {
+      mongoFilter.hasOpenSignal = true;
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'unopened') {
+      mongoFilter.trackingEnabled = true;
+      mongoFilter.hasOpenSignal = { $ne: true };
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'suspicious') {
+      mongoFilter.suspiciousOpenCount = { $gt: 0 };
+      mongoFilter.isArchived = { $ne: true };
+    } else if (filter === 'needs_follow_up') {
+      mongoFilter.needsFollowUpNow = true;
+      mongoFilter.isArchived = { $ne: true };
+      sort = { needsFollowUpNow: -1, silenceOverdueFactor: -1, lastOutboundAt: -1 };
+    } else if (filter === 'hot_lead') {
+      mongoFilter.hotLead = true;
+      mongoFilter.isArchived = { $ne: true };
+      sort = { hotLead: -1, engagementScore: -1, lastOpenedAt: -1, lastMessageAt: -1 };
+    } else if (filter === 'overdue') {
+      mongoFilter.silenceState = { $in: ['overdue', 'at_risk', 'ghosted'] };
+      mongoFilter.isArchived = { $ne: true };
+      sort = { silenceOverdueFactor: -1, lastOutboundAt: -1 };
+    } else if (filter === 'opened_no_reply') {
+      mongoFilter.openedButNotReplied = true;
+      mongoFilter.isArchived = { $ne: true };
+      sort = { lastOpenedAt: -1, estimatedHumanOpenCount: -1, lastMessageAt: -1 };
+    } else if (filter === 'suspicious_only') {
+      mongoFilter.suspiciousTrackingOnly = true;
+      mongoFilter.isArchived = { $ne: true };
+      sort = { suspiciousOpenCount: -1, lastOpenedAt: -1, lastMessageAt: -1 };
     } else if (filter === 'archived') {
       mongoFilter.isArchived = true;
     } else {
@@ -86,7 +126,7 @@ export class ThreadsService {
     const [data, total] = await Promise.all([
       this.threadModel
         .find(mongoFilter)
-        .sort({ lastMessageAt: -1 })
+        .sort(sort)
         .skip(skip)
         .limit(limit)
         .exec(),
@@ -117,7 +157,10 @@ export class ThreadsService {
       .sort({ sentAt: 1 })
       .exec();
 
-    return { ...thread.toObject(), messages };
+    return {
+      ...thread.toObject(),
+      messages: this.attachThreadTrackingState(thread, messages),
+    };
   }
 
   async listMessages(
@@ -152,7 +195,7 @@ export class ThreadsService {
       }),
     ]);
 
-    return buildCommPaginationResponse(data, total, page, limit);
+    return buildCommPaginationResponse(this.attachThreadTrackingState(thread, data), total, page, limit);
   }
 
   async getUnreadCount(
@@ -354,5 +397,65 @@ export class ThreadsService {
     if (!userIdentityIds.includes(identityId)) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
+  }
+
+  private attachThreadTrackingState(
+    thread: CommThreadDocument,
+    messages: CommMessageDocument[],
+  ): Array<Record<string, unknown>> {
+    return messages.map((message) => {
+      const serialized =
+        typeof message.toObject === 'function'
+          ? (message.toObject() as unknown as Record<string, unknown>)
+          : (message as unknown as Record<string, unknown>);
+
+      return {
+        ...serialized,
+        replyState: serialized.replyState ?? thread.replyState,
+        deliveryState: serialized.deliveryState ?? thread.deliveryState,
+        bounceState: serialized.bounceState ?? thread.bounceState,
+        lastOutboundAt: serialized.lastOutboundAt ?? thread.lastOutboundAt,
+        lastInboundAt: serialized.lastInboundAt ?? thread.lastInboundAt,
+        repliedAt: serialized.repliedAt ?? thread.repliedAt,
+        tracking:
+          serialized.tracking ??
+          {
+            replyState: thread.replyState,
+            deliveryState: thread.deliveryState,
+            bounceState: thread.bounceState,
+            lastOutboundAt: thread.lastOutboundAt,
+            lastInboundAt: thread.lastInboundAt,
+            repliedAt: thread.repliedAt,
+            firstOpenedAt: thread.firstOpenedAt,
+            lastOpenedAt: thread.lastOpenedAt,
+            trackedOpenCount: thread.trackedOpenCount,
+            estimatedHumanOpenCount: thread.estimatedHumanOpenCount,
+            suspiciousOpenCount: thread.suspiciousOpenCount,
+            hasOpenSignal: thread.hasOpenSignal,
+            trackingEnabled: thread.trackingEnabled,
+            lastOpenSource: thread.lastOpenSource,
+            primaryRecipientEmail: thread.primaryRecipientEmail,
+            recentEstimatedHumanOpenCount: thread.recentEstimatedHumanOpenCount,
+            recentSuspiciousOpenCount: thread.recentSuspiciousOpenCount,
+            responseTimeComparableCount: thread.responseTimeComparableCount,
+            responseTimeMedianMs: thread.responseTimeMedianMs,
+            responseTimeP75Ms: thread.responseTimeP75Ms,
+            responseTimeAverageMs: thread.responseTimeAverageMs,
+            responseTimeSignalQuality: thread.responseTimeSignalQuality,
+            responseTimeScope: thread.responseTimeScope,
+            expectedReplyWindowMs: thread.expectedReplyWindowMs,
+            silenceState: thread.silenceState,
+            silenceOverdueFactor: thread.silenceOverdueFactor,
+            engagementScore: thread.engagementScore,
+            engagementBand: thread.engagementBand,
+            engagementScoreConfidence: thread.engagementScoreConfidence,
+            scoreReasons: thread.scoreReasons,
+            needsFollowUpNow: thread.needsFollowUpNow,
+            hotLead: thread.hotLead,
+            openedButNotReplied: thread.openedButNotReplied,
+            suspiciousTrackingOnly: thread.suspiciousTrackingOnly,
+          },
+      };
+    });
   }
 }

@@ -12,12 +12,16 @@ import { PubsubController } from './pubsub.controller';
 import { WatchRenewalService } from './watch-renewal.service';
 import { WatchdogService } from './watchdog.service';
 import { COMM_ATTACHMENT_QUEUE, COMM_SYNC_QUEUE } from './sync.constants';
+import { TrackingModule } from '../tracking/tracking.module';
+import { IntelligenceModule } from '../intelligence/intelligence.module';
 
 @Module({
   imports: [
     CommSchemasModule,
     forwardRef(() => IdentitiesModule),
     EntityLinksModule,
+    TrackingModule,
+    IntelligenceModule,
     BullModule.registerQueue(
       { name: COMM_SYNC_QUEUE },
       { name: COMM_ATTACHMENT_QUEUE },

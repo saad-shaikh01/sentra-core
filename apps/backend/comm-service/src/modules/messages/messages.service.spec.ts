@@ -8,6 +8,9 @@ import { AuditService } from '../audit/audit.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { IdentitiesService } from '../identities/identities.service';
 import { GmailApiService } from '../sync/gmail-api.service';
+import { SyncService } from '../sync/sync.service';
+import { IntelligenceService } from '../intelligence/intelligence.service';
+import { TrackingService } from '../tracking/tracking.service';
 import { ThreadsService } from '../threads/threads.service';
 import { MessagesService } from './messages.service';
 
@@ -52,6 +55,10 @@ function matchesQuery(source: Record<string, unknown>, query: Record<string, unk
       if ('$ne' in expected) {
         const disallowed = (expected as { $ne: unknown }).$ne;
         return values.every((value) => value !== disallowed);
+      }
+      if ('$gt' in expected) {
+        const threshold = (expected as { $gt: number }).$gt;
+        return values.some((value) => typeof value === 'number' && value > threshold);
       }
     }
 
@@ -164,7 +171,19 @@ describe('MessagesService', () => {
   let attachmentsService: {
     fetchAttachmentBuffers: jest.Mock;
   };
+  let trackingService: {
+    prepareOpenTracking: jest.Mock;
+    injectOpenTrackingPixel: jest.Mock;
+    activateOpenTracking: jest.Mock;
+    abandonPreparedOpenTracking: jest.Mock;
+    recordSentEvent: jest.Mock;
+    recordSendFailedEvent: jest.Mock;
+  };
+  let intelligenceService: {
+    refreshThreadIntelligence: jest.Mock;
+  };
   let buildMimeSpy: jest.SpyInstance<Promise<string>, [unknown]>;
+  let syncService: SyncService;
 
   beforeEach(() => {
     threadRecords = [];
@@ -195,6 +214,9 @@ describe('MessagesService', () => {
             ...(update.$setOnInsert as Record<string, unknown>),
           };
           messageRecords.push(existing);
+        }
+        if (update.$set) {
+          Object.assign(existing, update.$set as Record<string, unknown>);
         }
         return existing;
       }),
@@ -305,6 +327,17 @@ describe('MessagesService', () => {
     attachmentsService = {
       fetchAttachmentBuffers: jest.fn(async () => []),
     };
+    trackingService = {
+      prepareOpenTracking: jest.fn().mockResolvedValue(null),
+      injectOpenTrackingPixel: jest.fn((bodyHtml: string) => bodyHtml),
+      activateOpenTracking: jest.fn().mockResolvedValue(undefined),
+      abandonPreparedOpenTracking: jest.fn().mockResolvedValue(undefined),
+      recordSentEvent: jest.fn().mockResolvedValue(undefined),
+      recordSendFailedEvent: jest.fn().mockResolvedValue(undefined),
+    };
+    intelligenceService = {
+      refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
+    };
 
     gmailSendMock = jest.fn().mockResolvedValue({
       data: {
@@ -313,21 +346,59 @@ describe('MessagesService', () => {
       },
     });
 
+    const gmailApi = {
+      getGmailClient: jest.fn().mockResolvedValue({
+        users: {
+          messages: {
+            send: gmailSendMock,
+          },
+        },
+      }),
+      getMessage: jest.fn().mockResolvedValue({
+        id: 'gmail-message-1',
+        threadId: 'gmail-thread-1',
+        internalDate: String(new Date('2026-03-11T10:00:00.000Z').getTime()),
+        labelIds: ['SENT'],
+        payload: {
+          headers: [
+            { name: 'From', value: 'Agent <agent@example.com>' },
+            { name: 'To', value: 'Client <client@example.com>' },
+            { name: 'Subject', value: 'Hello' },
+            { name: 'Date', value: 'Wed, 11 Mar 2026 10:00:00 +0000' },
+            { name: 'Message-ID', value: '<sent-1@example.com>' },
+          ],
+          mimeType: 'text/plain',
+          body: {
+            data: Buffer.from('Hello there').toString('base64url'),
+          },
+        },
+      }),
+    };
+
+    syncService = new SyncService(
+      identityModel as unknown as Model<CommIdentityDocument>,
+      threadModel as unknown as Model<CommThreadDocument>,
+      messageModel as unknown as Model<CommMessageDocument>,
+      {} as never,
+      { add: jest.fn() } as never,
+      { add: jest.fn() } as never,
+      gmailApi as unknown as GmailApiService,
+      trackingService as unknown as TrackingService,
+      intelligenceService as unknown as IntelligenceService,
+      undefined,
+      undefined,
+      undefined,
+    );
+
     messagesService = new MessagesService(
       messageModel as unknown as Model<CommMessageDocument>,
       threadModel as unknown as Model<CommThreadDocument>,
       identityModel as unknown as Model<CommIdentityDocument>,
       entityLinkModel as unknown as Model<CommEntityLinkDocument>,
       identitiesService as unknown as IdentitiesService,
-      {
-        getGmailClient: jest.fn().mockResolvedValue({
-          users: {
-            messages: {
-              send: gmailSendMock,
-            },
-          },
-        }),
-      } as unknown as GmailApiService,
+      gmailApi as unknown as GmailApiService,
+      syncService,
+      trackingService as unknown as TrackingService,
       attachmentsService as unknown as AttachmentsService,
       {
         log: jest.fn().mockResolvedValue(undefined),
@@ -366,7 +437,7 @@ describe('MessagesService', () => {
       'org-1',
       'admin-1',
       UserRole.ADMIN,
-      { page: 1, limit: 20, filter: 'sent' },
+      { page: 1, limit: 20, filter: 'sent', scope: 'all' },
     );
 
     expect(sentThreads.data).toHaveLength(1);
@@ -374,6 +445,7 @@ describe('MessagesService', () => {
       gmailThreadId: 'gmail-thread-1',
       hasSent: true,
     });
+    expect(trackingService.recordSentEvent).toHaveBeenCalled();
   });
 
   it('sendMessage linked to an entity appears in the entity timeline as an outbound message', async () => {
@@ -398,7 +470,13 @@ describe('MessagesService', () => {
       gmailThreadId: 'gmail-thread-1',
       isSentByIdentity: true,
       subject: 'Hello',
+      deliveryState: 'sent',
+      tracking: expect.objectContaining({
+        deliveryState: 'sent',
+      }),
     });
+    expect(['fresh', 'waiting', 'ghosted']).toContain(timeline.data[0].replyState);
+    expect(timeline.data[0].tracking?.replyState).toBe(timeline.data[0].replyState);
   });
 
   it('buildMime includes attachments as multipart MIME parts', async () => {
@@ -437,6 +515,8 @@ describe('MessagesService', () => {
 
   it('sendMessage with attachmentS3Keys sends MIME with a binary attachment part', async () => {
     buildMimeSpy.mockRestore();
+    jest.spyOn(syncService, 'syncGmailMessage').mockRejectedValueOnce(new Error('enrichment failed'));
+    jest.spyOn(syncService, 'processMessage').mockResolvedValueOnce(undefined);
     attachmentsService.fetchAttachmentBuffers.mockResolvedValue([
       {
         buffer: Buffer.from('attachment-bytes'),
@@ -473,6 +553,8 @@ describe('MessagesService', () => {
   });
 
   it('replyAll expands recipients to include the original to and cc addresses except the sending identity', async () => {
+    jest.spyOn(syncService, 'syncGmailMessage').mockRejectedValueOnce(new Error('enrichment failed'));
+    jest.spyOn(syncService, 'processMessage').mockResolvedValueOnce(undefined);
     messageRecords.push({
       _id: 'message-original',
       organizationId: 'org-1',
@@ -507,5 +589,48 @@ describe('MessagesService', () => {
       to: [{ email: 'client@example.com' }, { email: 'teammate@example.com' }],
       cc: [{ email: 'manager@example.com' }],
     });
+  });
+
+  it('injects an estimated open-tracking pixel into HTML sends and finalizes per-message tracking', async () => {
+    trackingService.prepareOpenTracking.mockResolvedValue({
+      tokenId: 'token-1',
+      rawToken: 'raw-token',
+      pixelUrl: 'https://comm.example.com/api/comm/track/o/raw-token.gif',
+      trackingMode: 'per_message',
+      recipientEmail: 'client@example.com',
+    });
+    trackingService.injectOpenTrackingPixel.mockReturnValue(
+      '<p>Hello there</p><img src="https://comm.example.com/api/comm/track/o/raw-token.gif">',
+    );
+
+    await messagesService.sendMessage('org-1', 'user-1', {
+      identityId: 'identity-1',
+      to: ['client@example.com'],
+      subject: 'Tracked',
+      bodyHtml: '<p>Hello there</p>',
+    });
+
+    expect(trackingService.prepareOpenTracking).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      identityId: 'identity-1',
+      to: ['client@example.com'],
+      cc: undefined,
+      bcc: undefined,
+      entityType: undefined,
+      entityId: undefined,
+    });
+    expect(buildMimeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: '<p>Hello there</p><img src="https://comm.example.com/api/comm/track/o/raw-token.gif">',
+      }),
+    );
+    expect(trackingService.activateOpenTracking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenId: 'token-1',
+        message: expect.objectContaining({
+          gmailMessageId: 'gmail-message-1',
+        }),
+      }),
+    );
   });
 });

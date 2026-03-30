@@ -77,6 +77,9 @@ jest.mock('@/hooks/use-comm', () => ({
   useMarkThreadRead: () => ({
     mutate: mockMarkRead,
   }),
+  useMarkThreadUnread: () => ({
+    mutate: jest.fn(),
+  }),
   useIdentities: () => ({
     data: [
       {
@@ -88,6 +91,31 @@ jest.mock('@/hooks/use-comm', () => ({
         syncState: { status: 'active', lastSyncAt: null, lastError: null },
       },
     ],
+  }),
+  useCommIntelligenceSummary: () => ({
+    data: {
+      totals: {
+        trackedSends: 4,
+        replies: 2,
+        estimatedOpens: 3,
+        suspiciousOpens: 1,
+        bounces: 0,
+        sendFailures: 0,
+      },
+      responseTimes: {
+        sampleSize: 2,
+        signalQuality: 'weak',
+        humanWindow: 'Median 6h',
+      },
+      queues: {
+        needsFollowUp: 1,
+        hotLeads: 2,
+        overdue: 1,
+        openedNoReply: 1,
+        suspiciousOnly: 0,
+      },
+    },
+    isLoading: false,
   }),
 }));
 
@@ -184,5 +212,14 @@ describe('InboxPage forward flow', () => {
         replyAll: true,
       }),
     });
+  });
+
+  it('shows the Phase 3 intelligence snapshot and queue filters', () => {
+    render(<InboxPage />);
+
+    expect(screen.getByText('Intelligence Snapshot')).not.toBeNull();
+    expect(screen.getByText('Tracked sends')).not.toBeNull();
+    expect(screen.getByText('Hot Leads')).not.toBeNull();
+    expect(screen.getByText('Needs Follow-up')).not.toBeNull();
   });
 });

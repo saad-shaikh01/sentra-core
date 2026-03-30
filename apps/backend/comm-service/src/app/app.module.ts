@@ -33,6 +33,8 @@ import { AttachmentsModule } from '../modules/attachments/attachments.module';
 import { MessagesModule } from '../modules/messages/messages.module';
 import { GatewayModule } from '../modules/gateway/gateway.module';
 import { GSuiteModule } from '../modules/gsuite/gsuite.module';
+import { TrackingModule } from '../modules/tracking/tracking.module';
+import { IntelligenceModule } from '../modules/intelligence/intelligence.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -108,6 +110,8 @@ function resolveEnvFiles(): string[] {
     EntityLinksModule,
     AttachmentsModule,
     MessagesModule,
+    TrackingModule,
+    IntelligenceModule,
     GSuiteModule,
   ],
   providers: [

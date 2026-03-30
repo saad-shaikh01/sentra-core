@@ -12,6 +12,8 @@ import { useUIStore } from '@/stores/ui-store';
 import { COMM_ENABLED } from '@/lib/feature-flags';
 import type {
   CommIdentity,
+  CommIntelligenceSummary,
+  CommIntelligenceSummaryParams,
   CommThread,
   CommMessage,
   CommMessageSummary,
@@ -64,6 +66,8 @@ export const commKeys = {
   threads: (params?: ListThreadsParams) => [...commKeys.all, 'threads', params] as const,
   thread: (id: string) => [...commKeys.all, 'threads', id] as const,
   messages: (params?: ListMessagesParams) => [...commKeys.all, 'messages', params] as const,
+  intelligenceSummary: (params?: CommIntelligenceSummaryParams) =>
+    [...commKeys.all, 'intelligence-summary', params] as const,
   timeline: (entityType: string, entityId: string, params?: PaginationParams) =>
     [...commKeys.all, 'timeline', entityType, entityId, params] as const,
 };
@@ -168,9 +172,66 @@ export function useEntityTimeline(entityType: string, entityId: string, params?:
         snippet: message.bodyText?.slice(0, 160) ?? message.subject,
         sentAt: message.sentAt,
         hasAttachments: (message.attachments?.length ?? 0) > 0,
+        replyState: message.replyState ?? message.tracking?.replyState,
+        deliveryState: message.deliveryState ?? message.tracking?.deliveryState,
+        bounceState: message.bounceState ?? message.tracking?.bounceState,
+        lastOutboundAt: message.lastOutboundAt ?? message.tracking?.lastOutboundAt,
+        lastInboundAt: message.lastInboundAt ?? message.tracking?.lastInboundAt,
+        repliedAt: message.repliedAt ?? message.tracking?.repliedAt,
+        firstOpenedAt: message.firstOpenedAt ?? message.tracking?.firstOpenedAt,
+        lastOpenedAt: message.lastOpenedAt ?? message.tracking?.lastOpenedAt,
+        openCount: message.openCount ?? message.tracking?.openCount,
+        estimatedHumanOpenCount: message.estimatedHumanOpenCount ?? message.tracking?.estimatedHumanOpenCount,
+        suspiciousOpenCount: message.suspiciousOpenCount ?? message.tracking?.suspiciousOpenCount,
+        hasOpenSignal: message.hasOpenSignal ?? message.tracking?.hasOpenSignal,
+        openTrackingState: message.openTrackingState ?? message.tracking?.openTrackingState,
+        lastOpenSource: message.lastOpenSource ?? message.tracking?.lastOpenSource,
+        trackingEnabled: message.trackingEnabled ?? message.tracking?.trackingEnabled,
+        primaryRecipientEmail: message.primaryRecipientEmail ?? message.tracking?.primaryRecipientEmail,
+        recentEstimatedHumanOpenCount:
+          message.recentEstimatedHumanOpenCount ?? message.tracking?.recentEstimatedHumanOpenCount,
+        recentSuspiciousOpenCount:
+          message.recentSuspiciousOpenCount ?? message.tracking?.recentSuspiciousOpenCount,
+        responseTimeComparableCount:
+          message.responseTimeComparableCount ?? message.tracking?.responseTimeComparableCount,
+        responseTimeMedianMs: message.responseTimeMedianMs ?? message.tracking?.responseTimeMedianMs,
+        responseTimeP75Ms: message.responseTimeP75Ms ?? message.tracking?.responseTimeP75Ms,
+        responseTimeAverageMs:
+          message.responseTimeAverageMs ?? message.tracking?.responseTimeAverageMs,
+        responseTimeSignalQuality:
+          message.responseTimeSignalQuality ?? message.tracking?.responseTimeSignalQuality,
+        responseTimeScope: message.responseTimeScope ?? message.tracking?.responseTimeScope,
+        expectedReplyWindowMs:
+          message.expectedReplyWindowMs ?? message.tracking?.expectedReplyWindowMs,
+        silenceState: message.silenceState ?? message.tracking?.silenceState,
+        silenceOverdueFactor: message.silenceOverdueFactor ?? message.tracking?.silenceOverdueFactor,
+        engagementScore: message.engagementScore ?? message.tracking?.engagementScore,
+        engagementBand: message.engagementBand ?? message.tracking?.engagementBand,
+        engagementScoreConfidence:
+          message.engagementScoreConfidence ?? message.tracking?.engagementScoreConfidence,
+        scoreReasons: message.scoreReasons ?? message.tracking?.scoreReasons,
+        needsFollowUpNow: message.needsFollowUpNow ?? message.tracking?.needsFollowUpNow,
+        hotLead: message.hotLead ?? message.tracking?.hotLead,
+        openedButNotReplied:
+          message.openedButNotReplied ?? message.tracking?.openedButNotReplied,
+        suspiciousTrackingOnly:
+          message.suspiciousTrackingOnly ?? message.tracking?.suspiciousTrackingOnly,
+        tracking: message.tracking,
       })) as CommMessageSummary[];
     },
     enabled: !!entityType && !!entityId,
+  });
+}
+
+export function useCommIntelligenceSummary(params?: CommIntelligenceSummaryParams) {
+  return useQuery({
+    queryKey: commKeys.intelligenceSummary(params),
+    queryFn: async () => {
+      const res = await api.getCommIntelligenceSummary(params as Record<string, unknown>);
+      return (res?.data ?? res) as CommIntelligenceSummary;
+    },
+    staleTime: 60 * 1000,
+    enabled: COMM_ENABLED,
   });
 }
 

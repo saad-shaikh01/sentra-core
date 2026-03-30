@@ -30,6 +30,7 @@ import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.
 import { CommEntityLink, CommEntityLinkDocument } from '../../schemas/comm-entity-link.schema';
 import { IdentitiesService } from '../identities/identities.service';
 import { GmailApiService } from '../sync/gmail-api.service';
+import { SyncService } from '../sync/sync.service';
 import { AuditService } from '../audit/audit.service';
 import { SendMessageDto, ReplyDto, ForwardDto } from './dto/send-message.dto';
 import { CommGateway } from '../gateway/comm.gateway';
@@ -38,6 +39,7 @@ import { buildCommPaginationResponse, toMongoosePagination } from '../../common/
 import { ListMessagesQueryDto } from './dto/list-messages.dto';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { EntityLinksService } from '../entity-links/entity-links.service';
+import { PreparedOpenTracking, TrackingService } from '../tracking/tracking.service';
 
 @Injectable()
 export class MessagesService {
@@ -54,6 +56,8 @@ export class MessagesService {
     private readonly entityLinkModel: Model<CommEntityLinkDocument>,
     private readonly identitiesService: IdentitiesService,
     private readonly gmailApi: GmailApiService,
+    private readonly syncService: SyncService,
+    private readonly trackingService: TrackingService,
     private readonly attachmentsService: AttachmentsService,
     private readonly audit: AuditService,
     @Optional() private readonly gateway?: CommGateway,
@@ -123,7 +127,9 @@ export class MessagesService {
       this.messageModel.countDocuments(filter),
     ]);
 
-    return buildCommPaginationResponse(data, total, page, limit);
+    const enrichedData = await this.attachThreadTrackingState(organizationId, data);
+
+    return buildCommPaginationResponse(enrichedData, total, page, limit);
   }
 
   async getMessage(
@@ -159,54 +165,71 @@ export class MessagesService {
       throw new UnprocessableEntityException('Subject is required');
     }
 
+    const { htmlForSend, preparedTracking } = await this.prepareTrackedHtml({
+      organizationId,
+      identityId: String(identity._id),
+      bodyHtml: body.bodyHtml,
+      to: dto.to,
+      cc: dto.cc,
+      bcc: dto.bcc,
+      entityType: dto.entityType,
+      entityId: dto.entityId,
+    });
+
     const rawMime = await this.buildMime({
       from: fromAddress,
       to: dto.to,
       cc: dto.cc,
       bcc: dto.bcc,
       subject,
-      html: body.bodyHtml,
+      html: htmlForSend,
       text: body.bodyText,
       attachments,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
-    const sendResp = await this.gmailSend(gmail, { raw: rawMime }, `identity ${identity._id}`, 'send');
+    let sendResp: { id: string; threadId: string };
+    try {
+      sendResp = await this.gmailSend(gmail, { raw: rawMime }, `identity ${identity._id}`, 'send');
+    } catch (error) {
+      await this.trackingService.abandonPreparedOpenTracking(preparedTracking?.tokenId);
+      await this.recordSendFailureEvent({
+        organizationId,
+        identityId: String(identity._id),
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        recipients: { to: dto.to, cc: dto.cc, bcc: dto.bcc },
+        operation: 'send',
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
 
     const gmailMessageId = sendResp.id!;
     const gmailThreadId = sendResp.threadId!;
+    const { message, thread } = await this.canonicalizeSentMessage({
+      organizationId,
+      identity,
+      gmailMessageId,
+      gmailThreadId,
+      userId,
+      subject,
+      bodyHtml: body.bodyHtml,
+      bodyText: body.bodyText,
+      fromAddress,
+      to: dto.to,
+      cc: dto.cc,
+      bcc: dto.bcc,
+      attachments,
+    });
+    await this.finalizeSentTracking({
+      message,
+      thread,
+      preparedTracking,
+      entityType: dto.entityType,
+      entityId: dto.entityId,
+    });
 
-    const message = await this.messageModel.findOneAndUpdate(
-      { organizationId, gmailMessageId },
-      {
-        $setOnInsert: {
-          organizationId,
-          gmailThreadId,
-          gmailMessageId,
-          identityId: String(identity._id),
-          from: { email: fromAddress },
-          to: dto.to.map((e) => ({ email: e })),
-          cc: (dto.cc ?? []).map((e) => ({ email: e })),
-          bcc: (dto.bcc ?? []).map((e) => ({ email: e })),
-          subject,
-          bodyHtml: body.bodyHtml,
-          bodyText: body.bodyText,
-          attachments: attachments.map((attachment) => ({
-            filename: attachment.filename,
-            mimeType: attachment.mimeType,
-            size: attachment.size,
-            s3Key: attachment.s3Key,
-          })),
-          isRead: true,
-          isSentByIdentity: true,
-          sentByUserId: userId,
-          gmailLabels: ['SENT'],
-        },
-      },
-      { upsert: true, new: true },
-    );
-
-    const thread = await this.upsertThread(organizationId, identity, gmailThreadId, subject, message!);
     if (dto.entityType && dto.entityId) {
       await this.linkThreadToEntity(organizationId, userId, gmailThreadId, dto.entityType, dto.entityId);
     }
@@ -231,17 +254,17 @@ export class MessagesService {
       gmailThreadId,
       direction: 'outbound',
       message: {
-        id: String(message!._id),
+        id: String(message._id),
         gmailMessageId,
         gmailThreadId,
-        from: { email: fromAddress },
-        to: dto.to,
-        subject,
+        from: message.from,
+        to: message.to.map((entry) => entry.email),
+        subject: message.subject,
         identityId: dto.identityId,
       },
     });
 
-    return message!;
+    return message;
   }
 
   async replyToMessage(
@@ -259,59 +282,74 @@ export class MessagesService {
     const body = this.resolveMessageBody(dto.bodyHtml, dto.bodyText);
     const attachments = await this.attachmentsService.fetchAttachmentBuffers(dto.attachmentS3Keys ?? []);
     const recipients = this.resolveReplyRecipients(original, fromAddress, dto.replyAll);
+    const mergedCc = this.mergeRecipients(recipients.cc, dto.cc);
+    const { htmlForSend, preparedTracking } = await this.prepareTrackedHtml({
+      organizationId,
+      identityId: String(identity._id),
+      bodyHtml: body.bodyHtml,
+      to: recipients.to,
+      cc: mergedCc,
+      bcc: [],
+    });
 
     const rawMime = await this.buildMime({
       from: fromAddress,
       to: recipients.to,
-      cc: this.mergeRecipients(recipients.cc, dto.cc),
+      cc: mergedCc,
       subject: `Re: ${original.subject ?? ''}`,
-      html: body.bodyHtml,
+      html: htmlForSend,
       text: body.bodyText,
-      inReplyTo: original.gmailMessageId,
-      references: original.gmailMessageId,
+      inReplyTo: original.rfcMessageId ?? original.gmailMessageId,
+      references: this.buildReferenceIds(original),
       threadId: original.gmailThreadId,
       attachments,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
-    const replyResp = await this.gmailSend(
-      gmail,
-      { raw: rawMime, threadId: original.gmailThreadId },
-      `identity ${identity._id}`,
-      'reply',
-    );
+    let replyResp: { id: string; threadId: string };
+    try {
+      replyResp = await this.gmailSend(
+        gmail,
+        { raw: rawMime, threadId: original.gmailThreadId },
+        `identity ${identity._id}`,
+        'reply',
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.trackingService.abandonPreparedOpenTracking(preparedTracking?.tokenId);
+      await this.syncService.recordThreadSendFailure(organizationId, original.gmailThreadId, message);
+      await this.recordSendFailureEvent({
+        organizationId,
+        identityId: String(identity._id),
+        gmailThreadId: original.gmailThreadId,
+        recipients: { to: recipients.to, cc: mergedCc, bcc: [] },
+        operation: 'reply',
+        reason: message,
+      });
+      throw error;
+    }
 
     const gmailMessageId = replyResp.id!;
-
-    const message = await this.messageModel.findOneAndUpdate(
-      { organizationId, gmailMessageId },
-      {
-        $setOnInsert: {
-          organizationId,
-          gmailThreadId: original.gmailThreadId,
-          gmailMessageId,
-          identityId: String(identity._id),
-          from: { email: fromAddress },
-          to: recipients.to.map((email) => ({ email })),
-          cc: this.mergeRecipients(recipients.cc, dto.cc).map((email) => ({ email })),
-          bcc: [],
-          subject: `Re: ${original.subject ?? ''}`,
-          bodyHtml: body.bodyHtml,
-          bodyText: body.bodyText,
-          attachments: attachments.map((attachment) => ({
-            filename: attachment.filename,
-            mimeType: attachment.mimeType,
-            size: attachment.size,
-            s3Key: attachment.s3Key,
-          })),
-          isRead: true,
-          isSentByIdentity: true,
-          sentByUserId: userId,
-          gmailLabels: ['SENT'],
-        },
-      },
-      { upsert: true, new: true },
-    );
+    const { message, thread } = await this.canonicalizeSentMessage({
+      organizationId,
+      identity,
+      gmailMessageId,
+      gmailThreadId: original.gmailThreadId,
+      userId,
+      subject: `Re: ${original.subject ?? ''}`,
+      bodyHtml: body.bodyHtml,
+      bodyText: body.bodyText,
+      fromAddress,
+      to: recipients.to,
+      cc: mergedCc,
+      bcc: [],
+      attachments,
+    });
+    await this.finalizeSentTracking({
+      message,
+      thread,
+      preparedTracking,
+    });
 
     await this.audit.log({
       organizationId,
@@ -332,16 +370,16 @@ export class MessagesService {
       gmailThreadId: original.gmailThreadId,
       direction: 'outbound',
       message: {
-        id: String(message!._id),
+        id: String(message._id),
         gmailMessageId,
         gmailThreadId: original.gmailThreadId,
-        from: { email: fromAddress },
-        subject: `Re: ${original.subject ?? ''}`,
+        from: message.from,
+        subject: message.subject,
         identityId: dto.identityId,
       },
     });
 
-    return message!;
+    return message;
   }
 
   async forwardMessage(
@@ -372,50 +410,67 @@ export class MessagesService {
         <div>${original.bodyHtml ?? original.bodyText ?? ''}</div>
       </div>
     `;
+    const { htmlForSend, preparedTracking } = await this.prepareTrackedHtml({
+      organizationId,
+      identityId: String(identity._id),
+      bodyHtml: quotedBody,
+      to: dto.to,
+      cc: [],
+      bcc: [],
+    });
 
     const rawMime = await this.buildMime({
       from: fromAddress,
       to: dto.to,
       subject: `Fwd: ${original.subject ?? ''}`,
-      html: quotedBody,
+      html: htmlForSend,
       text: dto.bodyText,
       attachments,
     });
 
     const gmail = await this.gmailApi.getGmailClient(identity);
-    const fwdResp = await this.gmailSend(gmail, { raw: rawMime }, `identity ${identity._id}`, 'forward');
+    let fwdResp: { id: string; threadId: string };
+    try {
+      fwdResp = await this.gmailSend(
+        gmail,
+        { raw: rawMime },
+        `identity ${identity._id}`,
+        'forward',
+      );
+    } catch (error) {
+      await this.trackingService.abandonPreparedOpenTracking(preparedTracking?.tokenId);
+      await this.recordSendFailureEvent({
+        organizationId,
+        identityId: String(identity._id),
+        recipients: { to: dto.to, cc: [], bcc: [] },
+        operation: 'forward',
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
 
     const gmailMessageId = fwdResp.id!;
     const gmailThreadId = fwdResp.threadId!;
-
-    const message = await this.messageModel.findOneAndUpdate(
-      { organizationId, gmailMessageId },
-      {
-        $setOnInsert: {
-          organizationId,
-          gmailThreadId,
-          gmailMessageId,
-          identityId: String(identity._id),
-          from: { email: fromAddress },
-          to: dto.to.map((e) => ({ email: e })),
-          cc: [],
-          bcc: [],
-          subject: `Fwd: ${original.subject ?? ''}`,
-          bodyHtml: quotedBody,
-          attachments: attachments.map((attachment) => ({
-            filename: attachment.filename,
-            mimeType: attachment.mimeType,
-            size: attachment.size,
-            s3Key: attachment.s3Key,
-          })),
-          isRead: true,
-          isSentByIdentity: true,
-          sentByUserId: userId,
-          gmailLabels: ['SENT'],
-        },
-      },
-      { upsert: true, new: true },
-    );
+    const { message, thread } = await this.canonicalizeSentMessage({
+      organizationId,
+      identity,
+      gmailMessageId,
+      gmailThreadId,
+      userId,
+      subject: `Fwd: ${original.subject ?? ''}`,
+      bodyHtml: quotedBody,
+      bodyText: dto.bodyText,
+      fromAddress,
+      to: dto.to,
+      cc: [],
+      bcc: [],
+      attachments,
+    });
+    await this.finalizeSentTracking({
+      message,
+      thread,
+      preparedTracking,
+    });
 
     await this.audit.log({
       organizationId,
@@ -431,23 +486,22 @@ export class MessagesService {
       void this.entityLinksService?.autoLinkThreads(organizationId, [gmailThreadId]);
     }
 
-    const thread = await this.threadModel.findOne({ organizationId, gmailThreadId }).exec();
     this.gateway?.emitToOrg(organizationId, 'message:sent', {
-      threadId: thread ? String(thread._id) : undefined,
+      threadId: String(thread._id),
       gmailThreadId,
       direction: 'outbound',
       message: {
-        id: String(message!._id),
+        id: String(message._id),
         gmailMessageId,
         gmailThreadId,
-        from: { email: fromAddress },
-        to: dto.to,
-        subject: `Fwd: ${original.subject ?? ''}`,
+        from: message.from,
+        to: message.to.map((entry) => entry.email),
+        subject: message.subject,
         identityId: dto.identityId,
       },
     });
 
-    return message!;
+    return message;
   }
 
   private async gmailSend(
@@ -565,7 +619,7 @@ export class MessagesService {
     html?: string;
     text?: string;
     inReplyTo?: string;
-    references?: string;
+    references?: string[];
     threadId?: string;
     attachments?: Array<{ buffer: Buffer; filename: string; mimeType: string }>;
   }): Promise<string> {
@@ -589,7 +643,9 @@ export class MessagesService {
 
     const headers: Record<string, string> = {};
     if (opts.inReplyTo) headers['In-Reply-To'] = `<${opts.inReplyTo}>`;
-    if (opts.references) headers['References'] = `<${opts.references}>`;
+    if (opts.references?.length) {
+      headers['References'] = opts.references.map((reference) => `<${reference}>`).join(' ');
+    }
     if (Object.keys(headers).length) mailOptions.headers = headers;
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -635,6 +691,368 @@ export class MessagesService {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     ).exec())!;
+  }
+
+  private buildReferenceIds(original: CommMessageDocument): string[] | undefined {
+    const referenceIds = Array.from(
+      new Set(
+        [...(original.referenceIds ?? []), original.rfcMessageId]
+          .filter((candidate): candidate is string => Boolean(candidate)),
+      ),
+    );
+    return referenceIds.length > 0 ? referenceIds : undefined;
+  }
+
+  private async canonicalizeSentMessage(args: {
+    organizationId: string;
+    identity: CommIdentityDocument;
+    gmailMessageId: string;
+    gmailThreadId: string;
+    userId: string;
+    fromAddress: string;
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject: string;
+    bodyHtml?: string;
+    bodyText?: string;
+    attachments: Array<{ buffer: Buffer; filename: string; mimeType: string; size: number; s3Key?: string }>;
+  }): Promise<{ message: CommMessageDocument; thread: CommThreadDocument }> {
+    try {
+      const { message, thread } = await this.syncService.syncGmailMessage(
+        args.identity,
+        args.gmailMessageId,
+        { emitInboundEvent: false, sentByUserId: args.userId },
+      );
+      return { message, thread };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Canonical Gmail fetch failed after send for message ${args.gmailMessageId}: ${message}`,
+      );
+
+      const fallbackMessage = (await this.messageModel.findOneAndUpdate(
+        { organizationId: args.organizationId, gmailMessageId: args.gmailMessageId },
+        {
+          $set: {
+            organizationId: args.organizationId,
+            gmailThreadId: args.gmailThreadId,
+            gmailMessageId: args.gmailMessageId,
+            identityId: String(args.identity._id),
+            from: { email: args.fromAddress },
+            to: args.to.map((email) => ({ email })),
+            cc: (args.cc ?? []).map((email) => ({ email })),
+            bcc: (args.bcc ?? []).map((email) => ({ email })),
+            subject: args.subject,
+            bodyHtml: args.bodyHtml,
+            bodyText: args.bodyText,
+            attachments: args.attachments.map((attachment) => ({
+              filename: attachment.filename,
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+              s3Key: attachment.s3Key,
+            })),
+            sentAt: new Date(),
+            gmailInternalDate: new Date(),
+            isRead: true,
+            isSentByIdentity: true,
+            sentByUserId: args.userId,
+            gmailLabels: ['SENT'],
+            deliveryState: 'sent',
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ))!;
+      const thread = await this.syncService.refreshThreadState(
+        args.organizationId,
+        args.gmailThreadId,
+        String(args.identity._id),
+      );
+
+      void this.syncService
+        .processMessage(args.identity, args.gmailMessageId)
+        .catch((processError) =>
+          this.logger.warn(
+            `Deferred sent-message enrichment failed for ${args.gmailMessageId}: ${
+              processError instanceof Error ? processError.message : String(processError)
+            }`,
+          ),
+        );
+
+      return { message: fallbackMessage, thread };
+    }
+  }
+
+  private async prepareTrackedHtml(args: {
+    organizationId: string;
+    identityId: string;
+    bodyHtml?: string;
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    entityType?: string;
+    entityId?: string;
+  }): Promise<{ htmlForSend?: string; preparedTracking?: PreparedOpenTracking | null }> {
+    if (!args.bodyHtml) {
+      return { htmlForSend: args.bodyHtml, preparedTracking: null };
+    }
+
+    const preparedTracking = await this.trackingService.prepareOpenTracking({
+      organizationId: args.organizationId,
+      identityId: args.identityId,
+      to: args.to,
+      cc: args.cc,
+      bcc: args.bcc,
+      entityType: args.entityType,
+      entityId: args.entityId,
+    });
+
+    if (!preparedTracking) {
+      return { htmlForSend: args.bodyHtml, preparedTracking };
+    }
+
+    return {
+      htmlForSend: this.trackingService.injectOpenTrackingPixel(args.bodyHtml, preparedTracking.pixelUrl),
+      preparedTracking,
+    };
+  }
+
+  private async finalizeSentTracking(args: {
+    message: CommMessageDocument;
+    thread: CommThreadDocument;
+    preparedTracking?: PreparedOpenTracking | null;
+    entityType?: string;
+    entityId?: string;
+  }): Promise<void> {
+    try {
+      if (args.preparedTracking?.tokenId) {
+        await this.trackingService.activateOpenTracking({
+          message: args.message,
+          thread: args.thread,
+          tokenId: args.preparedTracking.tokenId,
+          eventContext: {
+            entityType: args.entityType,
+            entityId: args.entityId,
+            recipientEmail: args.preparedTracking.recipientEmail,
+          },
+        });
+        return;
+      }
+
+      await this.trackingService.recordSentEvent({
+        message: args.message,
+        thread: args.thread,
+        entityType: args.entityType,
+        entityId: args.entityId,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Message tracking finalization failed for ${args.message.gmailMessageId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      try {
+        await this.trackingService.recordSentEvent({
+          message: args.message,
+          thread: args.thread,
+          entityType: args.entityType,
+          entityId: args.entityId,
+        });
+      } catch (fallbackError) {
+        this.logger.warn(
+          `Sent event fallback failed for ${args.message.gmailMessageId}: ${
+            fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+          }`,
+        );
+      }
+    }
+  }
+
+  private async recordSendFailureEvent(args: {
+    organizationId: string;
+    identityId: string;
+    gmailThreadId?: string;
+    entityType?: string;
+    entityId?: string;
+    recipients: { to: string[]; cc?: string[]; bcc?: string[] };
+    operation: 'send' | 'reply' | 'forward';
+    reason: string;
+  }): Promise<void> {
+    try {
+      await this.trackingService.recordSendFailedEvent({
+        organizationId: args.organizationId,
+        identityId: args.identityId,
+        gmailThreadId: args.gmailThreadId,
+        entityType: args.entityType,
+        entityId: args.entityId,
+        recipientEmail: this.resolveSingleTrackedRecipient(
+          args.recipients.to,
+          args.recipients.cc,
+          args.recipients.bcc,
+        ),
+        metadata: {
+          operation: args.operation,
+          reason: args.reason,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to record send failure tracking event: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private resolveSingleTrackedRecipient(
+    to: string[],
+    cc?: string[],
+    bcc?: string[],
+  ): string | undefined {
+    const recipients = Array.from(
+      new Set(
+        [...to, ...(cc ?? []), ...(bcc ?? [])]
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    return recipients.length === 1 ? recipients[0] : undefined;
+  }
+
+  private async attachThreadTrackingState(
+    organizationId: string,
+    messages: CommMessageDocument[],
+  ): Promise<Array<Record<string, unknown>>> {
+    if (messages.length === 0) {
+      return [];
+    }
+
+    const gmailThreadIds = Array.from(
+      new Set(
+        messages
+          .map((message) => message.gmailThreadId)
+          .filter((gmailThreadId): gmailThreadId is string => Boolean(gmailThreadId)),
+      ),
+    );
+
+    if (gmailThreadIds.length === 0) {
+      return messages.map((message) =>
+        typeof message.toObject === 'function'
+          ? (message.toObject() as unknown as Record<string, unknown>)
+          : (message as unknown as Record<string, unknown>),
+      );
+    }
+
+    const threads = await this.threadModel
+      .find({
+        organizationId,
+        gmailThreadId: { $in: gmailThreadIds },
+      })
+      .select(
+        [
+          'gmailThreadId',
+          'replyState',
+          'deliveryState',
+          'bounceState',
+          'lastOutboundAt',
+          'lastInboundAt',
+          'repliedAt',
+          'firstOpenedAt',
+          'lastOpenedAt',
+          'trackedOpenCount',
+          'estimatedHumanOpenCount',
+          'suspiciousOpenCount',
+          'hasOpenSignal',
+          'trackingEnabled',
+          'lastOpenSource',
+          'primaryRecipientEmail',
+          'recentEstimatedHumanOpenCount',
+          'recentSuspiciousOpenCount',
+          'responseTimeComparableCount',
+          'responseTimeMedianMs',
+          'responseTimeP75Ms',
+          'responseTimeAverageMs',
+          'responseTimeSignalQuality',
+          'responseTimeScope',
+          'expectedReplyWindowMs',
+          'silenceState',
+          'silenceOverdueFactor',
+          'engagementScore',
+          'engagementBand',
+          'engagementScoreConfidence',
+          'scoreReasons',
+          'needsFollowUpNow',
+          'hotLead',
+          'openedButNotReplied',
+          'suspiciousTrackingOnly',
+        ].join(' '),
+      )
+      .lean()
+      .exec();
+
+    const threadByGmailThreadId = new Map(
+      threads.map((thread) => [thread.gmailThreadId as string, thread]),
+    );
+
+    return messages.map((message) => {
+      const serialized =
+        typeof message.toObject === 'function'
+          ? (message.toObject() as unknown as Record<string, unknown>)
+          : (message as unknown as Record<string, unknown>);
+      const thread = threadByGmailThreadId.get(message.gmailThreadId);
+
+      if (!thread) {
+        return serialized;
+      }
+
+      return {
+        ...serialized,
+        replyState: serialized.replyState ?? thread.replyState,
+        deliveryState: serialized.deliveryState ?? thread.deliveryState,
+        bounceState: serialized.bounceState ?? thread.bounceState,
+        lastOutboundAt: serialized.lastOutboundAt ?? thread.lastOutboundAt,
+        lastInboundAt: serialized.lastInboundAt ?? thread.lastInboundAt,
+        repliedAt: serialized.repliedAt ?? thread.repliedAt,
+        tracking:
+          serialized.tracking ??
+          {
+            replyState: thread.replyState,
+            deliveryState: thread.deliveryState,
+            bounceState: thread.bounceState,
+            lastOutboundAt: thread.lastOutboundAt,
+            lastInboundAt: thread.lastInboundAt,
+            repliedAt: thread.repliedAt,
+            firstOpenedAt: thread.firstOpenedAt,
+            lastOpenedAt: thread.lastOpenedAt,
+            trackedOpenCount: thread.trackedOpenCount,
+            estimatedHumanOpenCount: thread.estimatedHumanOpenCount,
+            suspiciousOpenCount: thread.suspiciousOpenCount,
+            hasOpenSignal: thread.hasOpenSignal,
+            trackingEnabled: thread.trackingEnabled,
+            lastOpenSource: thread.lastOpenSource,
+            primaryRecipientEmail: thread.primaryRecipientEmail,
+            recentEstimatedHumanOpenCount: thread.recentEstimatedHumanOpenCount,
+            recentSuspiciousOpenCount: thread.recentSuspiciousOpenCount,
+            responseTimeComparableCount: thread.responseTimeComparableCount,
+            responseTimeMedianMs: thread.responseTimeMedianMs,
+            responseTimeP75Ms: thread.responseTimeP75Ms,
+            responseTimeAverageMs: thread.responseTimeAverageMs,
+            responseTimeSignalQuality: thread.responseTimeSignalQuality,
+            responseTimeScope: thread.responseTimeScope,
+            expectedReplyWindowMs: thread.expectedReplyWindowMs,
+            silenceState: thread.silenceState,
+            silenceOverdueFactor: thread.silenceOverdueFactor,
+            engagementScore: thread.engagementScore,
+            engagementBand: thread.engagementBand,
+            engagementScoreConfidence: thread.engagementScoreConfidence,
+            scoreReasons: thread.scoreReasons,
+            needsFollowUpNow: thread.needsFollowUpNow,
+            hotLead: thread.hotLead,
+            openedButNotReplied: thread.openedButNotReplied,
+            suspiciousTrackingOnly: thread.suspiciousTrackingOnly,
+          },
+      };
+    });
   }
 
   private async findMessageByIdOrGmailId(

@@ -15,8 +15,45 @@ export class ListThreadsQueryDto extends CommPaginationQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn(['all', 'unread', 'sent', 'archived'])
-  filter?: 'all' | 'unread' | 'sent' | 'archived';
+  @IsIn([
+    'all',
+    'unread',
+    'sent',
+    'archived',
+    'fresh',
+    'waiting',
+    'ghosted',
+    'replied',
+    'bounced',
+    'failed',
+    'opened',
+    'unopened',
+    'suspicious',
+    'needs_follow_up',
+    'hot_lead',
+    'overdue',
+    'opened_no_reply',
+    'suspicious_only',
+  ])
+  filter?:
+    | 'all'
+    | 'unread'
+    | 'sent'
+    | 'archived'
+    | 'fresh'
+    | 'waiting'
+    | 'ghosted'
+    | 'replied'
+    | 'bounced'
+    | 'failed'
+    | 'opened'
+    | 'unopened'
+    | 'suspicious'
+    | 'needs_follow_up'
+    | 'hot_lead'
+    | 'overdue'
+    | 'opened_no_reply'
+    | 'suspicious_only';
 
   @IsOptional()
   @IsString()
