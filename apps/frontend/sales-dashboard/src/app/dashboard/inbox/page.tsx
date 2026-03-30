@@ -16,17 +16,19 @@ import {
 } from 'lucide-react';
 import {
   useThreads, useThread, useMessages, useReplyToMessage,
-  useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities, useCommIntelligenceSummary,
+  useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities, useCommIntelligenceSummary, useCommSettings,
 } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
 import { CommIntelligenceBadges, CommTrackingBadges } from '@/components/shared/comm/tracking-state';
+import { TrackingSendControl } from '@/components/shared/comm/tracking-send-control';
+import { CommAlertsPanel } from '@/components/shared/comm/alerts-panel';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { CommThread, CommMessage, CommIdentity, CommAttachment, CommIntelligenceSummary } from '@/types/comm.types';
+import type { CommThread, CommMessage, CommIdentity, CommAttachment, CommIntelligenceSummary, CommSettings } from '@/types/comm.types';
 import { COMM_ENABLED } from '@/lib/feature-flags';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -198,6 +200,7 @@ function InboxContent() {
   const debouncedSearch = useDebounce(search, 300);
   const { data: identities } = useIdentities();
   const { data: intelligenceSummary } = useCommIntelligenceSummary(summaryRange);
+  const { data: commSettings } = useCommSettings();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
 
@@ -395,7 +398,11 @@ function InboxContent() {
         </div>
 
         <div className="px-3 py-3 border-b border-white/10 bg-white/[0.02]">
-          <InboxSummaryCards summary={intelligenceSummary} />
+          <InboxSummaryCards
+            summary={intelligenceSummary}
+            commSettings={commSettings}
+            onSelectThread={setSelectedThreadId}
+          />
         </div>
 
         {/* Mobile: filter chips + compose */}
@@ -525,12 +532,13 @@ function InboxContent() {
         !selectedThreadId ? 'hidden sm:flex' : 'flex',
       )}>
         {selectedThreadId ? (
-          <ThreadView
-            threadId={selectedThreadId}
-            onClose={() => setSelectedThreadId(null)}
-            identities={identities ?? []}
-            userId={user?.id ?? ''}
-          />
+            <ThreadView
+              threadId={selectedThreadId}
+              onClose={() => setSelectedThreadId(null)}
+              identities={identities ?? []}
+              userId={user?.id ?? ''}
+              commSettings={commSettings}
+            />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3">
             <Mail className="h-16 w-16 mx-auto text-muted-foreground/10" />
@@ -631,7 +639,15 @@ function ThreadRow({
 
 // ─── Thread detail view ────────────────────────────────────────────────────────
 
-function InboxSummaryCards({ summary }: { summary?: CommIntelligenceSummary }) {
+function InboxSummaryCards({
+  summary,
+  commSettings,
+  onSelectThread,
+}: {
+  summary?: CommIntelligenceSummary;
+  commSettings?: CommSettings;
+  onSelectThread: (threadId: string | null) => void;
+}) {
   const cards = [
     { label: 'Tracked sends', value: summary?.totals.trackedSends ?? 0, tone: 'text-foreground' },
     { label: 'Replies', value: summary?.totals.replies ?? 0, tone: 'text-emerald-300' },
@@ -643,10 +659,16 @@ function InboxSummaryCards({ summary }: { summary?: CommIntelligenceSummary }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Intelligence Snapshot
-        </p>
-        <p className="text-[10px] text-muted-foreground/70">Last 30d</p>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Intelligence Snapshot
+          </p>
+          <p className="text-[10px] text-muted-foreground/70">
+            Last 30d
+            {commSettings?.trackingEnabled === false && ' · tracking controls are currently off'}
+          </p>
+        </div>
+        <CommAlertsPanel onSelectThread={(threadId) => onSelectThread(threadId)} />
       </div>
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-5">
         {cards.map((card) => (
@@ -665,15 +687,18 @@ function InboxSummaryCards({ summary }: { summary?: CommIntelligenceSummary }) {
           {summary.responseTimes.signalQuality !== 'usable' && ' Signal quality is still building.'}
         </p>
       )}
+      <p className="text-[10px] text-muted-foreground/60">
+        Open signals are estimated. Gmail image proxying and security scanners can create noise.
+      </p>
     </div>
   );
 }
 
 function ThreadView({
-  threadId, onClose, identities, userId,
+  threadId, onClose, identities, userId, commSettings,
 }: {
   threadId: string; onClose: () => void;
-  identities: CommIdentity[]; userId: string;
+  identities: CommIdentity[]; userId: string; commSettings?: CommSettings;
 }) {
   const { data: thread, isLoading: threadLoading } = useThread(threadId);
   const { data: messagesRes, isLoading: messagesLoading, isError: messagesError, refetch: refetchMessages } = useMessages({ threadId });
@@ -832,6 +857,7 @@ function ThreadView({
               lastMessage={lastMessage}
               identities={identities}
               userId={userId}
+              commSettings={commSettings}
               onClose={() => setReplyOpen(false)}
             />
           </div>
@@ -853,19 +879,28 @@ function ThreadView({
 // ─── Reply box (Gmail-style bottom compose) ────────────────────────────────────
 
 function ReplyBox({
-  lastMessage, identities, userId, onClose,
+  lastMessage, identities, userId, commSettings, onClose,
 }: {
   lastMessage: CommMessage | undefined;
-  identities: CommIdentity[]; userId: string; onClose: () => void;
+  identities: CommIdentity[]; userId: string; commSettings?: CommSettings; onClose: () => void;
 }) {
   const replyMutation = useReplyToMessage();
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [trackingEnabled, setTrackingEnabled] = useState(
+    (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
+  );
 
   const defaultIdentityId = (identities.find((i) => i.isDefault) ?? identities[0])?.id ?? '';
   const [selectedIdentityId, setSelectedIdentityId] = useState(defaultIdentityId);
   const activeIdentityId = selectedIdentityId || defaultIdentityId;
+
+  useEffect(() => {
+    setTrackingEnabled(
+      (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
+    );
+  }, [commSettings?.openTrackingEnabled, commSettings?.trackingEnabled, lastMessage?.id, lastMessage?.gmailMessageId]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -908,6 +943,7 @@ function ReplyBox({
         identityId: activeIdentityId, bodyText, bodyHtml,
         attachmentS3Keys: uploadedAttachments.length > 0 ? uploadedAttachments.map((a) => a.s3Key) : undefined,
         replyAll,
+        trackingEnabled,
       },
     });
     editor?.commands.clearContent(true);
@@ -1001,6 +1037,15 @@ function ReplyBox({
             {replyMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Sending…</> : 'Send'}
           </Button>
         </div>
+      </div>
+      <div className="px-3 pb-3">
+        <TrackingSendControl
+          value={trackingEnabled}
+          onChange={setTrackingEnabled}
+          settings={commSettings}
+          hasHtmlSupport
+          compact
+        />
       </div>
     </div>
   );

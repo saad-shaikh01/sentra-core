@@ -48,6 +48,10 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   entityId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  trackingEnabled?: boolean;
 }
 
 export class ReplyDto {
@@ -80,6 +84,10 @@ export class ReplyDto {
   @IsOptional()
   @IsBoolean()
   replyAll?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  trackingEnabled?: boolean;
 }
 
 export class ForwardDto {
@@ -103,4 +111,8 @@ export class ForwardDto {
   @IsArray()
   @IsString({ each: true })
   attachmentS3Keys?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  trackingEnabled?: boolean;
 }

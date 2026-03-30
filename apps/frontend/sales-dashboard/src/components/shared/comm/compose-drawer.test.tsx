@@ -5,6 +5,7 @@ import { ComposeDrawer } from './compose-drawer';
 const mockUseIdentities = jest.fn();
 const mockUseSendMessage = jest.fn();
 const mockUseForwardMessage = jest.fn();
+const mockUseCommSettings = jest.fn();
 const mockApiFetch = jest.fn();
 const mockUseAuth = jest.fn();
 
@@ -168,6 +169,7 @@ jest.mock('@/hooks/use-comm', () => ({
   useIdentities: () => mockUseIdentities(),
   useSendMessage: () => mockUseSendMessage(),
   useForwardMessage: () => mockUseForwardMessage(),
+  useCommSettings: () => mockUseCommSettings(),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -253,6 +255,13 @@ describe('ComposeDrawer', () => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1' },
     });
+    mockUseCommSettings.mockReturnValue({
+      data: {
+        trackingEnabled: true,
+        openTrackingEnabled: true,
+        allowPerMessageTrackingToggle: true,
+      },
+    });
     mockApiFetch.mockReset().mockResolvedValue({
       data: {
         s3Key: 'org-1/outbound/logo.png',
@@ -303,6 +312,7 @@ describe('ComposeDrawer', () => {
       expect(mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           bodyHtml: '<p>Hello from editor</p>',
+          trackingEnabled: true,
         }),
       );
     });

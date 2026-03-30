@@ -2,6 +2,8 @@ import { Model } from 'mongoose';
 import { CommMessageDocument } from '../../schemas/comm-message.schema';
 import { CommMessageEventDocument } from '../../schemas/comm-message-event.schema';
 import { CommThreadDocument } from '../../schemas/comm-thread.schema';
+import { AlertsService } from '../alerts/alerts.service';
+import { CommSettingsService } from '../settings/comm-settings.service';
 import { IntelligenceService } from './intelligence.service';
 
 function createQueryChain<T>(value: T) {
@@ -39,6 +41,13 @@ describe('IntelligenceService', () => {
   let eventModel: {
     countDocuments: jest.Mock;
   };
+  let settingsService: {
+    getResolvedSettings: jest.Mock;
+    getRuntimeSettings: jest.Mock;
+  };
+  let alertsService: {
+    syncThreadAlerts: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date('2026-03-30T10:00:00.000Z'));
@@ -54,11 +63,27 @@ describe('IntelligenceService', () => {
     eventModel = {
       countDocuments: jest.fn(),
     };
+    settingsService = {
+      getResolvedSettings: jest.fn().mockResolvedValue({
+        trackingEnabled: true,
+        openTrackingEnabled: true,
+      }),
+      getRuntimeSettings: jest.fn().mockReturnValue({
+        silenceThresholds: { overdue: 1, atRisk: 1.75, ghosted: 3 },
+        engagementScoreMultiplier: 1,
+        hotLeadThreshold: 70,
+      }),
+    };
+    alertsService = {
+      syncThreadAlerts: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new IntelligenceService(
       threadModel as unknown as Model<CommThreadDocument>,
       messageModel as unknown as Model<CommMessageDocument>,
       eventModel as unknown as Model<CommMessageEventDocument>,
+      settingsService as unknown as CommSettingsService,
+      alertsService as unknown as AlertsService,
     );
   });
 

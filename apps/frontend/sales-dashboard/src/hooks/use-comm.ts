@@ -11,12 +11,16 @@ import { toast } from '@/hooks/use-toast';
 import { useUIStore } from '@/stores/ui-store';
 import { COMM_ENABLED } from '@/lib/feature-flags';
 import type {
+  CommAlertListResponse,
+  CommAlertQuery,
   CommIdentity,
   CommIntelligenceSummary,
   CommIntelligenceSummaryParams,
+  CommMaintenanceJob,
   CommThread,
   CommMessage,
   CommMessageSummary,
+  CommSettings,
   PaginatedResponse,
   ListThreadsParams,
   ListMessagesParams,
@@ -24,6 +28,7 @@ import type {
   SendMessageDto,
   ReplyDto,
   ForwardDto,
+  UpdateCommSettingsDto,
 } from '@/types/comm.types';
 
 const COMM_UNREAD_STORAGE_KEY = 'comm:unread';
@@ -68,6 +73,9 @@ export const commKeys = {
   messages: (params?: ListMessagesParams) => [...commKeys.all, 'messages', params] as const,
   intelligenceSummary: (params?: CommIntelligenceSummaryParams) =>
     [...commKeys.all, 'intelligence-summary', params] as const,
+  settings: () => [...commKeys.all, 'settings'] as const,
+  alerts: (params?: CommAlertQuery) => [...commKeys.all, 'alerts', params] as const,
+  maintenanceJob: (jobId?: string) => [...commKeys.all, 'maintenance-job', jobId] as const,
   timeline: (entityType: string, entityId: string, params?: PaginationParams) =>
     [...commKeys.all, 'timeline', entityType, entityId, params] as const,
 };
@@ -232,6 +240,105 @@ export function useCommIntelligenceSummary(params?: CommIntelligenceSummaryParam
     },
     staleTime: 60 * 1000,
     enabled: COMM_ENABLED,
+  });
+}
+
+export function useCommSettings() {
+  return useQuery({
+    queryKey: commKeys.settings(),
+    queryFn: async () => {
+      const res = await api.getCommSettings();
+      return (res?.data ?? res) as CommSettings;
+    },
+    staleTime: 60 * 1000,
+    enabled: COMM_ENABLED,
+  });
+}
+
+export function useUpdateCommSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: UpdateCommSettingsDto) => {
+      const res = await api.updateCommSettings(dto as Record<string, unknown>);
+      return (res?.data ?? res) as CommSettings;
+    },
+    onSuccess: (settings) => {
+      queryClient.setQueryData(commKeys.settings(), settings);
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.intelligenceSummary() });
+      toast.success('Email intelligence settings updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update email intelligence settings', e.message),
+  });
+}
+
+export function useCommAlerts(params?: CommAlertQuery) {
+  return useQuery({
+    queryKey: commKeys.alerts(params),
+    queryFn: async () => {
+      const res = await api.listCommAlerts(params as Record<string, unknown>) as CommAlertListResponse;
+      return {
+        ...res,
+        data: (res.data ?? []).map((alert) => ({
+          ...alert,
+          id: (alert.id ?? (alert as unknown as { _id?: string })._id ?? '') as string,
+        })),
+      } as CommAlertListResponse;
+    },
+    staleTime: 30 * 1000,
+    enabled: COMM_ENABLED,
+  });
+}
+
+export function useMarkCommAlertRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (alertId: string) => api.markCommAlertRead(alertId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.alerts() });
+    },
+    onError: (e: Error) => toast.error('Failed to mark alert as read', e.message),
+  });
+}
+
+export function useMarkAllCommAlertsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => api.markAllCommAlertsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.alerts() });
+    },
+    onError: (e: Error) => toast.error('Failed to mark alerts as read', e.message),
+  });
+}
+
+export function useRunCommIntelligenceBackfill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto?: { batchSize?: number }) => {
+      const res = await api.runCommIntelligenceBackfill(dto as Record<string, unknown> | undefined);
+      return (res?.data ?? res) as CommMaintenanceJob;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.settings() });
+      toast.success('Repair job queued');
+    },
+    onError: (e: Error) => toast.error('Failed to queue repair job', e.message),
+  });
+}
+
+export function useCommMaintenanceJob(jobId?: string, enabled = true) {
+  return useQuery({
+    queryKey: commKeys.maintenanceJob(jobId),
+    queryFn: async () => {
+      const res = await api.getCommMaintenanceJob(jobId!);
+      return (res?.data ?? res) as CommMaintenanceJob;
+    },
+    enabled: Boolean(jobId) && enabled,
+    refetchInterval: (query) => {
+      const state = (query.state.data as CommMaintenanceJob | undefined)?.state;
+      return state === 'completed' || state === 'failed' ? false : 4000;
+    },
   });
 }
 

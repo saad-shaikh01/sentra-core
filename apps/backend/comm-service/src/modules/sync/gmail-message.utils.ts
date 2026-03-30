@@ -311,6 +311,10 @@ export function deriveThreadState(
   messages: ThreadStateInput[],
   existingThread?: ExistingThreadState,
   now = new Date(),
+  options?: {
+    freshReplyWindowMs?: number;
+    ghostedReplyWindowMs?: number;
+  },
 ): {
   participants: EmailAddress[];
   messageCount: number;
@@ -362,6 +366,14 @@ export function deriveThreadState(
   const repliedAt = lastOutboundAt
     ? inboundMessages.find((message) => (message.sentAt?.getTime() ?? 0) > lastOutboundAt.getTime())?.sentAt
     : undefined;
+  const freshReplyWindowMs = Math.max(
+    options?.freshReplyWindowMs ?? FRESH_REPLY_WINDOW_MS,
+    60 * 60 * 1000,
+  );
+  const ghostedReplyWindowMs = Math.max(
+    options?.ghostedReplyWindowMs ?? GHOSTED_REPLY_WINDOW_MS,
+    freshReplyWindowMs,
+  );
 
   let replyState: CommThreadReplyState = 'none';
   if (lastOutboundAt) {
@@ -369,9 +381,9 @@ export function deriveThreadState(
       replyState = 'replied';
     } else {
       const ageMs = now.getTime() - lastOutboundAt.getTime();
-      replyState = ageMs <= FRESH_REPLY_WINDOW_MS
+      replyState = ageMs <= freshReplyWindowMs
         ? 'fresh'
-        : ageMs <= GHOSTED_REPLY_WINDOW_MS
+        : ageMs <= ghostedReplyWindowMs
           ? 'waiting'
           : 'ghosted';
     }

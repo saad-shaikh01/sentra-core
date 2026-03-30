@@ -4,6 +4,7 @@ import { AttachmentsModule } from '../attachments/attachments.module';
 import { IdentitiesModule } from '../identities/identities.module';
 import { SyncModule } from '../sync/sync.module';
 import { EntityLinksModule } from '../entity-links/entity-links.module';
+import { SettingsModule } from '../settings/settings.module';
 import { TrackingModule } from '../tracking/tracking.module';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
@@ -15,6 +16,7 @@ import { MessagesService } from './messages.service';
     SyncModule,
     AttachmentsModule,
     EntityLinksModule,
+    SettingsModule,
     TrackingModule,
   ],
   controllers: [MessagesController],

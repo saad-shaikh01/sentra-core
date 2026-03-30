@@ -256,6 +256,14 @@ export function useCommSocket() {
           });
         }
       });
+
+      const invalidateAlerts = () => {
+        queryClient.invalidateQueries({ queryKey: commKeys.alerts() });
+      };
+
+      socket.on('alert:new', invalidateAlerts);
+      socket.on('alert:updated', invalidateAlerts);
+      socket.on('alert:all-read', invalidateAlerts);
     };
 
     const initialToken = typeof window !== 'undefined' ? window.localStorage.getItem('accessToken') : null;

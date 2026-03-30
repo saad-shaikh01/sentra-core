@@ -117,6 +117,28 @@ jest.mock('@/hooks/use-comm', () => ({
     },
     isLoading: false,
   }),
+  useCommSettings: () => ({
+    data: {
+      trackingEnabled: true,
+      openTrackingEnabled: true,
+      allowPerMessageTrackingToggle: true,
+    },
+  }),
+  useCommAlerts: () => ({
+    data: {
+      data: [],
+      unreadCount: 0,
+      meta: { total: 0, page: 1, limit: 10, totalPages: 1 },
+    },
+    isLoading: false,
+  }),
+  useMarkCommAlertRead: () => ({
+    mutateAsync: jest.fn(),
+  }),
+  useMarkAllCommAlertsRead: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
 }));
 
 jest.mock('@/hooks/use-debounce', () => ({

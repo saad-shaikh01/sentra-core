@@ -2,12 +2,11 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, CheckCircle2, AlertCircle, Clock, Wifi, Trash2, Star } from 'lucide-react';
+import { Plus, CheckCircle2, AlertCircle, Clock, Wifi, Trash2, Star, RefreshCw, MailOpen, Bell } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useIdentities, useDisconnectIdentity, useInitiateOAuth } from '@/hooks/use-comm';
-import { useAuth } from '@/hooks/use-auth';
+import { useIdentities, useDisconnectIdentity, useInitiateOAuth, useCommSettings, useUpdateCommSettings, useRunCommIntelligenceBackfill, useCommMaintenanceJob } from '@/hooks/use-comm';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -15,12 +14,34 @@ import { toast } from '@/hooks/use-toast';
 import { commKeys } from '@/hooks/use-comm';
 import { timeAgo } from '@/lib/format-date';
 import { useUIStore } from '@/stores/ui-store';
-import type { CommIdentity } from '@/types/comm.types';
+import { cn } from '@/lib/utils';
+import type { CommIdentity, CommSettings, UpdateCommSettingsDto } from '@/types/comm.types';
 
 type OAuthBrandOption = {
   id: string;
   name: string;
 };
+
+function toSettingsDraft(settings?: CommSettings | null): UpdateCommSettingsDto | null {
+  if (!settings) {
+    return null;
+  }
+
+  return {
+    trackingEnabled: settings.trackingEnabled,
+    openTrackingEnabled: settings.openTrackingEnabled,
+    allowPerMessageTrackingToggle: settings.allowPerMessageTrackingToggle,
+    ghostedAfterDays: settings.ghostedAfterDays,
+    silenceSensitivity: settings.silenceSensitivity,
+    engagementSensitivity: settings.engagementSensitivity,
+    inAppAlertsEnabled: settings.inAppAlertsEnabled,
+    emailAlertsEnabled: settings.emailAlertsEnabled,
+    multipleOpenAlertsEnabled: settings.multipleOpenAlertsEnabled,
+    multipleOpenThreshold: settings.multipleOpenThreshold,
+    hotLeadAlertsEnabled: settings.hotLeadAlertsEnabled,
+    overdueAlertsEnabled: settings.overdueAlertsEnabled,
+  };
+}
 
 export default function GmailSettingsPageWrapper() {
   return (
@@ -31,11 +52,13 @@ export default function GmailSettingsPageWrapper() {
 }
 
 function GmailSettingsPage() {
-  const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const { data: identities, isLoading, isError, error, refetch } = useIdentities();
   const disconnectMutation = useDisconnectIdentity();
   const oauthMutation = useInitiateOAuth();
+  const { data: commSettings } = useCommSettings();
+  const updateSettings = useUpdateCommSettings();
+  const runBackfill = useRunCommIntelligenceBackfill();
   const queryClient = useQueryClient();
   const commSyncProgress = useUIStore((s) => s.commSyncProgress);
   const commIdentityErrors = useUIStore((s) => s.commIdentityErrors);
@@ -46,6 +69,9 @@ function GmailSettingsPage() {
   const [brandOptions, setBrandOptions] = useState<OAuthBrandOption[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(true);
   const [brandsError, setBrandsError] = useState<string | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<UpdateCommSettingsDto | null>(null);
+  const [lastBackfillJobId, setLastBackfillJobId] = useState<string | null>(null);
+  const { data: lastBackfillJob } = useCommMaintenanceJob(lastBackfillJobId ?? undefined, Boolean(lastBackfillJobId));
 
   const searchParams = useSearchParams();
   const canViewOrgIdentities = hasPermission('sales:settings:view');
@@ -94,6 +120,12 @@ function GmailSettingsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (commSettings) {
+      setSettingsDraft(toSettingsDraft(commSettings));
+    }
+  }, [commSettings]);
+
   const handleConnect = async () => {
     if (!selectedBrandId) return;
     const result = await oauthMutation.mutateAsync(selectedBrandId);
@@ -114,8 +146,9 @@ function GmailSettingsPage() {
       await api.setDefaultIdentity(id);
       queryClient.invalidateQueries({ queryKey: commKeys.identities() });
       toast.success('Default account updated');
-    } catch (e: any) {
-      toast.error('Failed to update default', e.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      toast.error('Failed to update default', message);
     }
   };
 
@@ -236,7 +269,304 @@ function GmailSettingsPage() {
           </div>
         )}
       </div>
+
+      <EmailIntelligenceSettingsCard
+        settings={settingsDraft ?? commSettings}
+        canManage={hasPermission('sales:settings:view')}
+        isSaving={updateSettings.isPending}
+        saveError={updateSettings.error instanceof Error ? updateSettings.error.message : null}
+        onChange={(patch) =>
+          setSettingsDraft((current) => ({
+            ...(current ?? toSettingsDraft(commSettings) ?? {}),
+            ...patch,
+          }))
+        }
+        onSave={async () => {
+          if (!settingsDraft) {
+            return;
+          }
+          await updateSettings.mutateAsync(settingsDraft);
+        }}
+        onReset={() => setSettingsDraft(toSettingsDraft(commSettings))}
+        onRunBackfill={async () => {
+          const job = await runBackfill.mutateAsync({ batchSize: 100 });
+          setLastBackfillJobId(job.id);
+        }}
+        backfillJob={lastBackfillJob}
+        isBackfillRunning={runBackfill.isPending}
+      />
     </div>
+  );
+}
+
+function SettingCheckbox({
+  label,
+  description,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (nextValue: boolean) => void;
+}) {
+  return (
+    <label className={cn('flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3', disabled && 'opacity-70')}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/20 text-primary focus:ring-primary"
+      />
+      <div>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+    </label>
+  );
+}
+
+function EmailIntelligenceSettingsCard({
+  settings,
+  canManage,
+  isSaving,
+  saveError,
+  onChange,
+  onSave,
+  onReset,
+  onRunBackfill,
+  backfillJob,
+  isBackfillRunning,
+}: {
+  settings?: UpdateCommSettingsDto & Partial<CommSettings>;
+  canManage: boolean;
+  isSaving: boolean;
+  saveError: string | null;
+  onChange: (patch: UpdateCommSettingsDto) => void;
+  onSave: () => Promise<void>;
+  onReset: () => void;
+  onRunBackfill: () => Promise<void>;
+  backfillJob?: { state?: string; progress?: Record<string, unknown>; finishedOn?: string; failedReason?: string; returnvalue?: Record<string, unknown> };
+  isBackfillRunning: boolean;
+}) {
+  const ghostedAfterDays = settings?.ghostedAfterDays ?? 7;
+  const progress = backfillJob?.progress as { processed?: number; total?: number } | undefined;
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Email Intelligence</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Control estimated open tracking, follow-up thresholds, alerts, and repair tools.
+        </p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <SettingCheckbox
+              label="Tracking enabled"
+              description="Keeps the tracking layer active for new sends. Gmail mailbox sync still continues."
+              checked={settings?.trackingEnabled ?? true}
+              disabled={!canManage}
+              onChange={(trackingEnabled) => onChange({ trackingEnabled })}
+            />
+            <SettingCheckbox
+              label="Estimated open tracking"
+              description="Injects a pixel into HTML emails only. Open signals remain estimated."
+              checked={settings?.openTrackingEnabled ?? true}
+              disabled={!canManage || !(settings?.trackingEnabled ?? true)}
+              onChange={(openTrackingEnabled) => onChange({ openTrackingEnabled })}
+            />
+            <SettingCheckbox
+              label="Per-send tracking toggle"
+              description="Lets senders disable estimated open tracking on individual emails."
+              checked={settings?.allowPerMessageTrackingToggle ?? true}
+              disabled={!canManage || !(settings?.trackingEnabled ?? true)}
+              onChange={(allowPerMessageTrackingToggle) => onChange({ allowPerMessageTrackingToggle })}
+            />
+            <SettingCheckbox
+              label="In-app alerts"
+              description="Show hot lead, repeated-open, and overdue follow-up alerts inside the inbox."
+              checked={settings?.inAppAlertsEnabled ?? true}
+              disabled={!canManage || !(settings?.trackingEnabled ?? true)}
+              onChange={(inAppAlertsEnabled) => onChange({ inAppAlertsEnabled })}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ghosted After</label>
+              <Select
+                value={String(ghostedAfterDays)}
+                onValueChange={(value) => onChange({ ghostedAfterDays: Number(value) })}
+                disabled={!canManage}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[3, 5, 7, 10, 14].map((days) => (
+                    <SelectItem key={days} value={String(days)}>
+                      {days} days
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Controls the Fresh → Waiting → Ghosted ladder.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Silence Sensitivity</label>
+              <Select
+                value={settings?.silenceSensitivity ?? 'medium'}
+                onValueChange={(value) => onChange({ silenceSensitivity: value as CommSettings['silenceSensitivity'] })}
+                disabled={!canManage}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">High sensitivity raises overdue signals sooner.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Scoring Sensitivity</label>
+              <Select
+                value={settings?.engagementSensitivity ?? 'medium'}
+                onValueChange={(value) => onChange({ engagementSensitivity: value as CommSettings['engagementSensitivity'] })}
+                disabled={!canManage}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">High sensitivity flags warm threads faster.</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+            <div className="flex items-center gap-2 text-amber-200">
+              <MailOpen className="h-4 w-4" />
+              <p className="text-sm font-medium">Tracking transparency</p>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-amber-100/80">
+              Open tracking is estimated, not guaranteed human reading. Delivery badges do not confirm mailbox delivery.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => void onSave()} disabled={!canManage || isSaving}>
+              {isSaving ? 'Saving...' : 'Save Settings'}
+            </Button>
+            <Button variant="outline" onClick={onReset} disabled={!canManage || isSaving}>
+              Reset
+            </Button>
+            {!canManage && (
+              <p className="text-xs text-muted-foreground">Only admins can update organization-wide mail intelligence settings.</p>
+            )}
+          </div>
+          {saveError && <p className="text-xs text-red-300">{saveError}</p>}
+        </div>
+
+        <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Alert Rules</h3>
+            <p className="mt-1 text-xs text-muted-foreground">In-app alerts stay conservative and deduplicated per thread.</p>
+          </div>
+          <div className="space-y-3">
+            <SettingCheckbox
+              label="Repeated-open alerts"
+              description={`Notify when a tracked email reaches ${settings?.multipleOpenThreshold ?? 3}+ estimated opens in 24h.`}
+              checked={settings?.multipleOpenAlertsEnabled ?? true}
+              disabled={!canManage || !(settings?.inAppAlertsEnabled ?? true)}
+              onChange={(multipleOpenAlertsEnabled) => onChange({ multipleOpenAlertsEnabled })}
+            />
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Multiple-open threshold</label>
+              <Select
+                value={String(settings?.multipleOpenThreshold ?? 3)}
+                onValueChange={(value) => onChange({ multipleOpenThreshold: Number(value) })}
+                disabled={!canManage || !(settings?.multipleOpenAlertsEnabled ?? true)}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[2, 3, 4, 5].map((threshold) => (
+                    <SelectItem key={threshold} value={String(threshold)}>
+                      {threshold} opens
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <SettingCheckbox
+              label="Hot lead alerts"
+              description="Notify when a thread crosses the current engagement threshold."
+              checked={settings?.hotLeadAlertsEnabled ?? true}
+              disabled={!canManage || !(settings?.inAppAlertsEnabled ?? true)}
+              onChange={(hotLeadAlertsEnabled) => onChange({ hotLeadAlertsEnabled })}
+            />
+            <SettingCheckbox
+              label="Overdue follow-up alerts"
+              description="Notify when current silence is longer than the expected reply window."
+              checked={settings?.overdueAlertsEnabled ?? true}
+              disabled={!canManage || !(settings?.inAppAlertsEnabled ?? true)}
+              onChange={(overdueAlertsEnabled) => onChange({ overdueAlertsEnabled })}
+            />
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-cyan-300" />
+                <p className="text-sm font-medium text-foreground">Repair and Backfill</p>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Safely re-run thread intelligence and score derivation for existing threads in batches.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button variant="outline" onClick={() => void onRunBackfill()} disabled={!canManage || isBackfillRunning}>
+                  {isBackfillRunning ? (
+                    <>
+                      <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      Queueing...
+                    </>
+                  ) : (
+                    'Rebuild Intelligence'
+                  )}
+                </Button>
+                {backfillJob?.state && (
+                  <span className="text-xs text-muted-foreground">
+                    Status: {backfillJob.state}
+                    {progress?.processed !== undefined && progress?.total !== undefined
+                      ? ` · ${progress.processed}/${progress.total}`
+                      : ''}
+                  </span>
+                )}
+              </div>
+              {backfillJob?.failedReason && (
+                <p className="mt-2 text-xs text-red-300">{backfillJob.failedReason}</p>
+              )}
+              {backfillJob?.finishedOn && (
+                <p className="mt-2 text-[11px] text-muted-foreground/70">
+                  Last completed {timeAgo(backfillJob.finishedOn)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -35,6 +35,9 @@ import { GatewayModule } from '../modules/gateway/gateway.module';
 import { GSuiteModule } from '../modules/gsuite/gsuite.module';
 import { TrackingModule } from '../modules/tracking/tracking.module';
 import { IntelligenceModule } from '../modules/intelligence/intelligence.module';
+import { SettingsModule } from '../modules/settings/settings.module';
+import { AlertsModule } from '../modules/alerts/alerts.module';
+import { MaintenanceModule } from '../modules/maintenance/maintenance.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -112,6 +115,9 @@ function resolveEnvFiles(): string[] {
     MessagesModule,
     TrackingModule,
     IntelligenceModule,
+    SettingsModule,
+    AlertsModule,
+    MaintenanceModule,
     GSuiteModule,
   ],
   providers: [

@@ -35,6 +35,8 @@ export type ThreadIntelligenceInput = {
   suspiciousOpenCount: number;
   hasOpenSignal: boolean;
   now: Date;
+  engagementScoreMultiplier?: number;
+  hotLeadThreshold?: number;
 };
 
 export type ThreadIntelligenceScore = {
@@ -124,6 +126,11 @@ export function deriveSilenceState(input: {
   repliedAt?: Date;
   expectedReplyWindowMs: number;
   now?: Date;
+  thresholds?: {
+    overdue: number;
+    atRisk: number;
+    ghosted: number;
+  };
 }): { silenceState: CommThreadSilenceState; silenceOverdueFactor?: number } {
   if (!input.lastOutboundAt || input.repliedAt || input.replyState === 'replied') {
     return { silenceState: 'none' };
@@ -137,16 +144,21 @@ export function deriveSilenceState(input: {
 
   const expectedReplyWindowMs = Math.max(input.expectedReplyWindowMs, HOUR_MS);
   const silenceOverdueFactor = Number((elapsedMs / expectedReplyWindowMs).toFixed(1));
+  const thresholds = input.thresholds ?? {
+    overdue: 1,
+    atRisk: 1.75,
+    ghosted: 3,
+  };
 
-  if (input.replyState === 'ghosted' || silenceOverdueFactor >= 3) {
+  if (input.replyState === 'ghosted' || silenceOverdueFactor >= thresholds.ghosted) {
     return { silenceState: 'ghosted', silenceOverdueFactor };
   }
 
-  if (silenceOverdueFactor >= 1.75) {
+  if (silenceOverdueFactor >= thresholds.atRisk) {
     return { silenceState: 'at_risk', silenceOverdueFactor };
   }
 
-  if (silenceOverdueFactor >= 1) {
+  if (silenceOverdueFactor >= thresholds.overdue) {
     return { silenceState: 'overdue', silenceOverdueFactor };
   }
 
@@ -238,7 +250,11 @@ export function calculateThreadIntelligenceScore(
     scoreReasons.push('Historically quick responder');
   }
 
-  engagementScore = clamp(engagementScore, 0, 100);
+  engagementScore = clamp(
+    engagementScore * (input.engagementScoreMultiplier ?? 1),
+    0,
+    100,
+  );
 
   const engagementBand: CommThreadEngagementBand =
     engagementScore >= 70 ? 'high' : engagementScore >= 40 ? 'medium' : 'low';
@@ -262,10 +278,11 @@ export function calculateThreadIntelligenceScore(
       input.silenceState === 'ghosted' ||
       openedButNotReplied);
 
+  const hotLeadThreshold = input.hotLeadThreshold ?? 70;
   const hotLead =
     !hasDeliveryFailure &&
     !suspiciousTrackingOnly &&
-    (hasReply || engagementScore >= 70 || input.recentEstimatedHumanOpenCount >= 3);
+    (hasReply || engagementScore >= hotLeadThreshold || input.recentEstimatedHumanOpenCount >= 3);
 
   return {
     engagementScore,

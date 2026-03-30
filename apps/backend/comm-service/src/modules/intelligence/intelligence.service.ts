@@ -11,6 +11,8 @@ import {
   CommThreadDocument,
   CommThreadResponseTimeScope,
 } from '../../schemas/comm-thread.schema';
+import { AlertsService } from '../alerts/alerts.service';
+import { CommSettingsService } from '../settings/comm-settings.service';
 import { IntelligenceSummaryQueryDto } from './dto/intelligence-summary.dto';
 import {
   calculateThreadIntelligenceScore,
@@ -18,8 +20,8 @@ import {
   formatDuration,
   resolveExpectedReplyWindowMs,
   selectResponseTimeScope,
-  summarizeResponseTimes,
-} from './intelligence.utils';
+    summarizeResponseTimes,
+  } from './intelligence.utils';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_OPEN_WINDOW_MS = DAY_MS;
@@ -41,6 +43,8 @@ export class IntelligenceService {
     private readonly messageModel: Model<CommMessageDocument>,
     @InjectModel(CommMessageEvent.name)
     private readonly eventModel: Model<CommMessageEventDocument>,
+    private readonly settingsService: CommSettingsService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async refreshThreadIntelligence(
@@ -61,6 +65,8 @@ export class IntelligenceService {
       .select('sentAt isSentByIdentity isBounceDetected trackedRecipientEmail to cc bcc')
       .lean()
       .exec() as ThreadMessageSnapshot[];
+    const settings = await this.settingsService.getResolvedSettings(organizationId);
+    const runtimeSettings = this.settingsService.getRuntimeSettings(settings);
 
     const latestOutbound = [...messages].reverse().find((message) => message.isSentByIdentity && message.sentAt);
     const primaryRecipientEmail =
@@ -83,6 +89,7 @@ export class IntelligenceService {
       lastOutboundAt: thread.lastOutboundAt,
       repliedAt: thread.repliedAt,
       expectedReplyWindowMs: expectedReplyWindowMs ?? 2 * DAY_MS,
+      thresholds: runtimeSettings.silenceThresholds,
     });
     const recentOpenMetrics = await this.getRecentOpenMetrics(organizationId, String(thread._id));
     const score = calculateThreadIntelligenceScore({
@@ -100,9 +107,11 @@ export class IntelligenceService {
       suspiciousOpenCount: thread.suspiciousOpenCount ?? 0,
       hasOpenSignal: Boolean(thread.hasOpenSignal),
       now: new Date(),
+      engagementScoreMultiplier: runtimeSettings.engagementScoreMultiplier,
+      hotLeadThreshold: runtimeSettings.hotLeadThreshold,
     });
 
-    return this.threadModel.findByIdAndUpdate(
+    const refreshedThread = await this.threadModel.findByIdAndUpdate(
       thread._id,
       {
         $set: {
@@ -132,6 +141,20 @@ export class IntelligenceService {
       },
       { new: true },
     ).exec();
+
+    if (refreshedThread) {
+      try {
+        await this.alertsService.syncThreadAlerts(refreshedThread);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to sync alerts for thread ${gmailThreadId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    return refreshedThread;
   }
 
   async getSummary(

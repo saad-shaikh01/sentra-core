@@ -32,6 +32,7 @@ import {
 } from './gmail-message.utils';
 import { TrackingService } from '../tracking/tracking.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
+import { CommSettingsService } from '../settings/comm-settings.service';
 
 type RateLimitedError = Error & {
   retryAfterSeconds?: number;
@@ -76,6 +77,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     private readonly gmailApi: GmailApiService,
     private readonly trackingService: TrackingService,
     private readonly intelligenceService: IntelligenceService,
+    private readonly settingsService: CommSettingsService,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly watchRenewal?: WatchRenewalService,
     private readonly entityLinksService?: EntityLinksService,
@@ -438,6 +440,8 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     gmailThreadId: string,
     identityId: string,
   ): Promise<CommThreadDocument> {
+    const settings = await this.settingsService.getResolvedSettings(organizationId);
+    const runtimeSettings = this.settingsService.getRuntimeSettings(settings);
     const [existingThread, messages] = await Promise.all([
       this.threadModel.findOne({ organizationId, gmailThreadId }).exec(),
       this.messageModel
@@ -447,7 +451,15 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         .exec(),
     ]);
 
-    const derived = deriveThreadState(messages, existingThread ?? undefined);
+    const derived = deriveThreadState(
+      messages,
+      existingThread ?? undefined,
+      new Date(),
+      {
+        freshReplyWindowMs: runtimeSettings.freshReplyWindowMs,
+        ghostedReplyWindowMs: runtimeSettings.ghostedReplyWindowMs,
+      },
+    );
     const thread = (await this.threadModel.findOneAndUpdate(
       { organizationId, gmailThreadId },
       {

@@ -299,6 +299,17 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     );
   }
 
+  if (snapshot.trackingEnabled && !hasOpenSignal) {
+    badges.push(
+      <TrackingBadge
+        key="tracking-on"
+        icon={MailOpen}
+        label="Tracking on"
+        className="border-cyan-500/20 bg-cyan-500/10 text-cyan-300"
+      />,
+    );
+  }
+
   if (snapshot.trackingEnabled && hasOpenSignal) {
     badges.push(
       <TrackingBadge

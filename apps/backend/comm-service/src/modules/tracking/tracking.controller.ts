@@ -3,12 +3,14 @@ import {
   Get,
   Headers,
   Logger,
+  Optional,
   Param,
   Req,
   Res,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
+import { MetricsService } from '../../common/metrics/metrics.service';
 import { TrackingService } from './tracking.service';
 
 @SkipThrottle()
@@ -16,7 +18,10 @@ import { TrackingService } from './tracking.service';
 export class TrackingController {
   private readonly logger = new Logger(TrackingController.name);
 
-  constructor(private readonly trackingService: TrackingService) {}
+  constructor(
+    private readonly trackingService: TrackingService,
+    @Optional() private readonly metrics?: MetricsService,
+  ) {}
 
   @Get('o/:token.gif')
   async captureOpenPixel(
@@ -26,6 +31,7 @@ export class TrackingController {
     @Headers('referer') referer: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<Buffer> {
+    this.metrics?.incrementPixelRequest('received');
     res.setHeader('Content-Type', 'image/gif');
     res.setHeader('Content-Length', String(this.trackingService.getTrackingPixel().length));
     res.setHeader('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate');
@@ -38,13 +44,18 @@ export class TrackingController {
         userAgent,
         referer,
       })
-      .catch((error) =>
+      .then(() => {
+        this.metrics?.incrementPixelRequest('logged');
+      })
+      .catch((error) => {
+        this.metrics?.incrementPixelRequest('error');
+        this.metrics?.incrementTrackingFailure('pixel_capture');
         this.logger.warn(
-          `Open pixel logging failed for token ${token.slice(0, 8)}…: ${
+          `Open pixel logging failed for token ${token.slice(0, 8)}...: ${
             error instanceof Error ? error.message : String(error)
           }`,
-        ),
-      );
+        );
+      });
 
     return this.trackingService.getTrackingPixel();
   }

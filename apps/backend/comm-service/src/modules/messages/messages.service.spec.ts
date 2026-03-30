@@ -11,6 +11,7 @@ import { GmailApiService } from '../sync/gmail-api.service';
 import { SyncService } from '../sync/sync.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
 import { TrackingService } from '../tracking/tracking.service';
+import { CommSettingsService } from '../settings/comm-settings.service';
 import { ThreadsService } from '../threads/threads.service';
 import { MessagesService } from './messages.service';
 
@@ -182,6 +183,10 @@ describe('MessagesService', () => {
   let intelligenceService: {
     refreshThreadIntelligence: jest.Mock;
   };
+  let settingsService: {
+    getResolvedSettings: jest.Mock;
+    getRuntimeSettings: jest.Mock;
+  };
   let buildMimeSpy: jest.SpyInstance<Promise<string>, [unknown]>;
   let syncService: SyncService;
 
@@ -338,6 +343,18 @@ describe('MessagesService', () => {
     intelligenceService = {
       refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
     };
+    settingsService = {
+      getResolvedSettings: jest.fn().mockResolvedValue({
+        trackingEnabled: true,
+        openTrackingEnabled: true,
+        allowPerMessageTrackingToggle: true,
+        ghostedAfterDays: 7,
+      }),
+      getRuntimeSettings: jest.fn().mockReturnValue({
+        freshReplyWindowMs: 2 * 24 * 60 * 60 * 1000,
+        ghostedReplyWindowMs: 7 * 24 * 60 * 60 * 1000,
+      }),
+    };
 
     gmailSendMock = jest.fn().mockResolvedValue({
       data: {
@@ -385,6 +402,7 @@ describe('MessagesService', () => {
       gmailApi as unknown as GmailApiService,
       trackingService as unknown as TrackingService,
       intelligenceService as unknown as IntelligenceService,
+      settingsService as unknown as CommSettingsService,
       undefined,
       undefined,
       undefined,
@@ -399,6 +417,7 @@ describe('MessagesService', () => {
       gmailApi as unknown as GmailApiService,
       syncService,
       trackingService as unknown as TrackingService,
+      settingsService as unknown as CommSettingsService,
       attachmentsService as unknown as AttachmentsService,
       {
         log: jest.fn().mockResolvedValue(undefined),

@@ -10,13 +10,14 @@ import DOMPurify from 'dompurify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Archive, ChevronDown, ChevronRight, Paperclip, Link2, XCircle, Loader2, AlertCircle, RefreshCw, Bold, Italic, List, Underline as UnderlineIcon, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useIdentities, useLinkThread, useUnlinkThread } from '@/hooks/use-comm';
+import { useThread, useMessages, useReplyToMessage, useArchiveThread, useMarkThreadRead, useIdentities, useLinkThread, useUnlinkThread, useCommSettings } from '@/hooks/use-comm';
 import { toast } from '@/hooks/use-toast';
 import { timeAgo } from '@/lib/format-date';
 import { api } from '@/lib/api';
 import type { CommMessage, CommAttachment, CommIdentity } from '@/types/comm.types';
 import { cn } from '@/lib/utils';
 import { CommIntelligenceBadges, CommTrackingBadges } from './tracking-state';
+import { TrackingSendControl } from './tracking-send-control';
 
 interface AliasOption {
   value: string;
@@ -171,6 +172,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
     threadId ? { threadId } : undefined,
   );
   const { data: identities } = useIdentities();
+  const { data: commSettings } = useCommSettings();
   const replyMutation = useReplyToMessage();
   const archiveMutation = useArchiveThread();
   const markRead = useMarkThreadRead();
@@ -204,6 +206,9 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
 
   const [selectedFrom, setSelectedFrom] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [trackingEnabled, setTrackingEnabled] = useState(
+    (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
+  );
 
   const messages = messagesRes?.data ?? [];
   const lastMessage = messages[messages.length - 1];
@@ -219,6 +224,12 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
     setReplyToolbarVisible(false);
     setUploadedAttachments([]);
   }, [replyEditor, threadId]);
+
+  useEffect(() => {
+    setTrackingEnabled(
+      (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
+    );
+  }, [commSettings?.openTrackingEnabled, commSettings?.trackingEnabled, threadId]);
 
   useEffect(() => {
     if (!identities || identities.length === 0) return;
@@ -303,6 +314,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
       attachmentS3Keys:
         uploadedAttachments.length > 0 ? uploadedAttachments.map((attachment) => attachment.s3Key) : undefined,
       replyAll,
+      trackingEnabled,
     };
 
     await replyMutation.mutateAsync({
@@ -552,6 +564,13 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
                   </Button>
                 </div>
               </div>
+              <TrackingSendControl
+                value={trackingEnabled}
+                onChange={setTrackingEnabled}
+                settings={commSettings}
+                hasHtmlSupport
+                compact
+              />
             </div>
           </motion.div>
         </>

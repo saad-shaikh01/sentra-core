@@ -823,6 +823,49 @@ class ApiClient {
     return this.fetch<any>(`/intelligence/summary${qs}`, { service: 'comm' });
   }
 
+  async getCommSettings() {
+    return this.fetch<any>('/settings', { service: 'comm' });
+  }
+
+  async updateCommSettings(dto: Record<string, unknown>) {
+    return this.fetch<any>('/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async listCommAlerts(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/alerts${qs}`, { service: 'comm' });
+  }
+
+  async markCommAlertRead(id: string) {
+    return this.fetch<void>(`/alerts/${id}/read`, {
+      method: 'PATCH',
+      service: 'comm',
+    });
+  }
+
+  async markAllCommAlertsRead() {
+    return this.fetch<void>('/alerts/read-all', {
+      method: 'PATCH',
+      service: 'comm',
+    });
+  }
+
+  async runCommIntelligenceBackfill(dto?: Record<string, unknown>) {
+    return this.fetch<any>('/maintenance/backfill-intelligence', {
+      method: 'POST',
+      body: JSON.stringify(dto ?? {}),
+      service: 'comm',
+    });
+  }
+
+  async getCommMaintenanceJob(id: string) {
+    return this.fetch<any>(`/maintenance/jobs/${id}`, { service: 'comm' });
+  }
+
   // Comm — Entity Links
   async linkCommThread(threadId: string, entityType: string, entityId: string) {
     return this.fetch<void>(`/entity-links`, {

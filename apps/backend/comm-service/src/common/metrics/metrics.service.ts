@@ -9,6 +9,9 @@
  *   comm_messages_sent_total         (label: identity_id)
  *   comm_token_refresh_total         (label: identity_id, result: success|error)
  *   comm_sync_errors_total           (label: identity_id, type)
+ *   comm_tracking_failures_total     (label: area)
+ *   comm_pixel_requests_total        (label: result)
+ *   comm_maintenance_jobs_total      (label: job_name, result)
  *
  * Gauges tracked:
  *   comm_ws_connections              (current active WS connections)
@@ -135,6 +138,14 @@ export class MetricsService {
 
   incrementSyncError(identityId: string, type = 'unknown'): void {
     this.incrementCounter('comm_sync_errors_total', { identity_id: identityId, type });
+  }
+
+  incrementTrackingFailure(area: string): void {
+    this.incrementCounter('comm_tracking_failures_total', { area });
+  }
+
+  incrementPixelRequest(result: 'received' | 'logged' | 'error'): void {
+    this.incrementCounter('comm_pixel_requests_total', { result });
   }
 
   trackWsConnect(): void {

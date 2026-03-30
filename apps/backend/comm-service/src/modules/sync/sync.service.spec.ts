@@ -7,6 +7,7 @@ import { GmailApiService } from './gmail-api.service';
 import { SyncService } from './sync.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
+import { CommSettingsService } from '../settings/comm-settings.service';
 
 describe('SyncService', () => {
   let service: SyncService;
@@ -39,6 +40,10 @@ describe('SyncService', () => {
   };
   let intelligenceService: {
     refreshThreadIntelligence: jest.Mock;
+  };
+  let settingsService: {
+    getResolvedSettings: jest.Mock;
+    getRuntimeSettings: jest.Mock;
   };
 
   beforeEach(() => {
@@ -142,6 +147,15 @@ describe('SyncService', () => {
     intelligenceService = {
       refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
     };
+    settingsService = {
+      getResolvedSettings: jest.fn().mockResolvedValue({
+        ghostedAfterDays: 7,
+      }),
+      getRuntimeSettings: jest.fn().mockReturnValue({
+        freshReplyWindowMs: 2 * 24 * 60 * 60 * 1000,
+        ghostedReplyWindowMs: 7 * 24 * 60 * 60 * 1000,
+      }),
+    };
 
     service = new SyncService(
       identityModel as unknown as Model<CommIdentityDocument>,
@@ -153,6 +167,7 @@ describe('SyncService', () => {
       gmailApi as unknown as GmailApiService,
       trackingService as unknown as TrackingService,
       intelligenceService as unknown as IntelligenceService,
+      settingsService as unknown as CommSettingsService,
       undefined,
       undefined,
       {

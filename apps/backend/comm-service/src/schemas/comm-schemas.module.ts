@@ -12,6 +12,8 @@ import {
   CommMessageTrackingToken,
   CommMessageTrackingTokenSchema,
 } from './comm-message-tracking-token.schema';
+import { CommSettings, CommSettingsSchema } from './comm-settings.schema';
+import { CommAlert, CommAlertSchema } from './comm-alert.schema';
 
 const schemas = MongooseModule.forFeature([
   { name: CommIdentity.name, schema: CommIdentitySchema },
@@ -23,6 +25,8 @@ const schemas = MongooseModule.forFeature([
   { name: CommAuditLog.name, schema: CommAuditLogSchema },
   { name: CommMessageEvent.name, schema: CommMessageEventSchema },
   { name: CommMessageTrackingToken.name, schema: CommMessageTrackingTokenSchema },
+  { name: CommSettings.name, schema: CommSettingsSchema },
+  { name: CommAlert.name, schema: CommAlertSchema },
 ]);
 
 @Module({

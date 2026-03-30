@@ -3,6 +3,7 @@
  *
  * Auth:  JWT from socket handshake auth.token
  * Rooms: org:{organizationId} (joined on connect)
+ *        user:{userId}         (joined on connect for personal alerts)
  *        entity:{entityType}:{entityId} (joined on client request)
  *
  * Client → Server events:
@@ -88,6 +89,7 @@ export class CommGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     socket.data.commAuth = auth;
     void socket.join(`org:${auth.organizationId}`);
+    void socket.join(`user:${auth.userId}`);
     this.metrics.trackWsConnect();
     this.logger.log(
       `CommGateway: connected ${socket.id} org=${auth.organizationId} user=${auth.userId}`,
@@ -130,6 +132,10 @@ export class CommGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitToOrg(orgId: string, event: string, payload: unknown): void {
     this.server.to(`org:${orgId}`).emit(event, payload);
+  }
+
+  emitToUser(userId: string, event: string, payload: unknown): void {
+    this.server.to(`user:${userId}`).emit(event, payload);
   }
 
   emitToEntity(entityType: string, entityId: string, event: string, payload: unknown): void {

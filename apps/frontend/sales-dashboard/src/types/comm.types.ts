@@ -45,6 +45,7 @@ export type CommResponseTimeScope = 'none' | 'recipient_email' | 'entity' | 'org
 export type CommSilenceState = 'none' | 'watch' | 'overdue' | 'at_risk' | 'ghosted';
 export type CommEngagementBand = 'low' | 'medium' | 'high';
 export type CommEngagementConfidence = 'low' | 'medium' | 'high';
+export type CommSensitivity = 'low' | 'medium' | 'high';
 export type CommOpenTrackingState =
   | 'disabled'
   | 'enabled'
@@ -288,6 +289,81 @@ export interface CommIntelligenceSummary {
   };
 }
 
+export interface CommSettings {
+  organizationId: string;
+  trackingEnabled: boolean;
+  openTrackingEnabled: boolean;
+  allowPerMessageTrackingToggle: boolean;
+  ghostedAfterDays: number;
+  silenceSensitivity: CommSensitivity;
+  engagementSensitivity: CommSensitivity;
+  inAppAlertsEnabled: boolean;
+  emailAlertsEnabled: boolean;
+  multipleOpenAlertsEnabled: boolean;
+  multipleOpenThreshold: number;
+  hotLeadAlertsEnabled: boolean;
+  overdueAlertsEnabled: boolean;
+  updatedByUserId?: string;
+}
+
+export interface UpdateCommSettingsDto {
+  trackingEnabled?: boolean;
+  openTrackingEnabled?: boolean;
+  allowPerMessageTrackingToggle?: boolean;
+  ghostedAfterDays?: number;
+  silenceSensitivity?: CommSensitivity;
+  engagementSensitivity?: CommSensitivity;
+  inAppAlertsEnabled?: boolean;
+  emailAlertsEnabled?: boolean;
+  multipleOpenAlertsEnabled?: boolean;
+  multipleOpenThreshold?: number;
+  hotLeadAlertsEnabled?: boolean;
+  overdueAlertsEnabled?: boolean;
+}
+
+export type CommAlertType = 'multi_open' | 'hot_lead' | 'overdue_follow_up';
+export type CommAlertSeverity = 'info' | 'warning' | 'success';
+
+export interface CommAlert {
+  id: string;
+  alertType: CommAlertType;
+  severity: CommAlertSeverity;
+  title: string;
+  body: string;
+  isRead: boolean;
+  isActive: boolean;
+  threadId?: string;
+  gmailThreadId?: string;
+  identityId?: string;
+  entityType?: string;
+  entityId?: string;
+  firstTriggeredAt?: string;
+  lastTriggeredAt?: string;
+  reasonKeys?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface CommAlertListResponse extends PaginatedResponse<CommAlert> {
+  unreadCount: number;
+}
+
+export interface CommAlertQuery {
+  status?: 'all' | 'active' | 'unread';
+  page?: number;
+  limit?: number;
+}
+
+export interface CommMaintenanceJob {
+  id: string;
+  name: string;
+  batchSize?: number;
+  state: string;
+  progress?: Record<string, unknown>;
+  finishedOn?: string;
+  failedReason?: string;
+  returnvalue?: Record<string, unknown>;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
@@ -357,6 +433,7 @@ export interface SendMessageDto {
   attachmentS3Keys?: string[];
   entityType?: string;
   entityId?: string;
+  trackingEnabled?: boolean;
 }
 
 export interface ReplyDto {
@@ -367,6 +444,7 @@ export interface ReplyDto {
   cc?: string[];
   attachmentS3Keys?: string[];
   replyAll?: boolean;
+  trackingEnabled?: boolean;
 }
 
 export interface ForwardDto {
@@ -375,4 +453,5 @@ export interface ForwardDto {
   bodyText?: string;
   bodyHtml?: string;
   attachmentS3Keys?: string[];
+  trackingEnabled?: boolean;
 }

@@ -15,6 +15,7 @@ import { EntityLinksService } from '../../src/modules/entity-links/entity-links.
 import { IdentitiesService } from '../../src/modules/identities/identities.service';
 import { MessagesService } from '../../src/modules/messages/messages.service';
 import { IntelligenceService } from '../../src/modules/intelligence/intelligence.service';
+import { CommSettingsService } from '../../src/modules/settings/comm-settings.service';
 import { GmailApiService } from '../../src/modules/sync/gmail-api.service';
 import { SyncService } from '../../src/modules/sync/sync.service';
 import { TrackingService } from '../../src/modules/tracking/tracking.service';
@@ -709,6 +710,18 @@ describe('COMM regression e2e', () => {
     const intelligenceService = {
       refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
     };
+    const settingsService = {
+      getResolvedSettings: jest.fn().mockResolvedValue({
+        trackingEnabled: true,
+        openTrackingEnabled: true,
+        allowPerMessageTrackingToggle: true,
+        ghostedAfterDays: 7,
+      }),
+      getRuntimeSettings: jest.fn().mockReturnValue({
+        freshReplyWindowMs: 2 * 24 * 60 * 60 * 1000,
+        ghostedReplyWindowMs: 7 * 24 * 60 * 60 * 1000,
+      }),
+    };
 
     const service = new SyncService(
       harness.identityModel as unknown as Model<CommIdentityDocument>,
@@ -720,6 +733,7 @@ describe('COMM regression e2e', () => {
       gmailApi as unknown as GmailApiService,
       trackingService as unknown as TrackingService,
       intelligenceService as unknown as IntelligenceService,
+      settingsService as unknown as CommSettingsService,
       undefined,
       undefined,
       entityLinksService,
@@ -879,6 +893,18 @@ describe('COMM regression e2e', () => {
     const intelligenceService = {
       refreshThreadIntelligence: jest.fn().mockResolvedValue(null),
     };
+    const settingsService = {
+      getResolvedSettings: jest.fn().mockResolvedValue({
+        trackingEnabled: true,
+        openTrackingEnabled: true,
+        allowPerMessageTrackingToggle: true,
+        ghostedAfterDays: 7,
+      }),
+      getRuntimeSettings: jest.fn().mockReturnValue({
+        freshReplyWindowMs: 2 * 24 * 60 * 60 * 1000,
+        ghostedReplyWindowMs: 7 * 24 * 60 * 60 * 1000,
+      }),
+    };
 
     const syncService = new SyncService(
       harness.identityModel as unknown as Model<CommIdentityDocument>,
@@ -890,6 +916,7 @@ describe('COMM regression e2e', () => {
       gmailApi as unknown as GmailApiService,
       trackingService as unknown as TrackingService,
       intelligenceService as unknown as IntelligenceService,
+      settingsService as unknown as CommSettingsService,
       undefined,
       undefined,
       {
@@ -909,6 +936,7 @@ describe('COMM regression e2e', () => {
       gmailApi as unknown as GmailApiService,
       syncService,
       trackingService as unknown as TrackingService,
+      settingsService as unknown as CommSettingsService,
       {
         fetchAttachmentBuffers: jest.fn().mockResolvedValue([]),
       } as unknown as AttachmentsService,

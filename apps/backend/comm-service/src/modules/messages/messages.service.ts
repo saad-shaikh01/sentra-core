@@ -39,6 +39,7 @@ import { buildCommPaginationResponse, toMongoosePagination } from '../../common/
 import { ListMessagesQueryDto } from './dto/list-messages.dto';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { EntityLinksService } from '../entity-links/entity-links.service';
+import { CommSettingsService } from '../settings/comm-settings.service';
 import { PreparedOpenTracking, TrackingService } from '../tracking/tracking.service';
 
 @Injectable()
@@ -58,6 +59,7 @@ export class MessagesService {
     private readonly gmailApi: GmailApiService,
     private readonly syncService: SyncService,
     private readonly trackingService: TrackingService,
+    private readonly settingsService: CommSettingsService,
     private readonly attachmentsService: AttachmentsService,
     private readonly audit: AuditService,
     @Optional() private readonly gateway?: CommGateway,
@@ -174,6 +176,7 @@ export class MessagesService {
       bcc: dto.bcc,
       entityType: dto.entityType,
       entityId: dto.entityId,
+      trackingEnabledOverride: dto.trackingEnabled,
     });
 
     const rawMime = await this.buildMime({
@@ -290,6 +293,7 @@ export class MessagesService {
       to: recipients.to,
       cc: mergedCc,
       bcc: [],
+      trackingEnabledOverride: dto.trackingEnabled,
     });
 
     const rawMime = await this.buildMime({
@@ -417,6 +421,7 @@ export class MessagesService {
       to: dto.to,
       cc: [],
       bcc: [],
+      trackingEnabledOverride: dto.trackingEnabled,
     });
 
     const rawMime = await this.buildMime({
@@ -792,8 +797,19 @@ export class MessagesService {
     bcc?: string[];
     entityType?: string;
     entityId?: string;
+    trackingEnabledOverride?: boolean;
   }): Promise<{ htmlForSend?: string; preparedTracking?: PreparedOpenTracking | null }> {
     if (!args.bodyHtml) {
+      return { htmlForSend: args.bodyHtml, preparedTracking: null };
+    }
+
+    const settings = await this.settingsService.getResolvedSettings(args.organizationId);
+    const trackingEnabled =
+      settings.trackingEnabled &&
+      settings.openTrackingEnabled &&
+      args.trackingEnabledOverride !== false;
+
+    if (!trackingEnabled) {
       return { htmlForSend: args.bodyHtml, preparedTracking: null };
     }
 

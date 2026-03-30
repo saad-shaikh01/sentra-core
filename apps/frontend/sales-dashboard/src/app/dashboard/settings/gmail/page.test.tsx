@@ -7,6 +7,10 @@ const mockUseSearchParams = jest.fn();
 const mockUseIdentities = jest.fn();
 const mockUseDisconnectIdentity = jest.fn();
 const mockUseInitiateOAuth = jest.fn();
+const mockUseCommSettings = jest.fn();
+const mockUseUpdateCommSettings = jest.fn();
+const mockUseRunCommIntelligenceBackfill = jest.fn();
+const mockUseCommMaintenanceJob = jest.fn();
 const mockUseAuth = jest.fn();
 const mockRefetch = jest.fn();
 const mockApiFetch = jest.fn();
@@ -64,6 +68,10 @@ jest.mock('@/hooks/use-comm', () => ({
   useIdentities: () => mockUseIdentities(),
   useDisconnectIdentity: () => mockUseDisconnectIdentity(),
   useInitiateOAuth: () => mockUseInitiateOAuth(),
+  useCommSettings: () => mockUseCommSettings(),
+  useUpdateCommSettings: () => mockUseUpdateCommSettings(),
+  useRunCommIntelligenceBackfill: () => mockUseRunCommIntelligenceBackfill(),
+  useCommMaintenanceJob: () => mockUseCommMaintenanceJob(),
   commKeys: {
     identities: () => ['comm', 'identities'],
   },
@@ -121,6 +129,35 @@ describe('GmailSettingsPage', () => {
         { id: 'brand-2', name: 'Brand Two' },
       ],
     });
+    mockUseCommSettings.mockReturnValue({
+      data: {
+        organizationId: 'org-1',
+        trackingEnabled: true,
+        openTrackingEnabled: true,
+        allowPerMessageTrackingToggle: true,
+        ghostedAfterDays: 7,
+        silenceSensitivity: 'medium',
+        engagementSensitivity: 'medium',
+        inAppAlertsEnabled: true,
+        emailAlertsEnabled: false,
+        multipleOpenAlertsEnabled: true,
+        multipleOpenThreshold: 3,
+        hotLeadAlertsEnabled: true,
+        overdueAlertsEnabled: true,
+      },
+    });
+    mockUseUpdateCommSettings.mockReturnValue({
+      mutateAsync: jest.fn(),
+      isPending: false,
+      error: null,
+    });
+    mockUseRunCommIntelligenceBackfill.mockReturnValue({
+      mutateAsync: jest.fn().mockResolvedValue({ id: 'job-1', state: 'queued' }),
+      isPending: false,
+    });
+    mockUseCommMaintenanceJob.mockReturnValue({
+      data: undefined,
+    });
     mockUIState.commSyncProgress = {};
     mockUIState.commIdentityErrors = {};
   });
@@ -156,6 +193,7 @@ describe('GmailSettingsPage', () => {
       screen.getByText('Showing all Gmail identities connected in your organization.'),
     ).toBeTruthy();
     expect(screen.getByText('Owner Mailbox')).toBeTruthy();
+    expect(screen.getByText('Email Intelligence')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /connect gmail/i }));
 

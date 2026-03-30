@@ -14,6 +14,7 @@ import { WatchdogService } from './watchdog.service';
 import { COMM_ATTACHMENT_QUEUE, COMM_SYNC_QUEUE } from './sync.constants';
 import { TrackingModule } from '../tracking/tracking.module';
 import { IntelligenceModule } from '../intelligence/intelligence.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { IntelligenceModule } from '../intelligence/intelligence.module';
     EntityLinksModule,
     TrackingModule,
     IntelligenceModule,
+    SettingsModule,
     BullModule.registerQueue(
       { name: COMM_SYNC_QUEUE },
       { name: COMM_ATTACHMENT_QUEUE },

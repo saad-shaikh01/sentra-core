@@ -25,11 +25,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useSendMessage, useIdentities, useForwardMessage } from '@/hooks/use-comm';
+import { useSendMessage, useIdentities, useForwardMessage, useCommSettings } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import type { CommIdentity } from '@/types/comm.types';
 import { cn } from '@/lib/utils';
+import { TrackingSendControl } from './tracking-send-control';
 
 interface AliasOption {
   value: string;
@@ -227,6 +228,7 @@ export function ComposeDrawer({
   const resolvedEntityType = entityType ?? defaultEntityType;
   const resolvedEntityId = entityId ?? defaultEntityId;
   const { data: identities } = useIdentities();
+  const { data: commSettings } = useCommSettings();
   const { user } = useAuth();
   const sendMessage = useSendMessage();
   const forwardMessage = useForwardMessage();
@@ -291,6 +293,9 @@ export function ComposeDrawer({
   const [bccError, setBccError] = useState('');
   const [savedDraft, setSavedDraft] = useState<DraftPayload | null>(null);
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
+  const [trackingEnabled, setTrackingEnabled] = useState(
+    (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
+  );
 
   const draftKey = user?.id ? `comm:draft:${user.id}` : null;
 
@@ -409,6 +414,15 @@ export function ComposeDrawer({
   }, [open, initialTo, defaultTo, defaultSubject]);
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setTrackingEnabled(
+      (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
+    );
+  }, [commSettings?.openTrackingEnabled, commSettings?.trackingEnabled, open]);
+
+  useEffect(() => {
     editor?.commands.setContent(defaultBodyHtml ?? '', { emitUpdate: false });
     setEditorHtml(normalizeEditorHtml(defaultBodyHtml ?? ''));
     setUploadedAttachments([]);
@@ -505,6 +519,7 @@ export function ComposeDrawer({
             bodyText,
             bodyHtml,
             attachmentS3Keys,
+            trackingEnabled,
           },
         });
       } else {
@@ -520,6 +535,7 @@ export function ComposeDrawer({
           attachmentS3Keys,
           entityType: resolvedEntityType,
           entityId: resolvedEntityId,
+          trackingEnabled,
         });
       }
       setToRecipients([]);
@@ -893,6 +909,13 @@ export function ComposeDrawer({
                 }}
                 className="hidden"
                 data-testid="compose-attachment-input"
+              />
+              <TrackingSendControl
+                value={trackingEnabled}
+                onChange={setTrackingEnabled}
+                settings={commSettings}
+                hasHtmlSupport
+                className="mt-3"
               />
             </div>
 
