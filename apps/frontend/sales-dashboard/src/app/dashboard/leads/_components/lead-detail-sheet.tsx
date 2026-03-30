@@ -67,6 +67,9 @@ import {
 import { timeAgo } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
+import { EntityCallTimeline } from '@/components/shared/ringcentral/entity-call-timeline';
+import { EntitySmsConversation } from '@/components/shared/ringcentral/entity-sms-conversation';
+import { RingCentralCallButton } from '@/components/shared/ringcentral/ringcentral-call-button';
 import { TeamAssignmentSelect } from './team-assignment-select';
 import { LeadNoteEditor } from './lead-note-editor';
 
@@ -76,7 +79,7 @@ interface LeadDetailSheetProps {
   onEdit: (lead: ILeadDetail) => void;
 }
 
-type DetailTab = 'details' | 'discussion' | 'activity' | 'emails';
+type DetailTab = 'details' | 'discussion' | 'activity' | 'calls' | 'sms' | 'emails';
 
 type ActivityActor = {
   id: string;
@@ -104,6 +107,8 @@ const tabConfig: Array<{ key: DetailTab; label: string; icon?: React.ReactNode }
   { key: 'details', label: 'Details' },
   { key: 'discussion', label: 'Discussion', icon: <MessageSquare className="h-3.5 w-3.5" /> },
   { key: 'activity', label: 'Activity', icon: <ClipboardList className="h-3.5 w-3.5" /> },
+  { key: 'calls', label: 'Calls', icon: <Phone className="h-3.5 w-3.5" /> },
+  { key: 'sms', label: 'SMS', icon: <MessageSquare className="h-3.5 w-3.5" /> },
   { key: 'emails', label: 'Emails', icon: <Mail className="h-3.5 w-3.5" /> },
 ];
 
@@ -387,6 +392,26 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
               />
             ) : null}
 
+            {activeTab === 'calls' && leadId ? (
+              <EntityCallTimeline
+                entityType="lead"
+                entityId={leadId}
+                phoneNumber={lead.phone ?? undefined}
+                contactName={lead.name ?? lead.title ?? undefined}
+                brandId={lead.brandId}
+              />
+            ) : null}
+
+            {activeTab === 'sms' && leadId ? (
+              <EntitySmsConversation
+                entityType="lead"
+                entityId={leadId}
+                phoneNumber={lead.phone ?? undefined}
+                contactName={lead.name ?? lead.title ?? undefined}
+                brandId={lead.brandId}
+              />
+            ) : null}
+
             {activeTab === 'details' ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-3">
@@ -395,7 +420,23 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <ContactRow icon={<User className="h-4 w-4" />} toneClassName="bg-blue-500/10 text-blue-400" label="Name" value={lead.name ?? '-'} />
-                      <ContactRow icon={<Phone className="h-4 w-4" />} toneClassName="bg-amber-500/10 text-amber-400" label="Phone" value={lead.phone ?? '-'} />
+                      <ContactRow
+                        icon={<Phone className="h-4 w-4" />}
+                        toneClassName="bg-amber-500/10 text-amber-400"
+                        label="Phone"
+                        value={lead.phone ?? '-'}
+                        action={
+                          lead.phone ? (
+                            <RingCentralCallButton
+                              phoneNumber={lead.phone}
+                              contactName={lead.name ?? lead.title ?? undefined}
+                              brandId={lead.brandId}
+                              entityType="lead"
+                              entityId={lead.id}
+                            />
+                          ) : null
+                        }
+                      />
                       <ContactRow
                         icon={<Mail className="h-4 w-4" />}
                         toneClassName="bg-emerald-500/10 text-emerald-400"
@@ -989,22 +1030,27 @@ function ContactRow({
   label,
   value,
   className,
+  action,
 }: {
   icon: React.ReactNode;
   toneClassName: string;
   label: string;
   value: string;
   className?: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <div className={cn('flex items-center gap-2.5', className)}>
-      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClassName}`}>
-        {icon}
+    <div className={cn('flex items-center justify-between gap-3', className)}>
+      <div className="flex items-center gap-2.5">
+        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClassName}`}>
+          {icon}
+        </div>
+        <div>
+          <p className="text-[10px] font-medium uppercase text-muted-foreground">{label}</p>
+          <p className="text-sm font-medium">{value}</p>
+        </div>
       </div>
-      <div>
-        <p className="text-[10px] font-medium uppercase text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium">{value}</p>
-      </div>
+      {action}
     </div>
   );
 }

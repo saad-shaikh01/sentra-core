@@ -4,6 +4,9 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import DOMPurify from 'dompurify';
 import { DetailSheet, StatusBadge } from '@/components/shared';
 import { EntityEmailTimeline } from '@/components/shared/comm/entity-email-timeline';
+import { EntityCallTimeline } from '@/components/shared/ringcentral/entity-call-timeline';
+import { EntitySmsConversation } from '@/components/shared/ringcentral/entity-sms-conversation';
+import { RingCentralCallButton } from '@/components/shared/ringcentral/ringcentral-call-button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +41,7 @@ import {
   DollarSign,
   Mail,
   MessageSquare,
+  Phone,
   Shield,
   UserCheck,
 } from 'lucide-react';
@@ -51,7 +55,7 @@ interface ClientDetailSheetProps {
 }
 
 type ClientDetail = IClient & { sales?: ISale[]; activities?: IClientActivity[] };
-type ClientTab = 'details' | 'discussion' | 'activity' | 'emails';
+type ClientTab = 'details' | 'discussion' | 'activity' | 'calls' | 'sms' | 'emails';
 
 const noteUrlPattern = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]])/gi;
 
@@ -266,6 +270,8 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
                 label: 'Activity',
                 icon: <ClipboardList className="h-3.5 w-3.5" />,
               },
+              { key: 'calls', label: 'Calls', icon: <Phone className="h-3.5 w-3.5" /> },
+              { key: 'sms', label: 'SMS', icon: <MessageSquare className="h-3.5 w-3.5" /> },
               { key: 'emails', label: 'Emails', icon: <Mail className="h-3.5 w-3.5" /> },
             ] as const).map((tab) => (
               <button
@@ -288,7 +294,25 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoCard label="Contact" value={detailClient.contactName ?? '-'} />
                 <InfoCard label="Email" value={detailClient.email} />
-                <InfoCard label="Phone" value={detailClient.phone ?? '-'} />
+                <InfoCard
+                  label="Phone"
+                  value={
+                    detailClient.phone ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="truncate">{detailClient.phone}</span>
+                        <RingCentralCallButton
+                          phoneNumber={detailClient.phone}
+                          contactName={detailClient.contactName ?? detailClient.email}
+                          brandId={detailClient.brandId}
+                          entityType="client"
+                          entityId={detailClient.id}
+                        />
+                      </div>
+                    ) : (
+                      '-'
+                    )
+                  }
+                />
                 <InfoCard label="Status" value={<StatusBadge status={detailClient.status} />} />
                 <InfoCard label="Portal" value={<PortalStatusBadge client={detailClient} />} />
                 <InfoCard
@@ -502,6 +526,26 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
                 description="Assignments, portal access changes, and other system events will appear here."
               />
             )
+          ) : null}
+
+          {activeTab === 'calls' && clientId ? (
+            <EntityCallTimeline
+              entityType="client"
+              entityId={clientId}
+              phoneNumber={detailClient.phone ?? undefined}
+              contactName={detailClient.contactName ?? detailClient.email}
+              brandId={detailClient.brandId}
+            />
+          ) : null}
+
+          {activeTab === 'sms' && clientId ? (
+            <EntitySmsConversation
+              entityType="client"
+              entityId={clientId}
+              phoneNumber={detailClient.phone ?? undefined}
+              contactName={detailClient.contactName ?? detailClient.email}
+              brandId={detailClient.brandId}
+            />
           ) : null}
 
           {activeTab === 'emails' && clientId ? (

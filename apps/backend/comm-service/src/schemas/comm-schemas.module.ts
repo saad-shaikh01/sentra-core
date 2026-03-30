@@ -14,6 +14,26 @@ import {
 } from './comm-message-tracking-token.schema';
 import { CommSettings, CommSettingsSchema } from './comm-settings.schema';
 import { CommAlert, CommAlertSchema } from './comm-alert.schema';
+import {
+  RingCentralConnection,
+  RingCentralConnectionSchema,
+} from './ringcentral-connection.schema';
+import {
+  RingCentralCallSession,
+  RingCentralCallSessionSchema,
+} from './ringcentral-call-session.schema';
+import {
+  RingCentralWebhookEvent,
+  RingCentralWebhookEventSchema,
+} from './ringcentral-webhook-event.schema';
+import {
+  RingCentralSmsThread,
+  RingCentralSmsThreadSchema,
+} from './ringcentral-sms-thread.schema';
+import {
+  RingCentralSmsMessage,
+  RingCentralSmsMessageSchema,
+} from './ringcentral-sms-message.schema';
 
 const schemas = MongooseModule.forFeature([
   { name: CommIdentity.name, schema: CommIdentitySchema },
@@ -27,6 +47,11 @@ const schemas = MongooseModule.forFeature([
   { name: CommMessageTrackingToken.name, schema: CommMessageTrackingTokenSchema },
   { name: CommSettings.name, schema: CommSettingsSchema },
   { name: CommAlert.name, schema: CommAlertSchema },
+  { name: RingCentralConnection.name, schema: RingCentralConnectionSchema },
+  { name: RingCentralCallSession.name, schema: RingCentralCallSessionSchema },
+  { name: RingCentralWebhookEvent.name, schema: RingCentralWebhookEventSchema },
+  { name: RingCentralSmsThread.name, schema: RingCentralSmsThreadSchema },
+  { name: RingCentralSmsMessage.name, schema: RingCentralSmsMessageSchema },
 ]);
 
 @Module({

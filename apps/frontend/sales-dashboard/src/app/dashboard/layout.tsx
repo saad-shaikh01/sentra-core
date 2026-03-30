@@ -6,6 +6,7 @@ import { TopNav } from '@/components/top-nav';
 import { SpotlightBackground } from '@/components/spotlight-background';
 import { ConfirmModal, Toaster } from '@/components/shared';
 import { CommEventsWatcher } from '@/components/shared/comm/comm-events-watcher';
+import { RingCentralCallDock } from '@/components/shared/ringcentral/ringcentral-call-dock';
 import { NotificationProvider, useNotificationSocket, NotificationPushInit } from '@sentra-core/notifications';
 import { api } from '@/lib/api';
 
@@ -36,6 +37,7 @@ export default function DashboardLayout({
           <ConfirmModal />
           <Toaster />
           <CommEventsWatcher />
+          <RingCentralCallDock />
           <NotificationSocketWatcher />
         </SpotlightBackground>
       </NotificationProvider>

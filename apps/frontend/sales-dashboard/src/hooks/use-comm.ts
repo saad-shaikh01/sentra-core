@@ -25,7 +25,18 @@ import type {
   ListThreadsParams,
   ListMessagesParams,
   PaginationParams,
+  RingCentralConnection,
+  RingCentralActiveCall,
+  RingCentralTrackedCall,
+  ListRingCentralCallsParams,
+  RingCentralSmsThread,
+  RingCentralSmsMessage,
+  ListRingCentralSmsThreadsParams,
+  ListRingCentralSmsMessagesParams,
+  SendRingCentralSmsDto,
+  UpdateRingCentralCallAnnotationDto,
   SendMessageDto,
+  StartRingCentralCallDto,
   ReplyDto,
   ForwardDto,
   UpdateCommSettingsDto,
@@ -67,6 +78,19 @@ function readStoredUnreadCount(): { count: number; timestamp: number } | null {
 export const commKeys = {
   all: ['comm'] as const,
   identities: () => [...commKeys.all, 'identities'] as const,
+  ringCentralConnections: () => [...commKeys.all, 'ringcentral', 'connections'] as const,
+  ringCentralCallsRoot: () => [...commKeys.all, 'ringcentral', 'calls'] as const,
+  ringCentralCalls: (params?: ListRingCentralCallsParams) =>
+    [...commKeys.all, 'ringcentral', 'calls', params] as const,
+  ringCentralActiveCallsRoot: () => [...commKeys.all, 'ringcentral', 'active-calls'] as const,
+  ringCentralActiveCalls: (params?: { connectionId?: string; brandId?: string }) =>
+    [...commKeys.all, 'ringcentral', 'active-calls', params] as const,
+  ringCentralSmsThreadsRoot: () => [...commKeys.all, 'ringcentral', 'sms', 'threads'] as const,
+  ringCentralSmsThreads: (params?: ListRingCentralSmsThreadsParams) =>
+    [...commKeys.all, 'ringcentral', 'sms', 'threads', params] as const,
+  ringCentralSmsMessagesRoot: () => [...commKeys.all, 'ringcentral', 'sms', 'messages'] as const,
+  ringCentralSmsMessages: (params?: ListRingCentralSmsMessagesParams) =>
+    [...commKeys.all, 'ringcentral', 'sms', 'messages', params] as const,
   unreadCount: () => [...commKeys.all, 'unread-count'] as const,
   threads: (params?: ListThreadsParams) => [...commKeys.all, 'threads', params] as const,
   thread: (id: string) => [...commKeys.all, 'threads', id] as const,
@@ -228,6 +252,88 @@ export function useEntityTimeline(entityType: string, entityId: string, params?:
       })) as CommMessageSummary[];
     },
     enabled: !!entityType && !!entityId,
+  });
+}
+
+export function useRingCentralConnections() {
+  return useQuery({
+    queryKey: commKeys.ringCentralConnections(),
+    queryFn: async () => {
+      const res = await api.listRingCentralConnections();
+      const raw: RingCentralConnection[] = (res?.data ?? res ?? []) as RingCentralConnection[];
+      return raw.map((connection) => ({
+        ...connection,
+        id: (connection.id ?? (connection as unknown as { _id?: string })._id ?? '') as string,
+      }));
+    },
+    enabled: COMM_ENABLED,
+  });
+}
+
+export function useRingCentralCalls(
+  params?: ListRingCentralCallsParams,
+  options?: { enabled?: boolean; refetchInterval?: number | false },
+) {
+  return useQuery({
+    queryKey: commKeys.ringCentralCalls(params),
+    queryFn: async () => {
+      const res = await api.listRingCentralCalls(params as Record<string, unknown> | undefined);
+      return (res?.data ?? res ?? []) as RingCentralTrackedCall[];
+    },
+    enabled: COMM_ENABLED && options?.enabled !== false,
+    refetchInterval: options?.refetchInterval,
+    staleTime: 2_000,
+  });
+}
+
+export function useRingCentralActiveCalls(
+  params?: { connectionId?: string; brandId?: string },
+  options?: { enabled?: boolean; refetchInterval?: number | false },
+) {
+  return useQuery({
+    queryKey: commKeys.ringCentralActiveCalls(params),
+    queryFn: async () => {
+      const res = await api.listRingCentralActiveCalls(
+        params as Record<string, unknown> | undefined,
+      );
+      return (res?.data ?? res ?? []) as RingCentralActiveCall[];
+    },
+    enabled: COMM_ENABLED && options?.enabled !== false,
+    refetchInterval: options?.refetchInterval,
+    staleTime: 2_000,
+  });
+}
+
+export function useRingCentralSmsThreads(
+  params?: ListRingCentralSmsThreadsParams,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: commKeys.ringCentralSmsThreads(params),
+    queryFn: async () => {
+      const res = await api.listRingCentralSmsThreads(params as Record<string, unknown> | undefined);
+      return (res?.data ?? res ?? []) as RingCentralSmsThread[];
+    },
+    enabled: COMM_ENABLED && options?.enabled !== false,
+    staleTime: 2_000,
+  });
+}
+
+export function useRingCentralSmsMessages(
+  params?: ListRingCentralSmsMessagesParams,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: commKeys.ringCentralSmsMessages(params),
+    queryFn: async () => {
+      const res = await api.listRingCentralSmsMessages(params as Record<string, unknown> | undefined);
+      return (res?.data ?? res ?? []) as RingCentralSmsMessage[];
+    },
+    enabled:
+      COMM_ENABLED &&
+      options?.enabled !== false &&
+      Boolean(params?.threadId || (params?.entityType && params?.entityId)),
+    staleTime: 2_000,
   });
 }
 
@@ -507,6 +613,13 @@ export function useInitiateOAuth() {
   });
 }
 
+export function useInitiateRingCentralOAuth() {
+  return useMutation({
+    mutationFn: (brandId?: string) => api.initiateRingCentralOAuth(brandId),
+    onError: (e: Error) => toast.error('Failed to initiate RingCentral OAuth', e.message),
+  });
+}
+
 export function useDisconnectIdentity() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -519,7 +632,140 @@ export function useDisconnectIdentity() {
   });
 }
 
+export function useDisconnectRingCentralConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.disconnectRingCentralConnection(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralConnections() });
+      toast.success('RingCentral connection disconnected');
+    },
+    onError: (e: Error) => toast.error('Failed to disconnect RingCentral connection', e.message),
+  });
+}
+
+export function useSetDefaultRingCentralConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.setDefaultRingCentralConnection(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralConnections() });
+      toast.success('Default RingCentral connection updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update RingCentral default', e.message),
+  });
+}
+
 // ─── G Suite Hooks ──────────────────────────────────────────────────────────
+
+export function useSyncRingCentralWebhookConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.syncRingCentralWebhookConnection(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralConnections() });
+      toast.success('RingCentral live events sync queued');
+    },
+    onError: (e: Error) => toast.error('Failed to sync RingCentral live events', e.message),
+  });
+}
+
+export function useStartRingCentralCall() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: StartRingCentralCallDto) => {
+      const res = await api.startRingCentralCall(dto as unknown as Record<string, unknown>);
+      return (res?.data ?? res) as RingCentralTrackedCall;
+    },
+    onSuccess: (call) => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralCallsRoot() });
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralActiveCallsRoot() });
+      toast.success(
+        call.contactName ? `Calling ${call.contactName}` : `Calling ${call.toPhoneNumber}`,
+      );
+    },
+    onError: (e: Error) => toast.error('Failed to start RingCentral call', e.message),
+  });
+}
+
+export function useCancelRingCentralCall() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.cancelRingCentralCall(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralCallsRoot() });
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralActiveCallsRoot() });
+      toast.success('RingCentral call canceled');
+    },
+    onError: (e: Error) => toast.error('Failed to cancel RingCentral call', e.message),
+  });
+}
+
+export function useUpdateRingCentralCallAnnotation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      callId,
+      dto,
+    }: {
+      callId: string;
+      dto: UpdateRingCentralCallAnnotationDto;
+    }) => {
+      const res = await api.updateRingCentralCallAnnotation(
+        callId,
+        dto as unknown as Record<string, unknown>,
+      );
+      return (res?.data ?? res) as RingCentralTrackedCall;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralCallsRoot() });
+      toast.success('Call notes updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update call notes', e.message),
+  });
+}
+
+export function useSendRingCentralSms() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: SendRingCentralSmsDto) => {
+      const res = await api.sendRingCentralSms(dto as unknown as Record<string, unknown>);
+      return (res?.data ?? res) as RingCentralSmsMessage;
+    },
+    onSuccess: (_message, dto) => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralSmsThreadsRoot() });
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralSmsMessagesRoot() });
+      if (dto.entityType && dto.entityId) {
+        queryClient.invalidateQueries({
+          queryKey: commKeys.ringCentralSmsThreads({
+            entityType: dto.entityType,
+            entityId: dto.entityId,
+          }),
+        });
+        queryClient.invalidateQueries({
+          queryKey: commKeys.ringCentralSmsMessages({
+            entityType: dto.entityType,
+            entityId: dto.entityId,
+          }),
+        });
+      }
+      toast.success('SMS sent');
+    },
+    onError: (e: Error) => toast.error('Failed to send SMS', e.message),
+  });
+}
+
+export function useMarkRingCentralSmsThreadRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (threadId: string) => api.markRingCentralSmsThreadRead(threadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralSmsThreadsRoot() });
+      queryClient.invalidateQueries({ queryKey: commKeys.ringCentralSmsMessagesRoot() });
+    },
+    onError: (e: Error) => toast.error('Failed to mark SMS thread as read', e.message),
+  });
+}
 
 export const gsuiteKeys = {
   connection: () => ['gsuite', 'connection'] as const,

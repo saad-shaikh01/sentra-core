@@ -257,6 +257,38 @@ export function useCommSocket() {
         }
       });
 
+      const invalidateRingCentral = () => {
+        queryClient.invalidateQueries({ queryKey: commKeys.ringCentralCallsRoot() });
+        queryClient.invalidateQueries({ queryKey: commKeys.ringCentralActiveCallsRoot() });
+        queryClient.invalidateQueries({ queryKey: commKeys.ringCentralConnections() });
+      };
+
+      const invalidateRingCentralSms = () => {
+        queryClient.invalidateQueries({ queryKey: commKeys.ringCentralSmsThreadsRoot() });
+        queryClient.invalidateQueries({ queryKey: commKeys.ringCentralSmsMessagesRoot() });
+      };
+
+      socket.on('call:incoming', (data: any) => {
+        invalidateRingCentral();
+        const caller = data?.fromName ?? data?.fromPhoneNumber ?? 'Unknown caller';
+        toast.success('Incoming RingCentral call', caller);
+      });
+      socket.on('call:updated', invalidateRingCentral);
+      socket.on('call:ended', invalidateRingCentral);
+      socket.on('sms:new', (data: any) => {
+        invalidateRingCentralSms();
+        if (String(data?.direction ?? '').toLowerCase() === 'inbound') {
+          const sender =
+            data?.contactName ??
+            data?.fromName ??
+            data?.participantPhoneNumber ??
+            data?.fromPhoneNumber ??
+            'Unknown sender';
+          const preview = data?.subject ? String(data.subject).slice(0, 120) : undefined;
+          toast.info(`New SMS from ${sender}`, preview);
+        }
+      });
+
       const invalidateAlerts = () => {
         queryClient.invalidateQueries({ queryKey: commKeys.alerts() });
       };

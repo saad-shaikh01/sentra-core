@@ -7,7 +7,10 @@ import {
 import { Public } from '../auth/decorators/public.decorator';
 import { InternalServiceGuard } from './guards/internal-service.guard';
 import { InternalContactsService } from './internal-contacts.service';
-import { LookupContactsDto } from './dto/lookup-contacts.dto';
+import {
+  LookupContactsByPhonesDto,
+  LookupContactsDto,
+} from './dto/lookup-contacts.dto';
 
 /**
  * Internal service-to-service endpoint.
@@ -22,6 +25,12 @@ export class InternalContactsController {
   @Post('by-emails')
   async lookupByEmails(@Body() dto: LookupContactsDto) {
     const results = await this.service.lookupByEmails(dto.organizationId, dto.emails);
+    return { data: results };
+  }
+
+  @Post('by-phones')
+  async lookupByPhones(@Body() dto: LookupContactsByPhonesDto) {
+    const results = await this.service.lookupByPhones(dto.organizationId, dto.phones);
     return { data: results };
   }
 }

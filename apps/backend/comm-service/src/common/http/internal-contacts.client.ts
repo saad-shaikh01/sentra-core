@@ -13,10 +13,11 @@ import { AxiosError } from 'axios';
 import { getCurrentRequestId } from '../middleware/request-id.middleware';
 
 export interface ContactLookupResult {
-  email: string;
   id: string;
   entityType: 'client' | 'lead';
   name: string;
+  email?: string;
+  phone?: string;
 }
 
 @Injectable()
@@ -43,7 +44,10 @@ export class InternalContactsClient {
     if (emails.length === 0) return [];
 
     try {
-      const resp = await this.postWithRetry(organizationId, emails);
+      const resp = await this.postWithRetry<ContactLookupResult>(
+        '/api/internal/contacts/by-emails',
+        { organizationId, emails },
+      );
       return resp.data.data ?? [];
     } catch (err) {
       this.logger.warn(
@@ -55,19 +59,41 @@ export class InternalContactsClient {
     }
   }
 
-  private async postWithRetry(
+  async lookupByPhones(
     organizationId: string,
-    emails: string[],
-  ): Promise<{ data: { data?: ContactLookupResult[] } }> {
+    phones: string[],
+  ): Promise<ContactLookupResult[]> {
+    if (phones.length === 0) return [];
+
+    try {
+      const resp = await this.postWithRetry<ContactLookupResult>(
+        '/api/internal/contacts/by-phones',
+        { organizationId, phones },
+      );
+      return resp.data.data ?? [];
+    } catch (err) {
+      this.logger.warn(
+        `Phone lookup failed for org ${organizationId} with ${phones.length} phones: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+  }
+
+  private async postWithRetry<T>(
+    path: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ data: { data?: T[] } }> {
     let attempt = 0;
 
     while (true) {
       try {
         const requestId = getCurrentRequestId();
         return await firstValueFrom(
-          this.http.post<{ data: ContactLookupResult[] }>(
-            `${this.coreServiceUrl}/api/internal/contacts/by-emails`,
-            { organizationId, emails },
+          this.http.post<{ data: T[] }>(
+            `${this.coreServiceUrl}${path}`,
+            payload,
             {
               timeout: this.timeoutMs,
               headers: {

@@ -39,6 +39,50 @@ export interface CommIdentity {
   };
 }
 
+export interface RingCentralPhoneNumber {
+  id?: string;
+  phoneNumber: string;
+  usageType?: string;
+  type?: string;
+  features: string[];
+}
+
+export interface RingCentralConnection {
+  id: string;
+  userId?: string;
+  brandId?: string;
+  accountId: string;
+  extensionId: string;
+  extensionNumber?: string;
+  displayName?: string;
+  email?: string;
+  serverUrl?: string;
+  phoneNumbers: RingCentralPhoneNumber[];
+  mainPhoneNumber?: string;
+  directPhoneNumbers: string[];
+  smsSenderPhoneNumbers: string[];
+  defaultOutboundPhoneNumber?: string;
+  isDefault: boolean;
+  connectionState?: {
+    status: 'active' | 'error' | 'reauthorization_required';
+    lastError?: string | null;
+    lastSeenAt?: string | null;
+  };
+  webhookState?: {
+    status: 'inactive' | 'pending' | 'active' | 'expiring' | 'expired' | 'error';
+    subscriptionId?: string;
+    deliveryAddress?: string;
+    eventFilters?: string[];
+    expiresAt?: string | null;
+    lastEventAt?: string | null;
+    lastError?: string | null;
+    lastSyncedAt?: string | null;
+  };
+  tokenExpiresAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type CommReplyState = 'none' | 'fresh' | 'waiting' | 'ghosted' | 'replied';
 export type CommResponseTimeSignalQuality = 'insufficient' | 'weak' | 'usable';
 export type CommResponseTimeScope = 'none' | 'recipient_email' | 'entity' | 'organization';
@@ -376,6 +420,170 @@ export interface PaginatedResponse<T> {
 
 export interface CommIdentityListResponse {
   data: CommIdentity[];
+}
+
+export interface RingCentralConnectionListResponse {
+  data: RingCentralConnection[];
+}
+
+export type RingCentralTrackedCallStatus =
+  | 'queued'
+  | 'dialing'
+  | 'connected'
+  | 'finished'
+  | 'cancelled'
+  | 'failed';
+
+export interface RingCentralTrackedCall {
+  id: string;
+  connectionId: string;
+  connectionLabel?: string;
+  brandId?: string;
+  entityType?: string;
+  entityId?: string;
+  contactName?: string;
+  matchedPhoneNumber?: string;
+  toPhoneNumber: string;
+  fromPhoneNumber?: string;
+  fromName?: string;
+  toName?: string;
+  ringOutId?: string;
+  ringOutUri?: string;
+  sessionId?: string;
+  telephonySessionId?: string;
+  partyId?: string;
+  direction?: string;
+  missedCall?: boolean;
+  eventTime?: string;
+  disposition?: string;
+  notes?: string;
+  notesUpdatedAt?: string;
+  notesUpdatedByUserId?: string;
+  source?: 'ringout' | 'webhook';
+  callStatus: RingCentralTrackedCallStatus;
+  providerCallStatus?: string;
+  providerCallerStatus?: string;
+  providerCalleeStatus?: string;
+  failureReason?: string;
+  lastPolledAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RingCentralActiveCall {
+  id: string;
+  connectionId: string;
+  connectionLabel?: string;
+  brandId?: string;
+  sessionId?: string;
+  telephonySessionId?: string;
+  partyId?: string;
+  direction?: string;
+  result?: string;
+  startTime?: string;
+  duration?: number;
+  fromName?: string;
+  fromPhoneNumber?: string;
+  toName?: string;
+  toPhoneNumber?: string;
+}
+
+export interface StartRingCentralCallDto {
+  toPhoneNumber: string;
+  fromPhoneNumber?: string;
+  connectionId?: string;
+  brandId?: string;
+  contactName?: string;
+  entityType?: 'lead' | 'client' | 'sale' | 'project';
+  entityId?: string;
+  playPrompt?: boolean;
+}
+
+export interface ListRingCentralCallsParams {
+  status?: 'all' | 'open';
+  limit?: number;
+  entityType?: 'lead' | 'client' | 'sale' | 'project';
+  entityId?: string;
+}
+
+export interface UpdateRingCentralCallAnnotationDto {
+  disposition?: string;
+  notes?: string;
+}
+
+export interface RingCentralSmsThread {
+  id: string;
+  connectionId: string;
+  connectionLabel?: string;
+  brandId?: string;
+  entityType?: string;
+  entityId?: string;
+  contactName?: string;
+  participantPhoneNumber: string;
+  participantName?: string;
+  providerConversationId?: string;
+  fromPhoneNumber?: string;
+  messageCount: number;
+  unreadCount: number;
+  lastMessageAt?: string;
+  lastInboundAt?: string;
+  lastOutboundAt?: string;
+  snippet?: string;
+  lastMessageDirection?: 'Inbound' | 'Outbound';
+  lastMessageStatus?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RingCentralSmsMessage {
+  id: string;
+  threadId: string;
+  connectionId: string;
+  connectionLabel?: string;
+  brandId?: string;
+  entityType?: string;
+  entityId?: string;
+  providerMessageId: string;
+  providerConversationId?: string;
+  direction: 'Inbound' | 'Outbound';
+  fromPhoneNumber?: string;
+  fromName?: string;
+  toPhoneNumbers: string[];
+  toNames: string[];
+  participantPhoneNumber?: string;
+  contactName?: string;
+  subject?: string;
+  messageStatus?: string;
+  readStatus?: string;
+  isRead: boolean;
+  sentAt?: string;
+  lastModifiedTime?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ListRingCentralSmsThreadsParams {
+  limit?: number;
+  entityType?: 'lead' | 'client' | 'sale' | 'project';
+  entityId?: string;
+}
+
+export interface ListRingCentralSmsMessagesParams {
+  threadId?: string;
+  limit?: number;
+  entityType?: 'lead' | 'client' | 'sale' | 'project';
+  entityId?: string;
+}
+
+export interface SendRingCentralSmsDto {
+  toPhoneNumber: string;
+  text: string;
+  fromPhoneNumber?: string;
+  connectionId?: string;
+  brandId?: string;
+  contactName?: string;
+  entityType?: 'lead' | 'client' | 'sale' | 'project';
+  entityId?: string;
 }
 
 export interface ListThreadsParams {

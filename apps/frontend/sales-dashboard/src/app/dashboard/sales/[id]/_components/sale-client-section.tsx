@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { User, Mail, Phone, ExternalLink, AlertTriangle, X } from 'lucide-react';
 import { ISaleWithRelations } from '@sentra-core/types';
 import { ClientDetailSheet } from '@/app/dashboard/clients/_components/client-detail-sheet';
+import { RingCentralCallButton } from '@/components/shared/ringcentral/ringcentral-call-button';
 
 interface SaleClientSectionProps {
   sale: ISaleWithRelations;
@@ -55,6 +56,16 @@ export function SaleClientSection({ sale, collisionWarning }: SaleClientSectionP
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Phone className="h-3.5 w-3.5 flex-shrink-0" />
               <span>{client.phone}</span>
+              <RingCentralCallButton
+                phoneNumber={client.phone}
+                contactName={client.contactName ?? client.email}
+                brandId={sale.brandId ?? client.brandId ?? undefined}
+                entityType="client"
+                entityId={client.id}
+                size="sm"
+                className="ml-auto h-8 px-3"
+                showLabel={true}
+              />
             </div>
           ) : null}
           <button

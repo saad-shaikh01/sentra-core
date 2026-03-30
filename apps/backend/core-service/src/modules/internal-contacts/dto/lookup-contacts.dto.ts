@@ -10,9 +10,20 @@ export class LookupContactsDto {
   emails: string[];
 }
 
+export class LookupContactsByPhonesDto {
+  @IsString()
+  organizationId: string;
+
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  phones: string[];
+}
+
 export interface ContactLookupResult {
-  email: string;
   id: string;
   entityType: 'client' | 'lead';
   name: string;
+  email?: string;
+  phone?: string;
 }

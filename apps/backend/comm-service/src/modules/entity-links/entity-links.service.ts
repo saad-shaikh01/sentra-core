@@ -208,6 +208,9 @@ export class EntityLinksService {
 
     // Create entity links
     for (const contact of contacts) {
+      if (!contact.email) {
+        continue;
+      }
       const relatedThreadIds = threadsByEmail.get(contact.email) ?? [];
       for (const threadId of relatedThreadIds) {
         await this.entityLinkModel.findOneAndUpdate(

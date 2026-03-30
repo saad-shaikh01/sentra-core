@@ -756,6 +756,105 @@ class ApiClient {
     return this.fetch<void>(`/identities/${id}/default`, { method: 'PATCH', service: 'comm' });
   }
 
+  // Comm - RingCentral
+  async listRingCentralConnections() {
+    return this.fetch<any>('/ringcentral/connections', { service: 'comm' });
+  }
+
+  async initiateRingCentralOAuth(brandId?: string) {
+    const qs = brandId ? `?brandId=${encodeURIComponent(brandId)}` : '';
+    const response = await this.fetch<{ data?: { redirectUrl?: string }; redirectUrl?: string }>(
+      `/ringcentral/oauth/initiate${qs}`,
+      { service: 'comm' },
+    );
+    return response.data ?? response;
+  }
+
+  async getRingCentralOAuthBrands() {
+    return this.fetch<{ data?: Array<{ id: string; name: string }> }>('/ringcentral/oauth/brands', {
+      service: 'comm',
+    });
+  }
+
+  async disconnectRingCentralConnection(id: string) {
+    return this.fetch<void>(`/ringcentral/connections/${id}`, {
+      method: 'DELETE',
+      service: 'comm',
+    });
+  }
+
+  async setDefaultRingCentralConnection(id: string) {
+    return this.fetch<void>(`/ringcentral/connections/${id}/default`, {
+      method: 'PATCH',
+      service: 'comm',
+    });
+  }
+
+  async syncRingCentralWebhookConnection(id: string) {
+    return this.fetch<void>(`/ringcentral/connections/${id}/subscriptions/sync`, {
+      method: 'POST',
+      service: 'comm',
+    });
+  }
+
+  async startRingCentralCall(dto: Record<string, unknown>) {
+    return this.fetch<any>('/ringcentral/calls', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async listRingCentralCalls(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/ringcentral/calls${qs}`, { service: 'comm' });
+  }
+
+  async updateRingCentralCallAnnotation(id: string, dto: Record<string, unknown>) {
+    return this.fetch<any>(`/ringcentral/calls/${id}/annotation`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async listRingCentralActiveCalls(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/ringcentral/calls/active${qs}`, { service: 'comm' });
+  }
+
+  async cancelRingCentralCall(id: string) {
+    return this.fetch<void>(`/ringcentral/calls/${id}`, {
+      method: 'DELETE',
+      service: 'comm',
+    });
+  }
+
+  async listRingCentralSmsThreads(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/ringcentral/sms/threads${qs}`, { service: 'comm' });
+  }
+
+  async listRingCentralSmsMessages(params?: Record<string, unknown>) {
+    const qs = buildQueryString(params);
+    return this.fetch<any>(`/ringcentral/sms/messages${qs}`, { service: 'comm' });
+  }
+
+  async sendRingCentralSms(dto: Record<string, unknown>) {
+    return this.fetch<any>('/ringcentral/sms/messages', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async markRingCentralSmsThreadRead(id: string) {
+    return this.fetch<void>(`/ringcentral/sms/threads/${id}/read`, {
+      method: 'PATCH',
+      service: 'comm',
+    });
+  }
+
   // Comm — Threads
   async listCommThreads(params?: Record<string, unknown>) {
     const qs = buildQueryString(params);

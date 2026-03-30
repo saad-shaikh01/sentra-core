@@ -23,6 +23,7 @@ import {
   Mail,
   UsersRound,
   Package,
+  Phone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, useLogout } from '@/hooks/use-auth';
@@ -51,6 +52,7 @@ const settingsNavigation = [
   { name: 'Profile', href: '/dashboard/settings/profile', icon: UserCircle },
   { name: 'Sales Teams', href: '/dashboard/teams', icon: UsersRound, permission: 'sales:page:teams' },
   ...(COMM_ENABLED ? [{ name: 'Gmail',   href: '/dashboard/settings/gmail',  icon: Mail,      permission: 'sales:page:settings' }] : []),
+  ...(COMM_ENABLED ? [{ name: 'RingCentral', href: '/dashboard/settings/ringcentral', icon: Phone, permission: 'sales:page:settings' }] : []),
   ...(COMM_ENABLED ? [{ name: 'G Suite', href: '/dashboard/settings/gsuite', icon: Building2, permission: 'sales:page:settings' }] : []),
 ];
 
