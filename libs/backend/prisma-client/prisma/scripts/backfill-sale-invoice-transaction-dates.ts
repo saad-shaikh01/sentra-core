@@ -36,8 +36,14 @@ const prisma = new PrismaClient();
 
 type DbInfoRow    = { current_database: string; inet_server_addr: string; inet_server_port: string };
 type CountRow     = { count: bigint };
-type SampleRow    = { sale_id: string; saleDate: Date; invoice_id: string; invoiceDate: Date };
-type TxSampleRow  = { tx_id: string; invoice_id: string; invoiceDate: Date; tx_createdAt: Date };
+type SampleRow    = { sale_id: string; sale_date: Date; invoice_id: string; invoice_date: Date };
+type TxSampleRow  = { tx_id: string; invoice_id: string; invoice_date: Date; tx_created_at: Date };
+
+function fmtDate(d: unknown): string {
+  if (d == null) return 'NULL';
+  const date = d instanceof Date ? d : new Date(String(d));
+  return isNaN(date.getTime()) ? String(d) : date.toISOString().slice(0, 10);
+}
 
 // Date range: Nov 1 2025 – Dec 31 2025 (inclusive)
 const RANGE_START = new Date('2025-11-01T00:00:00.000Z');
@@ -93,7 +99,7 @@ async function main(): Promise<void> {
   // ── Step 4: Sample invoices before update ────────────────────────────────
   if (Number(invoiceCount!.count) > 0) {
     const invSample = await prisma.$queryRaw<SampleRow[]>`
-      SELECT s.id AS sale_id, s."saleDate", i.id AS invoice_id, i."invoiceDate"
+      SELECT s.id AS sale_id, s."saleDate" AS sale_date, i.id AS invoice_id, i."invoiceDate" AS invoice_date
       FROM   "Invoice" i
       JOIN   "Sale"    s ON s.id = i."saleId"
       WHERE  s."saleDate"  >= ${RANGE_START}
@@ -109,8 +115,8 @@ async function main(): Promise<void> {
     console.log('─'.repeat(100));
     invSample.forEach((r) =>
       console.log(
-        new Date(r.saleDate).toISOString().slice(0, 10).padEnd(14),
-        new Date(r.invoiceDate).toISOString().slice(0, 10).padEnd(14),
+        fmtDate(r.sale_date).padEnd(14),
+        fmtDate(r.invoice_date).padEnd(14),
         r.invoice_id,
       ),
     );
@@ -120,7 +126,7 @@ async function main(): Promise<void> {
   // ── Step 5: Sample transactions before update ────────────────────────────
   if (Number(txCount!.count) > 0) {
     const txSample = await prisma.$queryRaw<TxSampleRow[]>`
-      SELECT pt.id AS tx_id, i.id AS invoice_id, i."invoiceDate", pt."createdAt" AS tx_createdAt
+      SELECT pt.id AS tx_id, i.id AS invoice_id, i."invoiceDate" AS invoice_date, pt."createdAt" AS tx_created_at
       FROM   "PaymentTransaction" pt
       JOIN   "Invoice" i ON i.id = pt."invoiceId"
       JOIN   "Sale"    s ON s.id = i."saleId"
@@ -137,8 +143,8 @@ async function main(): Promise<void> {
     console.log('─'.repeat(100));
     txSample.forEach((r) =>
       console.log(
-        new Date(r.invoiceDate).toISOString().slice(0, 10).padEnd(14),
-        new Date(r.tx_createdAt).toISOString().slice(0, 10).padEnd(14),
+        fmtDate(r.invoice_date).padEnd(14),
+        fmtDate(r.tx_created_at).padEnd(14),
         r.tx_id,
       ),
     );
