@@ -1,40 +1,55 @@
-PS D:\Repositories\new crm\sentra-core> npx nx build sales-dashboard --configuration=production
+root@server1:/home/sentra-core# pm2 logs comm-service-testing --err --lines 50 --nostream
+[TAILING] Tailing last 50 lines for [comm-service-testing] process (change the value with --lines option)
+/root/.pm2/logs/comm-service-testing-error.log last 50 lines:
+8|comm-ser | Starting inspector on localhost:9229 failed: address already in use
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:25:25 PM   ERROR [WatchdogService] Watchdog: token revoked/invalid for identity 69c18c4025c020151aa446c7 (saad.madcomdigital@gmail.com): invalid_grant
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:32:47 PM   ERROR [CommHTTP] {"service":"comm","requestId":"6a4f122611dab6ee","method":"POST","url":"/api/comm/messages/send","statusCode":500,"durationMs":781,"errorCode":"MongoServerError"}
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:32:47 PM   ERROR [CommExceptions] Unhandled error: Updating the path 'identityId' would create a conflict at 'identityId'
+8|comm-ser |
+8|comm-ser | MongoServerError: Updating the path 'identityId' would create a conflict at 'identityId'
+8|comm-ser |     at Connection.sendCommand (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/cmap/connection.ts:559:17)
+8|comm-ser |     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|comm-ser |     at Connection.command (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/cmap/connection.ts:633:22)
+8|comm-ser |     at Server.command (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/sdam/server.ts:350:21)
+8|comm-ser |     at tryOperation (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/operations/execute_operation.ts:289:24)
+8|comm-ser |     at executeOperation (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/operations/execute_operation.ts:119:12)
+8|comm-ser |     at Collection.findOneAndUpdate (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/collection.ts:1041:12)
+8|comm-ser |     at model.Query._findOneAndUpdate (/home/sentra-core/node_modules/mongoose/lib/query.js:3536:13)
+8|comm-ser |     at model.Query.exec (/home/sentra-core/node_modules/mongoose/lib/query.js:4627:63)
+8|comm-ser |     at SyncService.refreshThreadState (/home/sentra-core/dist/apps/backend/comm-service/webpack:/src/modules/sync/sync.service.ts:463:21)
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:34:51 PM   ERROR [CommHTTP] {"service":"comm","requestId":"266d425f9fdf59c9","method":"POST","url":"/api/comm/messages/send","statusCode":500,"durationMs":1328,"errorCode":"MongoServerError"}
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:34:51 PM   ERROR [CommExceptions] Unhandled error: Updating the path 'identityId' would create a conflict at 'identityId'
+8|comm-ser | MongoServerError: Updating the path 'identityId' would create a conflict at 'identityId'
+8|comm-ser |     at Connection.sendCommand (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/cmap/connection.ts:559:17)
+8|comm-ser |     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|comm-ser |     at Connection.command (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/cmap/connection.ts:633:22)
+8|comm-ser |     at Server.command (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/sdam/server.ts:350:21)
+8|comm-ser |     at tryOperation (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/operations/execute_operation.ts:289:24)
+8|comm-ser |     at executeOperation (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/operations/execute_operation.ts:119:12)
+8|comm-ser |     at Collection.findOneAndUpdate (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/collection.ts:1041:12)
+8|comm-ser |     at model.Query._findOneAndUpdate (/home/sentra-core/node_modules/mongoose/lib/query.js:3536:13)
+8|comm-ser |     at model.Query.exec (/home/sentra-core/node_modules/mongoose/lib/query.js:4627:63)
+8|comm-ser |     at SyncService.refreshThreadState (/home/sentra-core/dist/apps/backend/comm-service/webpack:/src/modules/sync/sync.service.ts:463:21)
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:42:54 PM   ERROR [CommHTTP] {"service":"comm","requestId":"5ac0b78594087c94","method":"POST","url":"/api/comm/messages/send","statusCode":500,"durationMs":1016,"errorCode":"MongoServerError"}
+8|comm-ser |
+8|comm-ser | [Nest] 1219932  - 03/31/2026, 11:42:54 PM   ERROR [CommExceptions] Unhandled error: Updating the path 'identityId' would create a conflict at 'identityId'
+8|comm-ser | MongoServerError: Updating the path 'identityId' would create a conflict at 'identityId'
+8|comm-ser |     at Connection.sendCommand (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/cmap/connection.ts:559:17)
+8|comm-ser |     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+8|comm-ser |     at Connection.command (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/cmap/connection.ts:633:22)
+8|comm-ser |     at Server.command (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/sdam/server.ts:350:21)
+8|comm-ser |     at tryOperation (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/operations/execute_operation.ts:289:24)
+8|comm-ser |     at executeOperation (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/operations/execute_operation.ts:119:12)
+8|comm-ser |     at Collection.findOneAndUpdate (/home/sentra-core/node_modules/mongoose/node_modules/mongodb/src/collection.ts:1041:12)
+8|comm-ser |     at model.Query._findOneAndUpdate (/home/sentra-core/node_modules/mongoose/lib/query.js:3536:13)
+8|comm-ser |     at model.Query.exec (/home/sentra-core/node_modules/mongoose/lib/query.js:4627:63)
+8|comm-ser |     at SyncService.refreshThreadState (/home/sentra-core/dist/apps/backend/comm-service/webpack:/src/modules/sync/sync.service.ts:463:21)
+8|comm-ser |
 
-> nx run sales-dashboard:build:production
-
-[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
- ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
- We detected multiple lockfiles and selected the directory of D:\Repositories\new crm\sentra-core\package-lock.json as the root directory.
- To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.      
-   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
- Detected additional lockfiles: 
-   * D:\Repositories\new crm\sentra-core\apps\frontend\sales-dashboard\package-lock.json
-   ▲ Next.js 16.0.11 (Turbopack)
-   - Environments: .env.local
-   Creating an optimized production build ...
-[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
- ✓ Compiled successfully in 48s
-   Running TypeScript ...
-Failed to compile.
-
-./src/components/shared/comm/tracking-state.tsx:222:20
-Type error: Element implicitly has an 'any' type because expression of type 'CommReplyState' can't be used to index type 'Record<"waiting" | "fresh" | "ghosted" | "replied", { className: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; }>'. 
-  Property 'none' does not exist on type 'Record<"waiting" | "fresh" | "ghosted" | "replied", { className: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; }>'.
-  220 |     };
-  221 |
-> 222 |     const config = styles[replyState];
-      |                    ^
-  223 |     badges.push(
-  224 |       <TrackingBadge
-  225 |         key="reply"
-Next.js build worker exited with code: 1 and signal: null
-Build process exited due to code 1  
-
-———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————— 
-
- NX   Ran target build for project sales-dashboard (3m)
-
-   ×  1/1 failed
-   √  0/1 succeeded [0 read from cache]
-
-PS D:\Repositories\new crm\sentra-core> 
+root@server1:/home/sentra-core#

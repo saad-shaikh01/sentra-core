@@ -466,7 +466,6 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         $setOnInsert: {
           organizationId,
           gmailThreadId,
-          identityId,
           entityLinks: [],
         },
         $set: {
