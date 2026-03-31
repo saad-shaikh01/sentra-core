@@ -121,7 +121,7 @@ export function CommAlertsPanel({ onSelectThread, className }: CommAlertsPanelPr
                         <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{alert.body}</p>
                       </div>
                       <span className="shrink-0 text-[10px] text-muted-foreground/70">
-                        {timeAgo(alert.lastTriggeredAt ?? alert.firstTriggeredAt)}
+                        {(alert.lastTriggeredAt ?? alert.firstTriggeredAt) ? timeAgo(alert.lastTriggeredAt ?? alert.firstTriggeredAt!) : null}
                       </span>
                     </div>
                   </button>
