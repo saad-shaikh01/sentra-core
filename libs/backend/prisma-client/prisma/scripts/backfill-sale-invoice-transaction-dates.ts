@@ -45,9 +45,7 @@ function fmtDate(d: unknown): string {
   return isNaN(date.getTime()) ? String(d) : date.toISOString().slice(0, 10);
 }
 
-// Date range: Nov 1 2025 – Dec 31 2025 (inclusive)
-const RANGE_START = new Date('2025-11-01T00:00:00.000Z');
-const RANGE_END   = new Date('2025-12-31T23:59:59.999Z');
+// No date range — applies to ALL sales
 
 async function main(): Promise<void> {
 
@@ -63,7 +61,7 @@ async function main(): Promise<void> {
   console.log('  Database :', db!.current_database);
   console.log('  Host     :', db!.inet_server_addr);
   console.log('  Port     :', db!.inet_server_port);
-  console.log('  Range    : Nov 1 2025 → Dec 31 2025');
+  console.log('  Range    : ALL sales (no filter)');
   console.log('──────────────────────────────────────────────────────────────\n');
 
   // ── Step 2: Count affected Invoices ──────────────────────────────────────
@@ -71,9 +69,7 @@ async function main(): Promise<void> {
     SELECT COUNT(*) AS count
     FROM   "Invoice"  i
     JOIN   "Sale"     s ON s.id = i."saleId"
-    WHERE  s."saleDate" >= ${RANGE_START}
-      AND  s."saleDate" <= ${RANGE_END}
-      AND  s."deletedAt" IS NULL
+    WHERE  s."deletedAt" IS NULL
       AND  i."invoiceDate" != s."saleDate"
   `;
   console.log(`Invoices to fix   : ${Number(invoiceCount!.count)}`);
@@ -84,10 +80,8 @@ async function main(): Promise<void> {
     FROM   "PaymentTransaction" pt
     JOIN   "Invoice" i ON i.id = pt."invoiceId"
     JOIN   "Sale"    s ON s.id = i."saleId"
-    WHERE  s."saleDate" >= ${RANGE_START}
-      AND  s."saleDate" <= ${RANGE_END}
-      AND  s."deletedAt" IS NULL
-      AND  pt."createdAt" != s."saleDate"
+    WHERE  s."deletedAt" IS NULL
+      AND  pt."createdAt" != i."invoiceDate"
   `;
   console.log(`Transactions to fix: ${Number(txCount!.count)}`);
 
@@ -102,9 +96,7 @@ async function main(): Promise<void> {
       SELECT s.id AS sale_id, s."saleDate" AS sale_date, i.id AS invoice_id, i."invoiceDate" AS invoice_date
       FROM   "Invoice" i
       JOIN   "Sale"    s ON s.id = i."saleId"
-      WHERE  s."saleDate"  >= ${RANGE_START}
-        AND  s."saleDate"  <= ${RANGE_END}
-        AND  s."deletedAt"  IS NULL
+      WHERE  s."deletedAt"  IS NULL
         AND  i."invoiceDate" != s."saleDate"
       ORDER  BY s."saleDate" DESC
       LIMIT  5
@@ -130,10 +122,8 @@ async function main(): Promise<void> {
       FROM   "PaymentTransaction" pt
       JOIN   "Invoice" i ON i.id = pt."invoiceId"
       JOIN   "Sale"    s ON s.id = i."saleId"
-      WHERE  s."saleDate"  >= ${RANGE_START}
-        AND  s."saleDate"  <= ${RANGE_END}
-        AND  s."deletedAt"  IS NULL
-        AND  pt."createdAt" != s."saleDate"
+      WHERE  s."deletedAt"  IS NULL
+        AND  pt."createdAt" != i."invoiceDate"
       ORDER  BY s."saleDate" DESC
       LIMIT  5
     `;
@@ -157,9 +147,7 @@ async function main(): Promise<void> {
     UPDATE "Invoice" i
     SET    "invoiceDate" = s."saleDate"
     FROM   "Sale" s
-    WHERE  s.id          = i."saleId"
-      AND  s."saleDate"  >= ${RANGE_START}
-      AND  s."saleDate"  <= ${RANGE_END}
+    WHERE  s.id           = i."saleId"
       AND  s."deletedAt"  IS NULL
       AND  i."invoiceDate" != s."saleDate"
   `;
@@ -172,9 +160,7 @@ async function main(): Promise<void> {
     SET    "createdAt" = i."invoiceDate"
     FROM   "Invoice" i
     JOIN   "Sale"    s ON s.id = i."saleId"
-    WHERE  i.id          = pt."invoiceId"
-      AND  s."saleDate"  >= ${RANGE_START}
-      AND  s."saleDate"  <= ${RANGE_END}
+    WHERE  i.id           = pt."invoiceId"
       AND  s."deletedAt"  IS NULL
       AND  pt."createdAt" != i."invoiceDate"
   `;
@@ -185,9 +171,7 @@ async function main(): Promise<void> {
     SELECT COUNT(*) AS count
     FROM   "Invoice"  i
     JOIN   "Sale"     s ON s.id = i."saleId"
-    WHERE  s."saleDate" >= ${RANGE_START}
-      AND  s."saleDate" <= ${RANGE_END}
-      AND  s."deletedAt" IS NULL
+    WHERE  s."deletedAt" IS NULL
       AND  i."invoiceDate" != s."saleDate"
   `;
   const [txRemaining] = await prisma.$queryRaw<CountRow[]>`
@@ -195,9 +179,7 @@ async function main(): Promise<void> {
     FROM   "PaymentTransaction" pt
     JOIN   "Invoice" i ON i.id = pt."invoiceId"
     JOIN   "Sale"    s ON s.id = i."saleId"
-    WHERE  s."saleDate" >= ${RANGE_START}
-      AND  s."saleDate" <= ${RANGE_END}
-      AND  s."deletedAt" IS NULL
+    WHERE  s."deletedAt" IS NULL
       AND  pt."createdAt" != i."invoiceDate"
   `;
 
