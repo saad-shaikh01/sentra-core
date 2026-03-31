@@ -306,6 +306,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
       bodyHtml?: string;
       attachmentS3Keys?: string[];
       replyAll?: boolean;
+      trackingEnabled?: boolean;
     } = {
       identityId,
       fromAlias,

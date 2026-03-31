@@ -211,7 +211,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
   const badges = [];
   const openTrackingState = snapshot.openTrackingState?.trim().toLowerCase();
 
-  if (replyState) {
+  if (replyState && replyState !== 'none') {
     const styles: Record<Exclude<CommReplyState, 'none'>, { className: string; icon: typeof MailOpen }> = {
       fresh: { className: 'border-sky-500/20 bg-sky-500/10 text-sky-300', icon: CircleDot },
       waiting: { className: 'border-amber-500/20 bg-amber-500/10 text-amber-300', icon: Clock3 },
