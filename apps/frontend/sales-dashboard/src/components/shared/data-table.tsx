@@ -243,7 +243,7 @@ export function DataTable<T>({
 
           <div
             ref={desktopScrollRef}
-            className={cn('overflow-auto overscroll-contain', desktopScrollerClassName)}
+            className={cn('overflow-x-auto overscroll-x-contain', desktopScrollerClassName)}
             style={desktopScrollerStyle}
           >
             <table className="w-full table-auto border-collapse">
