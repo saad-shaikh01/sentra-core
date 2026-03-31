@@ -63,7 +63,10 @@
       "Bash(npx dotenv:*)",
       "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-lead-converted-at.ts)",
       "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-sale-invoice-transaction-dates.ts)",
-      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-frontsell-sales.ts)"
+      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-frontsell-sales.ts)",
+      "Bash(sed 's/FRONTSELL/UPSELL/g; s/frontsell/upsell/g' \"D:/Repositories/new crm/sentra-core/libs/backend/prisma-client/prisma/scripts/backfill-frontsell-sales.ts\")",
+      "Bash(\"D:/Repositories/new crm/sentra-core/libs/backend/prisma-client/prisma/scripts/backfill-upsell-sales.ts\")",
+      "Bash(ts-node --project libs/backend/prisma-client/tsconfig.seed.json libs/backend/prisma-client/prisma/scripts/backfill-upsell-sales.ts)"
     ]
   }
 }
