@@ -16,7 +16,7 @@ import { timeAgo } from '@/lib/format-date';
 import { api } from '@/lib/api';
 import type { CommMessage, CommAttachment, CommIdentity } from '@/types/comm.types';
 import { cn } from '@/lib/utils';
-import { CommIntelligenceBadges, CommTrackingBadges } from './tracking-state';
+import { CommIntelligenceBadges, CommTrackingBadges, CommIntelligencePanel } from './tracking-state';
 import { TrackingSendControl } from './tracking-send-control';
 
 interface AliasOption {
@@ -388,58 +388,67 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
               "transition-all duration-300"
             )}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/10 shrink-0 bg-black/40">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onClose}
-                  className="sm:hidden h-8 w-8 shrink-0"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <div className="min-w-0 flex-1">
-                  {threadLoading ? (
-                    <div className="h-5 w-48 bg-white/10 rounded animate-pulse" />
-                  ) : (
-                    <>
-                      <h2 className="text-sm sm:text-base font-semibold text-foreground truncate">
-                        {thread?.subject || '(no subject)'}
-                      </h2>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                        {messages.length} message{messages.length !== 1 ? 's' : ''}
-                        {thread?.latestMessageAt && ` · ${timeAgo(thread.latestMessageAt)}`}
-                      </p>
-                    </>
-                  )}
+            {/* Header & Intelligence Panel */}
+            <div className="px-4 sm:px-6 py-4 border-b border-white/10 bg-black/40 shrink-0">
+              {threadLoading ? (
+                <div className="space-y-4 animate-pulse">
+                  <div className="flex items-center justify-between">
+                    <div className="h-7 w-1/2 bg-white/5 rounded-lg" />
+                    <div className="h-7 w-24 bg-white/5 rounded-lg" />
+                  </div>
+                  <div className="h-24 bg-white/5 rounded-2xl" />
                 </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0 ml-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground h-8 px-2 sm:px-3"
-                  onClick={() => threadId && archiveMutation.mutate(threadId)}
-                  disabled={archiveMutation.isPending}
-                >
-                  <Archive className="h-3.5 w-3.5 sm:mr-1.5" />
-                  <span className="hidden sm:inline">Archive</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onClose}
-                  className="hidden sm:flex h-8 w-8 hover:bg-white/10"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+              ) : (
+                <CommIntelligencePanel
+                  source={thread}
+                  className="mb-0 border-0 bg-transparent p-0 shadow-none"
+                  title={thread?.subject || '(no subject)'}
+                  subtitle={
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onClose}
+                        className="sm:hidden h-6 w-6 shrink-0 -ml-1"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <span>{messages.length} message{messages.length !== 1 ? 's' : ''}</span>
+                      {thread?.latestMessageAt && (
+                        <>
+                          <span className="text-muted-foreground/30">·</span>
+                          <span>{timeAgo(thread.latestMessageAt)}</span>
+                        </>
+                      )}
+                    </div>
+                  }
+                  actions={
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground h-8 px-2 sm:px-3"
+                        onClick={() => threadId && archiveMutation.mutate(threadId)}
+                        disabled={archiveMutation.isPending}
+                      >
+                        <Archive className="h-3.5 w-3.5 sm:mr-1.5" />
+                        <span className="hidden sm:inline">Archive</span>
+                      </Button>
+                      <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onClose}
+                        className="hidden sm:flex h-8 w-8 hover:bg-white/10"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  }
+                />
+              )}
             </div>
-            <div className="px-4 sm:px-6 py-3 border-b border-white/10 bg-black/30">
-              <CommTrackingBadges source={thread} showTiming />
-              <CommIntelligenceBadges source={thread} className="mt-2" />
-            </div>
+
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 overscroll-contain">

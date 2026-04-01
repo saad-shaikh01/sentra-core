@@ -470,4 +470,199 @@ export function CommIntelligenceBadges({
   );
 }
 
+export interface CommIntelligencePanelProps {
+  source?: CommTrackingLike | null;
+  className?: string;
+  actions?: React.ReactNode;
+  title?: React.ReactNode;
+  subtitle?: React.ReactNode;
+}
+
+export function CommIntelligencePanel({
+  source,
+  className,
+  actions,
+  title,
+  subtitle,
+}: CommIntelligencePanelProps) {
+  const snapshot = resolveTrackingSnapshot(source);
+  const replyState = deriveReplyState(source);
+  const openTrackingState = snapshot.openTrackingState?.trim().toLowerCase();
+
+  // 1. Collect Primary Statuses (Actionable/High-level)
+  const primaryBadges = [];
+  if (replyState && replyState !== 'none') {
+    const styles: Record<Exclude<CommReplyState, 'none'>, { className: string; icon: typeof MailOpen }> = {
+      fresh: { className: 'border-sky-500/20 bg-sky-500/10 text-sky-300', icon: CircleDot },
+      waiting: { className: 'border-amber-500/20 bg-amber-500/10 text-amber-300', icon: Clock3 },
+      ghosted: { className: 'border-rose-500/20 bg-rose-500/10 text-rose-300', icon: AlertTriangle },
+      replied: { className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300', icon: BadgeCheck },
+    };
+    const config = styles[replyState];
+    primaryBadges.push(
+      <TrackingBadge key="reply" icon={config.icon} label={titleCase(replyState)} className={config.className} />
+    );
+  }
+  if (snapshot.hotLead) {
+    primaryBadges.push(
+      <TrackingBadge key="hot-lead" icon={BadgeCheck} label="Hot lead" className="border-indigo-500/30 bg-indigo-500/10 text-indigo-300 shadow-[0_0_12px_-4px_rgba(99,102,241,0.4)]" />
+    );
+  }
+  if (snapshot.needsFollowUpNow) {
+    primaryBadges.push(
+      <TrackingBadge key="needs-follow-up" icon={Clock3} label="Needs follow-up" className="border-amber-500/30 bg-amber-500/10 text-amber-300" />
+    );
+  }
+
+  // 2. Collect Secondary Signals (Engagement/Delivery)
+  const secondaryBadges = [];
+  if (snapshot.deliveryState && snapshot.deliveryState !== 'none') {
+    secondaryBadges.push(
+      <div key="delivery" className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+        <BadgeCheck className="h-3 w-3" />
+        <span>Delivery {titleCase(snapshot.deliveryState)}</span>
+      </div>
+    );
+  }
+
+  const estimatedHumanOpenCount = snapshot.estimatedHumanOpenCount ?? 0;
+  const totalOpenCount = snapshot.openCount ?? 0;
+  const suspiciousOpenCount = snapshot.suspiciousOpenCount ?? 0;
+  const hasOpenSignal = Boolean(snapshot.hasOpenSignal) || Boolean(snapshot.firstOpenedAt) || Boolean(snapshot.lastOpenedAt) || totalOpenCount > 0 || estimatedHumanOpenCount > 0;
+
+  if (hasOpenSignal) {
+    const strongestOpenCount = Math.max(totalOpenCount, estimatedHumanOpenCount);
+    const openLabel = strongestOpenCount > 1 ? `Opened ${strongestOpenCount}x` : 'Opened';
+    secondaryBadges.push(
+      <div key="open-signal" className="flex items-center gap-1.5 text-[11px] text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+        <MailOpen className="h-3 w-3" />
+        <span>{openLabel}</span>
+      </div>
+    );
+  }
+
+  if (suspiciousOpenCount > 0 || openTrackingState === 'suspicious') {
+    secondaryBadges.push(
+      <div key="suspicious" className="flex items-center gap-1.5 text-[11px] text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+        <TriangleAlert className="h-3 w-3" />
+        <span>Suspicious activity</span>
+      </div>
+    );
+  }
+
+  // 3. Metrics
+  const metrics = [];
+  if (typeof snapshot.engagementScore === 'number') {
+    metrics.push({
+      label: 'Engagement',
+      value: `${Math.round(snapshot.engagementScore)}%`,
+      sub: snapshot.engagementBand ? titleCase(snapshot.engagementBand) : null,
+      color: snapshot.engagementBand === 'high' ? 'text-emerald-400' : snapshot.engagementBand === 'medium' ? 'text-amber-400' : 'text-muted-foreground'
+    });
+  }
+  if (snapshot.responseTimeMedianMs) {
+    metrics.push({
+      label: 'Typical Reply',
+      value: formatDurationShort(snapshot.responseTimeMedianMs),
+      sub: snapshot.responseTimeComparableCount ? `n=${snapshot.responseTimeComparableCount}` : null,
+      color: 'text-foreground'
+    });
+  }
+  if (snapshot.expectedReplyWindowMs) {
+    metrics.push({
+      label: 'Expected Window',
+      value: formatDurationShort(snapshot.expectedReplyWindowMs),
+      sub: snapshot.silenceOverdueFactor && snapshot.silenceOverdueFactor >= 1 ? `${snapshot.silenceOverdueFactor.toFixed(1)}x past` : 'On track',
+      color: snapshot.silenceOverdueFactor && snapshot.silenceOverdueFactor >= 1 ? 'text-rose-400' : 'text-muted-foreground'
+    });
+  }
+
+  return (
+    <div className={cn('flex flex-col gap-4 p-4 sm:p-6 bg-gradient-to-b from-white/[0.03] to-transparent rounded-2xl border border-white/10 shadow-xl mb-6', className)}>
+      {/* Header Area */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex-1 min-w-0 space-y-1">
+          {title && <div className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">{title}</div>}
+          {subtitle && <div className="text-sm text-muted-foreground font-medium">{subtitle}</div>}
+          
+          {primaryBadges.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {primaryBadges}
+            </div>
+          )}
+        </div>
+        
+        {actions && (
+          <div className="flex items-center gap-1 self-end sm:self-start bg-white/5 p-1 rounded-xl border border-white/5 shadow-inner">
+            {actions}
+          </div>
+        )}
+      </div>
+
+      {/* Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Secondary Signals Row */}
+        <div className="lg:col-span-7 space-y-4">
+          {secondaryBadges.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Engagement Signals</p>
+              <div className="flex flex-wrap gap-2">
+                {secondaryBadges}
+              </div>
+            </div>
+          )}
+          
+          {snapshot.scoreReasons && snapshot.scoreReasons.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Insights</p>
+              <div className="flex flex-wrap gap-1.5">
+                {snapshot.scoreReasons.map((reason) => (
+                  <span key={reason} className="text-[10px] bg-white/[0.03] text-muted-foreground/80 border border-white/5 px-2 py-0.5 rounded-full">
+                    {reason}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Metrics Section */}
+        {metrics.length > 0 && (
+          <div className="lg:col-span-5 grid grid-cols-3 gap-3 bg-black/20 p-3 rounded-2xl border border-white/5">
+            {metrics.map((m) => (
+              <div key={m.label} className="flex flex-col items-center text-center px-1">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">{m.label}</p>
+                <p className={cn('text-sm sm:text-base font-bold tracking-tight', m.color)}>{m.value}</p>
+                {m.sub && <p className="text-[9px] text-muted-foreground/40 mt-0.5 font-medium truncate w-full">{m.sub}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* Timing Info (Bottom Bar) */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-4 border-t border-white/5 text-[10px] text-muted-foreground/50 font-medium">
+        {snapshot.lastOutboundAt && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1 w-1 rounded-full bg-sky-500/50" />
+            <span>Outbound {timeAgo(snapshot.lastOutboundAt)}</span>
+          </div>
+        )}
+        {snapshot.lastInboundAt && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1 w-1 rounded-full bg-emerald-500/50" />
+            <span>Inbound {timeAgo(snapshot.lastInboundAt)}</span>
+          </div>
+        )}
+        {snapshot.repliedAt && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1 w-1 rounded-full bg-primary/50" />
+            <span>Replied {timeAgo(snapshot.repliedAt)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export { resolveTrackingSnapshot };

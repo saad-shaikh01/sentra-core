@@ -23,7 +23,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useDebounce } from '@/hooks/use-debounce';
 import { ComposeDrawer } from '@/components/shared/comm/compose-drawer';
-import { CommIntelligenceBadges, CommTrackingBadges } from '@/components/shared/comm/tracking-state';
+import { CommIntelligenceBadges, CommTrackingBadges, CommIntelligencePanel } from '@/components/shared/comm/tracking-state';
 import { TrackingSendControl } from '@/components/shared/comm/tracking-send-control';
 import { CommAlertsPanel } from '@/components/shared/comm/alerts-panel';
 import { Button } from '@/components/ui/button';
@@ -836,58 +836,66 @@ function ThreadView({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-white/10 bg-[#0a0a0f] shrink-0">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Button variant="ghost" size="icon" onClick={onClose} className="sm:hidden h-8 w-8 shrink-0">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          {threadLoading ? (
-            <div className="h-6 w-64 bg-white/10 rounded animate-pulse" />
-          ) : (
-            <>
-              <h1 className="text-base sm:text-lg font-semibold truncate leading-tight">
-                {thread?.subject || '(no subject)'}
-              </h1>
-              <CommTrackingBadges
-                source={thread}
-                className="mt-2"
-              />
-              <CommIntelligenceBadges
-                source={thread}
-                className="mt-2"
-              />
-            </>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 shrink-0 ml-3">
-          <Button
-            variant="ghost" size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            title={thread?.hasUnread ? 'Mark as read' : 'Mark as unread'}
-            onClick={() => thread?.hasUnread ? markRead.mutate(threadId) : markUnread.mutate(threadId)}
-          >
-            <MailOpen className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost" size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            title="Archive"
-            onClick={() => { archiveMutation.mutate(threadId); onClose(); }}
-          >
-            <Archive className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost" size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            title="Refresh"
-            onClick={() => refetchMessages()}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+      {/* ── Redesigned Thread Intelligence Panel ── */}
+      <div className="sticky top-0 z-10 bg-[#0a0a0f] px-4 sm:px-6 py-4 border-b border-white/5 shrink-0">
+        {threadLoading ? (
+          <div className="space-y-4 animate-pulse">
+            <div className="flex items-center justify-between">
+              <div className="h-7 w-1/2 bg-white/5 rounded-lg" />
+              <div className="h-7 w-24 bg-white/5 rounded-lg" />
+            </div>
+            <div className="h-24 bg-white/5 rounded-2xl" />
+          </div>
+        ) : (
+          <CommIntelligencePanel
+            source={thread}
+            className="mb-0 border-0 bg-transparent p-0 shadow-none"
+            title={thread?.subject || '(no subject)'}
+            subtitle={
+              <div className="flex items-center gap-2">
+                <span>{messages.length} message{messages.length !== 1 ? 's' : ''}</span>
+                {thread?.latestMessageAt && (
+                  <>
+                    <span className="text-muted-foreground/30">·</span>
+                    <span>Last active {formatEmailDate(thread.latestMessageAt)}</span>
+                  </>
+                )}
+              </div>
+            }
+            actions={
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title={thread?.hasUnread ? 'Mark as read' : 'Mark as unread'}
+                  onClick={() => thread?.hasUnread ? markRead.mutate(threadId) : markUnread.mutate(threadId)}
+                >
+                  <MailOpen className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Archive"
+                  onClick={() => { archiveMutation.mutate(threadId); onClose(); }}
+                >
+                  <Archive className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Refresh"
+                  onClick={() => refetchMessages()}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
+                <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            }
+          />
+        )}
       </div>
 
       {/* ── Scrollable body: messages + reply ── */}
