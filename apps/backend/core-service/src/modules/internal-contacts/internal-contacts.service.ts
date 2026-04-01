@@ -67,12 +67,14 @@ export class InternalContactsService {
     emails: string[],
   ): Promise<ContactLookupResult[]> {
     const results: ContactLookupResult[] = [];
+    const normalizedEmails = emails.map((e) => e.toLowerCase().trim()).filter(Boolean);
+    if (normalizedEmails.length === 0) return results;
 
     // Lookup clients — direct email field
     const clients = await this.prisma.client.findMany({
       where: {
         organizationId,
-        email: { in: emails },
+        email: { in: normalizedEmails, mode: 'insensitive' },
       },
       select: {
         id: true,
@@ -91,14 +93,14 @@ export class InternalContactsService {
     }
 
     // Lookup leads — email is stored in JSON data->>'email'
-    const foundClientEmails = new Set(clients.map((c) => c.email));
-    const leadEmails = emails.filter((e) => !foundClientEmails.has(e));
+    const foundClientEmails = new Set(clients.map((c) => c.email.toLowerCase()));
+    const leadEmails = normalizedEmails.filter((e) => !foundClientEmails.has(e));
 
     if (leadEmails.length > 0) {
       const leads = await this.prisma.lead.findMany({
         where: {
           organizationId,
-          email: { in: leadEmails },
+          email: { in: leadEmails, mode: 'insensitive' },
         },
         select: {
           id: true,
