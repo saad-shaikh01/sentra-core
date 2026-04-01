@@ -163,9 +163,11 @@ async function main() {
   fs.mkdirSync(backupDir, { recursive: true });
 
   console.log(`Creating PostgreSQL backup for ${envName}...`);
+  // Strip query params (e.g. ?schema=public) — pg_dump doesn't support them
+  const pgUrl = env.DATABASE_URL.split('?')[0];
   runCommand(
     'pg_dump',
-    ['--format=custom', `--file=${path.join(backupDir, 'postgres.dump')}`, env.DATABASE_URL],
+    ['--format=custom', `--file=${path.join(backupDir, 'postgres.dump')}`, pgUrl],
     { env },
   );
 

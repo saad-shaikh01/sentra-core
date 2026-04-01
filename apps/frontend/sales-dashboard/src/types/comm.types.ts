@@ -438,6 +438,7 @@ export interface SendMessageDto {
 }
 
 export interface ReplyDto {
+  threadId?: string;
   identityId: string;
   fromAlias?: string;
   bodyText?: string;
