@@ -1,29 +1,14 @@
-> nx run types:build  [existing outputs match the cache, left as is]
+I need help with an issue I'm facing after adding a new feature for Gmail integration in the comm-service. Here's the situation:
 
-Compiling TypeScript files for project "types"...
-Done compiling TypeScript files for project "types".
-Package type is set to "module" but "cjs" format is included. Going to use "esm" format instead. You can change the package type to "commonjs" or remove type in the package.json file.
+I initially added the Gmail integration feature where, upon connecting the Gmail account, all previous emails (both sent and received) were syncing perfectly. The backfill for all old emails was working as expected, and emails were being sent successfully. This functionality was live and working fine in the live branch.
+Then, I added tracking features in the main branch, which is the current branch. After implementing these tracking features, I deployed the app in the production environment and updated the .env.production file accordingly.
 
-> nx run comm-service:build
+Now, the problem is:
 
-ERROR in ./src/modules/contacts/contacts.controller.ts:13:6
-TS2693: 'OrgContext' only refers to a type, but is being used as a value here.
-    11 |   @Get('search')
-    12 |   async search(
-  > 13 |     @OrgContext('organizationId') organizationId: string,
-       |      ^^^^^^^^^^
-    14 |     @Query('q') q: string,
-    15 |   ) {
-    16 |     const results = await this.contactsClient.searchContacts(organizationId, q ?? '');
+Emails are being sent successfully.
+However, incoming emails are not displaying in the inbox.
+Old emails (both sent and received) are not syncing or backfilling at all.
 
-webpack compiled with 1 error (0a3098e3a2bddf6b)
+Could you help me identify the issue? It worked perfectly before the tracking feature was added, so I suspect something in the integration with tracking features might have disrupted the sync process. Also, I would appreciate any advice on speeding up the process using sub-agents or optimizations, as this issue is affecting our users.
 
-———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————— 
-
- NX   Ran target build for project comm-service and 1 task(s) they depend on (1m)
-
-   ×  1/2 failed
-   √  1/2 succeeded [1 read from cache]
-
-
-PS D:\Repositories\new crm\sentra-core> 
+Please investigate the cause and suggest any possible fixes or debugging steps.
