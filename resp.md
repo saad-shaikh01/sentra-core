@@ -14,9 +14,6 @@ Could you help me identify the issue? It worked perfectly before the tracking fe
 Please investigate the cause and suggest any possible fixes or debugging steps.
 
 
-
-
-
 Now I have a complete picture. Let me compile the full diagnosis.                                                                                      
                                                                                                                                                          
   ---                                                                                                                                                    
