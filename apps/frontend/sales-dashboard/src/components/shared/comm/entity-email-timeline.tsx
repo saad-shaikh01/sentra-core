@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Paperclip, ArrowRight, ArrowLeft, Mail, AlertCircle, RefreshCw, SquarePen } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Paperclip, ArrowRight, ArrowLeft, Mail, AlertCircle, RefreshCw, SquarePen, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useEntityTimeline } from '@/hooks/use-comm';
+import { useEntityTimeline, useLinkThread } from '@/hooks/use-comm';
 import { timeAgo } from '@/lib/format-date';
 import { ThreadViewDrawer } from './thread-view-drawer';
 import { ComposeDrawer } from './compose-drawer';
@@ -11,6 +11,8 @@ import { CommIntelligenceBadges, CommTrackingBadges } from './tracking-state';
 import type { CommMessageSummary } from '@/types/comm.types';
 import Link from 'next/link';
 import { COMM_ENABLED } from '@/lib/feature-flags';
+import { api } from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 interface EntityEmailTimelineProps {
   entityType: 'lead' | 'client' | 'project';
@@ -26,6 +28,7 @@ export function EntityEmailTimeline({ entityType, entityId, recipientEmail, enti
   );
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
 
   if (!COMM_ENABLED) {
     return (
@@ -68,17 +71,32 @@ export function EntityEmailTimeline({ entityType, entityId, recipientEmail, enti
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs text-muted-foreground font-medium">Email History</p>
           {COMM_ENABLED && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 h-7 px-2.5 text-xs"
-              onClick={() => setComposeOpen(true)}
-            >
-              <SquarePen className="h-3.5 w-3.5" />
-              Compose
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5 h-7 px-2.5 text-xs"
+                onClick={() => setLinkPanelOpen((p) => !p)}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Link
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-7 px-2.5 text-xs"
+                onClick={() => setComposeOpen(true)}
+              >
+                <SquarePen className="h-3.5 w-3.5" />
+                Compose
+              </Button>
+            </div>
           )}
         </div>
+
+        {linkPanelOpen && (
+          <LinkPanel entityType={entityType} entityId={entityId} onClose={() => setLinkPanelOpen(false)} />
+        )}
 
         <div className="py-8 text-center space-y-2">
           <Mail className="h-7 w-7 mx-auto text-muted-foreground/30" />
@@ -127,6 +145,10 @@ export function EntityEmailTimeline({ entityType, entityId, recipientEmail, enti
           </Button>
         )}
       </div>
+
+      {linkPanelOpen && (
+        <LinkPanel entityType={entityType} entityId={entityId} onClose={() => setLinkPanelOpen(false)} />
+      )}
 
       <div className="space-y-2">
         {messages.map((msg) => (
@@ -209,5 +231,83 @@ function EmailCard({ message, onClick }: { message: CommMessageSummary; onClick:
         className="pt-1"
       />
     </button>
+  );
+}
+
+function LinkPanel({
+  entityType,
+  entityId,
+  onClose,
+}: {
+  entityType: string;
+  entityId: string;
+  onClose: () => void;
+}) {
+  const linkThread = useLinkThread();
+  const [threadQuery, setThreadQuery] = useState('');
+  const [threadResults, setThreadResults] = useState<Array<{ id: string; gmailThreadId: string; subject?: string; participants?: Array<{ email: string; name?: string }> }>>([]);
+  const [threadSearching, setThreadSearching] = useState(false);
+  const threadTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleThreadSearch = (value: string) => {
+    setThreadQuery(value);
+    if (threadTimeout.current) clearTimeout(threadTimeout.current);
+    if (!value.trim()) { setThreadResults([]); return; }
+    threadTimeout.current = setTimeout(async () => {
+      setThreadSearching(true);
+      try {
+        const res = await api.listCommThreads({ search: value.trim(), scope: 'all', limit: 10 });
+        setThreadResults((res?.data ?? []) as typeof threadResults);
+      } catch {
+        setThreadResults([]);
+      } finally {
+        setThreadSearching(false);
+      }
+    }, 300);
+  };
+
+  const handleLink = (threadId: string) => {
+    linkThread.mutate(
+      { threadId, entityType, entityId },
+      { onSuccess: () => { toast.success('Thread linked'); onClose(); } },
+    );
+  };
+
+  return (
+    <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-foreground">Link an existing thread</p>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+      </div>
+      <input
+        value={threadQuery}
+        onChange={(e) => handleThreadSearch(e.target.value)}
+        placeholder="Search by subject or email address…"
+        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-white/20"
+      />
+      {threadSearching && (
+        <p className="text-[10px] text-muted-foreground/50">Searching…</p>
+      )}
+      {threadResults.length > 0 && (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {threadResults.map((thread) => (
+            <button
+              key={thread.id ?? thread.gmailThreadId}
+              onClick={() => handleLink(thread.id ?? thread.gmailThreadId)}
+              disabled={linkThread.isPending}
+              className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-colors"
+            >
+              <p className="text-xs font-medium truncate">{thread.subject || '(no subject)'}</p>
+              <p className="text-[10px] text-muted-foreground/60 truncate">
+                {thread.participants?.map((p) => p.name || p.email).join(', ')}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+      {threadQuery && !threadSearching && threadResults.length === 0 && (
+        <p className="text-[10px] text-muted-foreground/50">No threads found.</p>
+      )}
+    </div>
   );
 }

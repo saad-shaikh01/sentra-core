@@ -216,6 +216,19 @@ export class TrackingService {
       await this.threadModel.findByIdAndUpdate(input.thread._id, {
         $set: {
           trackingEnabled: true,
+          hasOpenSignal: false,
+          trackedOpenCount: 0,
+          estimatedHumanOpenCount: 0,
+          suspiciousOpenCount: 0,
+          recentEstimatedHumanOpenCount: 0,
+          recentSuspiciousOpenCount: 0,
+          openedButNotReplied: false,
+          suspiciousTrackingOnly: false,
+        },
+        $unset: {
+          firstOpenedAt: '',
+          lastOpenedAt: '',
+          lastOpenSource: '',
         },
       }).exec();
     }
@@ -255,6 +268,27 @@ export class TrackingService {
     entityId?: string;
   }): Promise<void> {
     const threadEntity = input.thread ? this.resolveThreadEntity(input.thread) : undefined;
+
+    if (input.thread?._id) {
+      await this.threadModel.findByIdAndUpdate(input.thread._id, {
+        $set: {
+          hasOpenSignal: false,
+          trackedOpenCount: 0,
+          estimatedHumanOpenCount: 0,
+          suspiciousOpenCount: 0,
+          recentEstimatedHumanOpenCount: 0,
+          recentSuspiciousOpenCount: 0,
+          openedButNotReplied: false,
+          suspiciousTrackingOnly: false,
+        },
+        $unset: {
+          firstOpenedAt: '',
+          lastOpenedAt: '',
+          lastOpenSource: '',
+        },
+      }).exec();
+    }
+
     await this.recordEvent(
       {
         organizationId: input.message.organizationId,
