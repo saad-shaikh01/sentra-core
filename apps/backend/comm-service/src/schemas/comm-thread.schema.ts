@@ -185,6 +185,9 @@ export class CommThread {
 
   @Prop()
   snippet?: string;
+
+  @Prop({ type: [String], default: [] })
+  gmailLabels: string[];
 }
 
 export const CommThreadSchema = SchemaFactory.createForClass(CommThread);

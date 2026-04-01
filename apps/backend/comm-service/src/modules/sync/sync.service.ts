@@ -485,6 +485,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
           hasSent: derived.hasSent,
           subject: derived.subject ?? existingThread?.subject,
           snippet: derived.snippet ?? existingThread?.snippet,
+          gmailLabels: [...new Set(messages.flatMap((m) => m.gmailLabels ?? []))],
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },

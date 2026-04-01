@@ -29,7 +29,7 @@ export class ThreadsService {
     role: UserRole,
     query: ListThreadsQueryDto,
   ) {
-    const { page = 1, limit = 20, entityType, entityId, search, filter, identityId, scope } = query;
+    const { page = 1, limit = 20, entityType, entityId, search, filter, identityId, scope, label } = query;
     const mongoFilter: Record<string, unknown> = { organizationId };
     let sort: Record<string, 1 | -1> = { lastMessageAt: -1 };
     // Admin with scope=all sees every thread in the org (explicit opt-in).
@@ -59,6 +59,10 @@ export class ThreadsService {
       // Skip if querying by entity link — entity link is the access control.
       mongoFilter.identityId = { $in: userIdentityIds };
       // isAdminViewAll + no identityId: no identity filter → sees all threads in org
+    }
+
+    if (label) {
+      mongoFilter['gmailLabels'] = label.toUpperCase();
     }
 
     if (search) {

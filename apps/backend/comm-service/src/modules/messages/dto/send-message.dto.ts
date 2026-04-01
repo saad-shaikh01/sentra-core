@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsEmail, IsOptional, ArrayNotEmpty, ValidateIf, IsBoolean } from 'class-validator';
+import { IsString, IsArray, IsEmail, IsOptional, IsNotEmpty, ArrayNotEmpty, ValidateIf, IsBoolean } from 'class-validator';
 
 export class SendMessageDto {
   @IsString()
@@ -23,8 +23,8 @@ export class SendMessageDto {
   @IsEmail({}, { each: true })
   bcc?: string[];
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   subject: string;
 
   @ValidateIf((dto: SendMessageDto) => !dto.bodyText)

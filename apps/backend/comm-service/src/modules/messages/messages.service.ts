@@ -239,7 +239,11 @@ export class MessagesService {
 
     // Auto-link by recipient email — matches thread participants against leads/clients
     if (gmailThreadId) {
-      void this.entityLinksService?.autoLinkThreads(organizationId, [gmailThreadId]);
+      void this.entityLinksService
+        ?.autoLinkThreads(organizationId, [gmailThreadId])
+        .catch((err: unknown) => {
+          this.logger.error(`Auto-link failed for thread ${gmailThreadId}: ${String(err)}`);
+        });
     }
 
     await this.audit.log({
