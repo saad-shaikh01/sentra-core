@@ -36,6 +36,38 @@ export class InternalContactsClient {
     this.serviceSecret = this.config.get<string>('INTERNAL_SERVICE_SECRET', '');
   }
 
+  async searchContacts(
+    organizationId: string,
+    query: string,
+  ): Promise<ContactLookupResult[]> {
+    if (!query.trim()) return [];
+
+    try {
+      const requestId = getCurrentRequestId();
+      const resp = await firstValueFrom(
+        this.http.get<{ data: ContactLookupResult[] }>(
+          `${this.coreServiceUrl}/api/internal/contacts/search`,
+          {
+            params: { organizationId, q: query },
+            timeout: this.timeoutMs,
+            headers: {
+              'x-service-secret': this.serviceSecret,
+              ...(requestId ? { 'x-request-id': requestId } : {}),
+            },
+          },
+        ),
+      );
+      return resp.data.data ?? [];
+    } catch (err) {
+      this.logger.warn(
+        `Contact search failed for org ${organizationId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+  }
+
   async lookupByEmails(
     organizationId: string,
     emails: string[],

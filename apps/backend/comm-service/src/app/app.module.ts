@@ -38,6 +38,7 @@ import { IntelligenceModule } from '../modules/intelligence/intelligence.module'
 import { SettingsModule } from '../modules/settings/settings.module';
 import { AlertsModule } from '../modules/alerts/alerts.module';
 import { MaintenanceModule } from '../modules/maintenance/maintenance.module';
+import { ContactsModule } from '../modules/contacts/contacts.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -119,6 +120,7 @@ function resolveEnvFiles(): string[] {
     AlertsModule,
     MaintenanceModule,
     GSuiteModule,
+    ContactsModule,
   ],
   providers: [
     {

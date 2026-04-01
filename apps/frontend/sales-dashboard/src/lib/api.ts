@@ -991,6 +991,19 @@ class ApiClient {
     return this.fetch<{ url: string; filename: string }>(`/messages/${messageId}/attachments/${attachmentIndex}`, { service: 'comm' });
   }
 
+  async batchThreadAction(threadIds: string[], action: 'archive' | 'mark_read' | 'mark_unread') {
+    return this.fetch<{ data: { processed: number; failed: number } }>('/threads/batch', {
+      method: 'POST',
+      body: JSON.stringify({ threadIds, action }),
+      service: 'comm',
+    });
+  }
+
+  async searchCommContacts(q: string) {
+    const qs = new URLSearchParams({ q }).toString();
+    return this.fetch<{ data: Array<{ email: string; name: string; entityType: string; id: string }> }>(`/contacts/search?${qs}`, { service: 'comm' });
+  }
+
   // Comm — G Suite Integration
   async initiateGSuiteOAuth() {
     return this.fetch<{ data: { redirectUrl: string } }>('/gsuite/oauth/initiate', { service: 'comm' });

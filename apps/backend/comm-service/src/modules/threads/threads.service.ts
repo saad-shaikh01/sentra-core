@@ -335,6 +335,36 @@ export class ThreadsService {
     this.gateway?.emitToOrg(organizationId, 'thread:updated', { threadId: String(thread._id) });
   }
 
+  async batchAction(
+    organizationId: string,
+    threadIds: string[],
+    action: 'archive' | 'mark_read' | 'mark_unread',
+    userId: string,
+    role: UserRole,
+  ): Promise<{ processed: number; failed: number }> {
+    let processed = 0;
+    let failed = 0;
+
+    await Promise.all(
+      threadIds.map(async (threadId) => {
+        try {
+          if (action === 'archive') {
+            await this.archiveThread(organizationId, threadId);
+          } else if (action === 'mark_read') {
+            await this.markThreadRead(organizationId, threadId, userId, role);
+          } else {
+            await this.markThreadUnread(organizationId, threadId, userId, role);
+          }
+          processed++;
+        } catch {
+          failed++;
+        }
+      }),
+    );
+
+    return { processed, failed };
+  }
+
   private async getThreadIdentity(
     organizationId: string,
     identityId: string,

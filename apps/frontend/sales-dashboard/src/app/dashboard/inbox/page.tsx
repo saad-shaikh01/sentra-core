@@ -12,11 +12,12 @@ import {
   Bold, Italic, List, Link2, Underline as UnderlineIcon,
   SquarePen, MailOpen, ArrowLeft, X, Loader2, ChevronDown,
   ChevronRight, Reply, CornerUpRight, TriangleAlert, CircleDot, Clock3, BadgeCheck,
-  Inbox as InboxIcon,
+  Inbox as InboxIcon, CheckSquare, Square, MailCheck, MailX,
 } from 'lucide-react';
 import {
   useThreads, useThread, useMessages, useReplyToMessage,
   useArchiveThread, useMarkThreadRead, useMarkThreadUnread, useIdentities, useCommIntelligenceSummary, useCommSettings,
+  useBatchThreadAction,
 } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -187,6 +188,8 @@ function InboxContent() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [checkedThreadIds, setCheckedThreadIds] = useState<Set<string>>(new Set());
+  const batchAction = useBatchThreadAction();
   const [composeOpen, setComposeOpen] = useState(false);
   const [identityFilter, setIdentityFilter] = useState('');
   const [summaryRange] = useState(() => {
@@ -454,6 +457,45 @@ function InboxContent() {
           ))}
         </div>
 
+        {/* Batch action bar */}
+        {checkedThreadIds.size > 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 shrink-0">
+            <span className="text-xs font-medium text-primary">{checkedThreadIds.size} selected</span>
+            <div className="flex items-center gap-1 ml-auto">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs gap-1"
+                disabled={batchAction.isPending}
+                onClick={() => batchAction.mutate({ threadIds: Array.from(checkedThreadIds), action: 'mark_read' }, { onSuccess: () => setCheckedThreadIds(new Set()) })}
+              >
+                <MailCheck className="h-3.5 w-3.5" /> Read
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs gap-1"
+                disabled={batchAction.isPending}
+                onClick={() => batchAction.mutate({ threadIds: Array.from(checkedThreadIds), action: 'mark_unread' }, { onSuccess: () => setCheckedThreadIds(new Set()) })}
+              >
+                <MailX className="h-3.5 w-3.5" /> Unread
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs gap-1 text-muted-foreground"
+                disabled={batchAction.isPending}
+                onClick={() => batchAction.mutate({ threadIds: Array.from(checkedThreadIds), action: 'archive' }, { onSuccess: () => setCheckedThreadIds(new Set()) })}
+              >
+                <Archive className="h-3.5 w-3.5" /> Archive
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setCheckedThreadIds(new Set())}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Thread list body */}
         <div className="flex-1 overflow-y-auto">
           {isPrivileged && !identityFilter ? (
@@ -508,6 +550,15 @@ function InboxContent() {
                         ? (identities?.find((id) => id.id === thread.identityId)?.email)
                         : undefined
                     }
+                    isChecked={checkedThreadIds.has(tid)}
+                    onCheck={(checked) => {
+                      setCheckedThreadIds((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(tid);
+                        else next.delete(tid);
+                        return next;
+                      });
+                    }}
                     onClick={() => setSelectedThreadId(tid)}
                   />
                 );
@@ -558,22 +609,22 @@ function InboxContent() {
 // ─── Thread row (Gmail-style) ─────────────────────────────────────────────────
 
 function ThreadRow({
-  thread, tid, isSelected, hasUnread, senderName, identityEmail, onClick,
+  thread, tid, isSelected, hasUnread, senderName, identityEmail, isChecked, onCheck, onClick,
 }: {
   thread: CommThread; tid: string; isSelected: boolean; hasUnread: boolean;
-  senderName: string; identityEmail?: string; onClick: () => void;
+  senderName: string; identityEmail?: string; isChecked?: boolean;
+  onCheck?: (checked: boolean) => void; onClick: () => void;
 }) {
   const archiveMutation = useArchiveThread();
   const [hovered, setHovered] = useState(false);
 
   return (
-    <button
-      onClick={onClick}
+    <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={cn(
-        'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] transition-colors relative group',
-        isSelected ? 'bg-primary/10' : hasUnread ? 'bg-white/[0.02] hover:bg-white/[0.05]' : 'hover:bg-white/[0.03]',
+        'w-full flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] transition-colors relative group cursor-pointer',
+        isSelected ? 'bg-primary/10' : isChecked ? 'bg-primary/5' : hasUnread ? 'bg-white/[0.02] hover:bg-white/[0.05]' : 'hover:bg-white/[0.03]',
       )}
     >
       {/* Unread indicator */}
@@ -581,8 +632,22 @@ function ThreadRow({
         <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary rounded-r" />
       )}
 
-      <Avatar name={senderName} />
+      {/* Checkbox (shown on hover or when any checked) */}
+      {(hovered || isChecked) ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onCheck?.(!isChecked); }}
+          className="h-9 w-9 flex items-center justify-center shrink-0 text-muted-foreground hover:text-primary transition-colors"
+        >
+          {isChecked ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+        </button>
+      ) : (
+        <button type="button" onClick={onClick} className="h-9 w-9 shrink-0 flex items-center justify-center">
+          <Avatar name={senderName} />
+        </button>
+      )}
 
+      <button type="button" onClick={onClick} className="flex-1 text-left min-w-0 py-0">
       <div className="flex-1 min-w-0">
         {/* Row 1: sender + date */}
         <div className="flex items-center justify-between gap-2">
@@ -633,7 +698,8 @@ function ThreadRow({
           <p className="text-[10px] text-primary/50 truncate">{identityEmail}</p>
         )}
       </div>
-    </button>
+      </button>
+    </div>
   );
 }
 

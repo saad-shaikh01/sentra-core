@@ -2,8 +2,10 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Param,
   Query,
+  Body,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -13,7 +15,7 @@ import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
 import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-response';
 import { ThreadsService } from './threads.service';
-import { ListThreadsQueryDto, ListMessagesQueryDto } from './dto/threads.dto';
+import { ListThreadsQueryDto, ListMessagesQueryDto, BatchThreadActionDto } from './dto/threads.dto';
 
 @UseGuards(OrgContextGuard)
 @Controller('threads')
@@ -109,5 +111,21 @@ export class ThreadsController {
       ctx.userRole as UserRole,
     );
     return COMM_MUTATION_OK;
+  }
+
+  @Post('batch')
+  @HttpCode(HttpStatus.OK)
+  async batchAction(
+    @GetOrgContext() ctx: OrgContext,
+    @Body() dto: BatchThreadActionDto,
+  ) {
+    const result = await this.service.batchAction(
+      ctx.organizationId,
+      dto.threadIds,
+      dto.action,
+      ctx.userId,
+      ctx.userRole as UserRole,
+    );
+    return { data: result };
   }
 }

@@ -209,6 +209,8 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
   const [trackingEnabled, setTrackingEnabled] = useState(
     (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
   );
+  const [undoCountdown, setUndoCountdown] = useState<number | null>(null);
+  const undoCancelRef = useRef<(() => void) | null>(null);
 
   const messages = messagesRes?.data ?? [];
   const lastMessage = messages[messages.length - 1];
@@ -318,13 +320,40 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
       trackingEnabled,
     };
 
-    await replyMutation.mutateAsync({
-      messageId,
-      dto,
-    });
+    // Optimistically clear composer
     replyEditor?.commands.clearContent(true);
     setReplyToolbarVisible(false);
     setUploadedAttachments([]);
+
+    // Undo/recall: 5-second countdown before actual send
+    const wasCancelled = await new Promise<boolean>((resolve) => {
+      let remaining = 5;
+      setUndoCountdown(remaining);
+
+      const tick = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(tick);
+          setUndoCountdown(null);
+          resolve(false);
+        } else {
+          setUndoCountdown(remaining);
+        }
+      }, 1000);
+
+      undoCancelRef.current = () => {
+        clearInterval(tick);
+        setUndoCountdown(null);
+        resolve(true);
+      };
+    });
+
+    if (wasCancelled) {
+      toast.info('Send cancelled', 'Your reply was not sent.');
+      return;
+    }
+
+    await replyMutation.mutateAsync({ messageId, dto });
   };
 
   const toggleExpand = (id: string) => {
@@ -521,6 +550,18 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
                   ))}
                 </div>
               )}
+              {undoCountdown !== null && (
+                <div className="flex items-center justify-between rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                  <span className="text-xs text-amber-400">Sending in {undoCountdown}s…</span>
+                  <button
+                    type="button"
+                    onClick={() => undoCancelRef.current?.()}
+                    className="text-xs font-semibold text-amber-400 hover:text-amber-300 transition-colors px-2 py-0.5 rounded border border-amber-500/30 hover:border-amber-400/50"
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
               <div className="flex justify-between items-center gap-2">
                 <div className="flex items-center gap-1">
                   <input
@@ -686,16 +727,84 @@ function MessageItem({
   );
 }
 
-function AttachmentList({ messageId, attachments }: { messageId: string; attachments: CommAttachment[] }) {
+interface AttachmentPreview {
+  url: string;
+  filename: string;
+  mimeType: string;
+}
+
+function AttachmentPreviewModal({ preview, onClose }: { preview: AttachmentPreview; onClose: () => void }) {
+  const isImage = preview.mimeType.startsWith('image/');
+  const isPdf = preview.mimeType === 'application/pdf';
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Attachments</p>
-      <div className="flex flex-wrap gap-2">
-        {attachments.map((att, idx) => (
-          <AttachmentItem key={idx} messageId={messageId} index={idx} attachment={att} />
-        ))}
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-md">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
+        <span className="text-sm font-medium truncate max-w-[calc(100%-5rem)]">{preview.filename}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={preview.url}
+            download={preview.filename}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-xs hover:bg-white/20 transition-colors"
+          >
+            Download
+          </a>
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+        {isImage && (
+          <img
+            src={preview.url}
+            alt={preview.filename}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+          />
+        )}
+        {isPdf && (
+          <object
+            data={preview.url}
+            type="application/pdf"
+            className="w-full h-full rounded-lg"
+            style={{ minHeight: '70vh' }}
+          >
+            <p className="text-sm text-muted-foreground text-center py-8">
+              PDF preview not supported.{' '}
+              <a href={preview.url} target="_blank" rel="noopener noreferrer" className="underline">
+                Download instead
+              </a>
+            </p>
+          </object>
+        )}
       </div>
     </div>
+  );
+}
+
+function AttachmentList({ messageId, attachments }: { messageId: string; attachments: CommAttachment[] }) {
+  const [preview, setPreview] = useState<AttachmentPreview | null>(null);
+
+  return (
+    <>
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Attachments</p>
+        <div className="flex flex-wrap gap-2">
+          {attachments.map((att, idx) => (
+            <AttachmentItem key={idx} messageId={messageId} index={idx} attachment={att} onPreview={setPreview} />
+          ))}
+        </div>
+      </div>
+      {preview && <AttachmentPreviewModal preview={preview} onClose={() => setPreview(null)} />}
+    </>
   );
 }
 
@@ -703,12 +812,15 @@ function AttachmentItem({
   messageId,
   index,
   attachment,
+  onPreview,
 }: {
   messageId: string;
   index: number;
   attachment: CommAttachment;
+  onPreview: (p: AttachmentPreview) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const isPreviewable = attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf';
 
   const handleClick = async () => {
     if (loading) return;
@@ -716,7 +828,10 @@ function AttachmentItem({
     try {
       const res = await api.getCommAttachmentUrl(messageId, index);
       const url = (res as any)?.data?.url ?? (res as any)?.url;
-      if (url) {
+      if (!url) return;
+      if (isPreviewable) {
+        onPreview({ url, filename: attachment.filename, mimeType: attachment.mimeType });
+      } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch {

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsArray, ArrayNotEmpty } from 'class-validator';
 import { CommPaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class ListThreadsQueryDto extends CommPaginationQueryDto {
@@ -69,3 +69,13 @@ export class ListThreadsQueryDto extends CommPaginationQueryDto {
 }
 
 export class ListMessagesQueryDto extends CommPaginationQueryDto {}
+
+export class BatchThreadActionDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  threadIds: string[];
+
+  @IsIn(['archive', 'mark_read', 'mark_unread'])
+  action: 'archive' | 'mark_read' | 'mark_unread';
+}

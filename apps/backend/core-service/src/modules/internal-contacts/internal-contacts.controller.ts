@@ -1,6 +1,8 @@
 import {
   Controller,
   Post,
+  Get,
+  Query,
   Body,
   UseGuards,
 } from '@nestjs/common';
@@ -22,6 +24,15 @@ export class InternalContactsController {
   @Post('by-emails')
   async lookupByEmails(@Body() dto: LookupContactsDto) {
     const results = await this.service.lookupByEmails(dto.organizationId, dto.emails);
+    return { data: results };
+  }
+
+  @Get('search')
+  async searchContacts(
+    @Query('organizationId') organizationId: string,
+    @Query('q') q: string,
+  ) {
+    const results = await this.service.searchContacts(organizationId, q ?? '');
     return { data: results };
   }
 }

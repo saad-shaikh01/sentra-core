@@ -31,6 +31,7 @@ import { api } from '@/lib/api';
 import type { CommIdentity } from '@/types/comm.types';
 import { cn } from '@/lib/utils';
 import { TrackingSendControl } from './tracking-send-control';
+import { RecipientInput } from './recipient-input';
 
 interface AliasOption {
   value: string;
@@ -685,43 +686,20 @@ export function ComposeDrawer({
 
               <div className="border-b border-white/10 pb-2">
                 <div className="flex items-start gap-2">
-                  <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">To</span>
-                  <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-                    {toRecipients.map((email) => (
-                      <span
-                        key={email}
-                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
-                      >
-                        <span className="truncate max-w-[150px]">{email}</span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${email}`}
-                          onClick={() => setToRecipients((current) => current.filter((candidate) => candidate !== email))}
-                          className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      value={toInput}
-                      onChange={(event) => {
-                        setToInput(event.target.value);
-                        if (toError) {
-                          setToError('');
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && toInput.trim()) {
-                          event.preventDefault();
-                          applyRecipientInput(toRecipients, toInput, setToRecipients, setToInput, setToError);
-                        }
-                      }}
+                  <div className="flex-1 min-w-0">
+                    <RecipientInput
+                      label="To"
+                      recipients={toRecipients}
+                      setRecipients={setToRecipients}
+                      inputValue={toInput}
+                      setInputValue={setToInput}
+                      error={toError}
+                      setError={setToError}
                       placeholder="recipient@example.com"
-                      className="min-w-[120px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+                      onCommitRecipients={(current, pending) => commitRecipients(current, pending)}
                     />
                   </div>
-                  <div className="flex gap-2 shrink-0 pt-1">
+                  <div className="flex gap-2 shrink-0 pt-2">
                     <button
                       type="button"
                       onClick={() => setShowCc((current) => !current)}
@@ -738,94 +716,37 @@ export function ComposeDrawer({
                     </button>
                   </div>
                 </div>
-                {toError && <p className="pl-14 pt-2 text-xs text-red-400">{toError}</p>}
               </div>
 
               {showCc && (
                 <div className="border-b border-white/10 pb-2">
-                  <div className="flex items-start gap-2">
-                    <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">CC</span>
-                    <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-                      {ccRecipients.map((email) => (
-                        <span
-                          key={email}
-                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
-                        >
-                          <span className="truncate max-w-[150px]">{email}</span>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${email}`}
-                            onClick={() => setCcRecipients((current) => current.filter((candidate) => candidate !== email))}
-                            className="text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        value={ccInput}
-                        onChange={(event) => {
-                          setCcInput(event.target.value);
-                          if (ccError) {
-                            setCcError('');
-                          }
-                        }}
-                        onKeyDown={(event) => {
-                          if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && ccInput.trim()) {
-                            event.preventDefault();
-                            applyRecipientInput(ccRecipients, ccInput, setCcRecipients, setCcInput, setCcError);
-                          }
-                        }}
-                        placeholder="cc@example.com"
-                        className="min-w-[120px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
-                      />
-                    </div>
-                  </div>
-                  {ccError && <p className="pl-14 pt-2 text-xs text-red-400">{ccError}</p>}
+                  <RecipientInput
+                    label="CC"
+                    recipients={ccRecipients}
+                    setRecipients={setCcRecipients}
+                    inputValue={ccInput}
+                    setInputValue={setCcInput}
+                    error={ccError}
+                    setError={setCcError}
+                    placeholder="cc@example.com"
+                    onCommitRecipients={(current, pending) => commitRecipients(current, pending)}
+                  />
                 </div>
               )}
 
               {showBcc && (
                 <div className="border-b border-white/10 pb-2">
-                  <div className="flex items-start gap-2">
-                    <span className="w-12 shrink-0 pt-2 text-xs text-muted-foreground">BCC</span>
-                    <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-                      {bccRecipients.map((email) => (
-                        <span
-                          key={email}
-                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs"
-                        >
-                          <span className="truncate max-w-[150px]">{email}</span>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${email}`}
-                            onClick={() => setBccRecipients((current) => current.filter((candidate) => candidate !== email))}
-                            className="text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        value={bccInput}
-                        onChange={(event) => {
-                          setBccInput(event.target.value);
-                          if (bccError) {
-                            setBccError('');
-                          }
-                        }}
-                        onKeyDown={(event) => {
-                          if ((event.key === 'Enter' || event.key === 'Tab' || event.key === ',') && bccInput.trim()) {
-                            event.preventDefault();
-                            applyRecipientInput(bccRecipients, bccInput, setBccRecipients, setBccInput, setBccError);
-                          }
-                        }}
-                        placeholder="bcc@example.com"
-                        className="min-w-[120px] flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
-                      />
-                    </div>
-                  </div>
-                  {bccError && <p className="pl-14 pt-2 text-xs text-red-400">{bccError}</p>}
+                  <RecipientInput
+                    label="BCC"
+                    recipients={bccRecipients}
+                    setRecipients={setBccRecipients}
+                    inputValue={bccInput}
+                    setInputValue={setBccInput}
+                    error={bccError}
+                    setError={setBccError}
+                    placeholder="bcc@example.com"
+                    onCommitRecipients={(current, pending) => commitRecipients(current, pending)}
+                  />
                 </div>
               )}
 

@@ -472,6 +472,21 @@ export function useMarkThreadUnread() {
   });
 }
 
+export function useBatchThreadAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadIds, action }: { threadIds: string[]; action: 'archive' | 'mark_read' | 'mark_unread' }) =>
+      api.batchThreadAction(threadIds, action),
+    onSuccess: (_data, { action }) => {
+      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
+      const label = action === 'archive' ? 'Archived' : action === 'mark_read' ? 'Marked as read' : 'Marked as unread';
+      toast.success(`${label} successfully`);
+    },
+    onError: (e: Error) => toast.error('Batch action failed', e.message),
+  });
+}
+
 export function useLinkThread() {
   const queryClient = useQueryClient();
   return useMutation({

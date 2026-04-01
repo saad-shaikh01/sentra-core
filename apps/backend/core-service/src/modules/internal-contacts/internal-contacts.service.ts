@@ -6,6 +6,62 @@ import { ContactLookupResult } from './dto/lookup-contacts.dto';
 export class InternalContactsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async searchContacts(
+    organizationId: string,
+    query: string,
+    limit = 10,
+  ): Promise<ContactLookupResult[]> {
+    const q = query.trim();
+    if (!q) return [];
+
+    const clients = await this.prisma.client.findMany({
+      where: {
+        organizationId,
+        OR: [
+          { email: { contains: q, mode: 'insensitive' } },
+          { contactName: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, email: true, contactName: true },
+      take: limit,
+    });
+
+    const results: ContactLookupResult[] = clients.map((c) => ({
+      email: c.email,
+      id: c.id,
+      entityType: 'client' as const,
+      name: c.contactName || c.email,
+    }));
+
+    if (results.length < limit) {
+      const leads = await this.prisma.lead.findMany({
+        where: {
+          organizationId,
+          email: { not: null },
+          OR: [
+            { email: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true, email: true, name: true },
+        take: limit - results.length,
+      });
+
+      for (const lead of leads) {
+        if (lead.email) {
+          results.push({
+            email: lead.email,
+            id: lead.id,
+            entityType: 'lead' as const,
+            name: lead.name ?? lead.email,
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
   async lookupByEmails(
     organizationId: string,
     emails: string[],
