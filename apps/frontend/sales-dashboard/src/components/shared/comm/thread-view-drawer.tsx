@@ -311,6 +311,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
     const identity = identities?.find((i) => i.id === identityId);
     const fromAlias = aliasEmail !== identity?.email ? aliasEmail : undefined;
     const dto: {
+      threadId?: string;
       identityId: string;
       fromAlias?: string;
       bodyText?: string;
@@ -319,6 +320,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
       replyAll?: boolean;
       trackingEnabled?: boolean;
     } = {
+      threadId: threadId ?? undefined,
       identityId,
       fromAlias,
       bodyText,

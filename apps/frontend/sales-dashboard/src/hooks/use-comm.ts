@@ -265,7 +265,7 @@ export function useUpdateCommSettings() {
     },
     onSuccess: (settings) => {
       queryClient.setQueryData(commKeys.settings(), settings);
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       queryClient.invalidateQueries({ queryKey: commKeys.intelligenceSummary() });
       toast.success('Email intelligence settings updated');
     },
@@ -351,7 +351,7 @@ export function useSendMessage() {
       return api.sendCommMessage(dto as unknown as Record<string, unknown>, idempotencyKey);
     },
     onSuccess: (_data, dto) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       if (dto.entityType && dto.entityId) {
         queryClient.invalidateQueries({ queryKey: commKeys.timeline(dto.entityType, dto.entityId) });
       }
@@ -370,7 +370,7 @@ export function useReplyToMessage() {
     },
     onSuccess: (_data, { dto }) => {
       const threadId = (dto as any).threadId as string | undefined;
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       if (threadId) {
         queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
         queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
@@ -401,7 +401,7 @@ export function useArchiveThread() {
   return useMutation({
     mutationFn: (threadId: string) => api.archiveCommThread(threadId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
     },
     onError: (e: Error) => toast.error('Failed to archive thread', e.message),
   });
@@ -415,7 +415,7 @@ export function useMarkThreadRead() {
     onMutate: (threadId) => {
       // Optimistically mark thread as read in every cached threads list
       queryClient.setQueriesData(
-        { queryKey: commKeys.threads() },
+        { queryKey: [...commKeys.all, 'threads'] },
         (old: any) => {
           if (!old?.data) return old;
           return {
@@ -433,7 +433,7 @@ export function useMarkThreadRead() {
     },
     onSuccess: (_data, threadId) => {
       decrementCommUnread(1);
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },
@@ -449,7 +449,7 @@ export function useMarkThreadUnread() {
     onMutate: (threadId) => {
       // Optimistically mark thread as unread in every cached threads list
       queryClient.setQueriesData(
-        { queryKey: commKeys.threads() },
+        { queryKey: [...commKeys.all, 'threads'] },
         (old: any) => {
           if (!old?.data) return old;
           return {
@@ -466,7 +466,7 @@ export function useMarkThreadUnread() {
     },
     onSuccess: (_data, threadId) => {
       incrementCommUnread(1);
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
     },
@@ -479,7 +479,7 @@ export function useBatchThreadAction() {
     mutationFn: ({ threadIds, action }: { threadIds: string[]; action: 'archive' | 'mark_read' | 'mark_unread' }) =>
       api.batchThreadAction(threadIds, action),
     onSuccess: (_data, { action }) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
       const label = action === 'archive' ? 'Archived' : action === 'mark_read' ? 'Marked as read' : 'Marked as unread';
       toast.success(`${label} successfully`);
@@ -494,7 +494,7 @@ export function useLinkThread() {
     mutationFn: ({ threadId, entityType, entityId }: { threadId: string; entityType: string; entityId: string }) =>
       api.linkCommThread(threadId, entityType, entityId),
     onSuccess: (_data, { entityType, entityId }) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       queryClient.invalidateQueries({ queryKey: commKeys.timeline(entityType, entityId) });
       toast.success('Thread linked');
     },
@@ -508,7 +508,7 @@ export function useUnlinkThread() {
     mutationFn: ({ threadId, entityType, entityId }: { threadId: string; entityType: string; entityId: string }) =>
       api.unlinkCommThread(threadId, entityType, entityId),
     onSuccess: (_data, { entityType, entityId }) => {
-      queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       queryClient.invalidateQueries({ queryKey: commKeys.timeline(entityType, entityId) });
       toast.success('Thread unlinked');
     },

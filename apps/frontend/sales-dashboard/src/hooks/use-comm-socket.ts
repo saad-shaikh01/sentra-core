@@ -111,7 +111,7 @@ export function useCommSocket() {
         useUIStore.getState().setCommConnectionStatus('connected');
         if (prevStatus !== 'connecting') {
           queryClient.invalidateQueries({ queryKey: commKeys.unreadCount() });
-          queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+          queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         }
       });
 
@@ -160,10 +160,15 @@ export function useCommSocket() {
 
       socket.on('message:new', (data: any) => {
         const threadId = resolveThreadId(data);
-        queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        const gmailThreadId: string | undefined = data?.gmailThreadId ?? data?.message?.gmailThreadId;
+        queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         if (threadId) {
           queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
           queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
+        }
+        if (gmailThreadId && gmailThreadId !== threadId) {
+          queryClient.invalidateQueries({ queryKey: commKeys.thread(gmailThreadId) });
+          queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId: gmailThreadId }) });
         }
         // Only increment unread count for messages from identities owned by the current user.
         // The broadcast is org-wide so Agent B would otherwise increment even with no Gmail.
@@ -179,18 +184,27 @@ export function useCommSocket() {
 
       socket.on('message:sent', (data: any) => {
         const threadId = resolveThreadId(data);
-        queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        const gmailThreadId: string | undefined = data?.gmailThreadId ?? data?.message?.gmailThreadId;
+        queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         if (threadId) {
           queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
           queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId }) });
+        }
+        if (gmailThreadId && gmailThreadId !== threadId) {
+          queryClient.invalidateQueries({ queryKey: commKeys.thread(gmailThreadId) });
+          queryClient.invalidateQueries({ queryKey: commKeys.messages({ threadId: gmailThreadId }) });
         }
       });
 
       socket.on('thread:updated', (data: any) => {
         const threadId = resolveThreadId(data);
-        queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        const gmailThreadId: string | undefined = data?.gmailThreadId ?? data?.message?.gmailThreadId;
+        queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         if (threadId) {
           queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
+        }
+        if (gmailThreadId && gmailThreadId !== threadId) {
+          queryClient.invalidateQueries({ queryKey: commKeys.thread(gmailThreadId) });
         }
       });
 
@@ -208,7 +222,7 @@ export function useCommSocket() {
         if (total > 0 && synced >= total) {
           useUIStore.getState().clearCommSyncProgress(data.identityId);
           queryClient.invalidateQueries({ queryKey: commKeys.identities() });
-          queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+          queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         }
       });
 
@@ -225,7 +239,7 @@ export function useCommSocket() {
         if (!userIdentityIds.has(data?.identityId)) return;
 
         queryClient.invalidateQueries({ queryKey: commKeys.identities() });
-        queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         toast.success(
           `Inbox sync complete for ${data?.email ?? 'mailbox'}`,
           `${data?.count ?? 0} messages synced`,
@@ -238,7 +252,7 @@ export function useCommSocket() {
       });
 
       socket.on('link:created', (data: any) => {
-        queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         // When backfill completes after lead/client creation, the event carries
         // entityType + entityId so we can invalidate that entity's timeline precisely.
         if (data?.entityType && data?.entityId) {
@@ -249,7 +263,7 @@ export function useCommSocket() {
       });
 
       socket.on('link:removed', (data: any) => {
-        queryClient.invalidateQueries({ queryKey: commKeys.threads() });
+        queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
         if (data?.entityType && data?.entityId) {
           queryClient.invalidateQueries({
             queryKey: commKeys.timeline(data.entityType as string, data.entityId as string),

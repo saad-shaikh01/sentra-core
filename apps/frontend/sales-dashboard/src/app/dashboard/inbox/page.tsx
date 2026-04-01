@@ -1008,6 +1008,7 @@ function ThreadView({
         {replyOpen && (
           <div className="px-4 sm:px-6 pb-6">
             <ReplyBox
+              threadId={threadId}
               lastMessage={lastMessage}
               identities={identities}
               userId={userId}
@@ -1033,8 +1034,9 @@ function ThreadView({
 // ─── Reply box (Gmail-style bottom compose) ────────────────────────────────────
 
 function ReplyBox({
-  lastMessage, identities, userId, commSettings, onClose,
+  threadId, lastMessage, identities, userId, commSettings, onClose,
 }: {
+  threadId: string;
   lastMessage: CommMessage | undefined;
   identities: CommIdentity[]; userId: string; commSettings?: CommSettings; onClose: () => void;
 }) {
@@ -1094,6 +1096,7 @@ function ReplyBox({
     await replyMutation.mutateAsync({
       messageId,
       dto: {
+        threadId,
         identityId: activeIdentityId, bodyText, bodyHtml,
         attachmentS3Keys: uploadedAttachments.length > 0 ? uploadedAttachments.map((a) => a.s3Key) : undefined,
         replyAll,
