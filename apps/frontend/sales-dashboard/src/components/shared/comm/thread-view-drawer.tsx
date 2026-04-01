@@ -212,8 +212,16 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
   const [undoCountdown, setUndoCountdown] = useState<number | null>(null);
   const undoCancelRef = useRef<(() => void) | null>(null);
 
+  const [showAllMessages, setShowAllMessages] = useState(false);
   const messages = messagesRes?.data ?? [];
-  const lastMessage = messages[messages.length - 1];
+  const totalMessages = messages.length;
+  const lastMessage = messages[totalMessages - 1];
+
+  // Folding logic
+  const hiddenCount = totalMessages > 4 && !showAllMessages ? totalMessages - 3 : 0;
+  const visibleMessages = showAllMessages || totalMessages <= 4 
+    ? messages 
+    : messages.slice(totalMessages - 3);
 
   useEffect(() => {
     if (threadId && thread?.hasUnread) {
@@ -225,6 +233,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
     replyEditor?.commands.setContent('', { emitUpdate: false });
     setReplyToolbarVisible(false);
     setUploadedAttachments([]);
+    setShowAllMessages(false);
   }, [replyEditor, threadId]);
 
   useEffect(() => {
@@ -451,7 +460,7 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
 
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 overscroll-contain">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 overscroll-contain bg-[#050507]">
               {threadError || messagesError ? (
                 <div className="py-12 text-center space-y-3">
                   <AlertCircle className="h-8 w-8 mx-auto text-red-400/60" />
@@ -475,19 +484,32 @@ export function ThreadViewDrawer({ threadId, onClose, entityType, entityId }: Th
                   <p className="text-sm text-muted-foreground">No messages in this thread.</p>
                 </div>
               ) : (
-                messages.map((msg, idx) => {
-                  const msgId = msg.id ?? msg.gmailMessageId ?? String(idx);
-                  const isExpanded = expandedIds.has(msgId);
-                  const isLast = idx === messages.length - 1;
-                  return (
-                    <MessageItem
-                      key={msgId}
-                      message={msg}
-                      isExpanded={isExpanded || isLast}
-                      onToggle={() => toggleExpand(msgId)}
-                    />
-                  );
-                })
+                <>
+                  {hiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowAllMessages(true)}
+                      className="w-full flex items-center justify-center gap-3 py-2 my-1 rounded-lg bg-white/5 border border-white/5 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground transition-all group"
+                    >
+                      <div className="h-px flex-1 bg-white/10 group-hover:bg-white/20" />
+                      <span>Show {hiddenCount} earlier messages</span>
+                      <div className="h-px flex-1 bg-white/10 group-hover:bg-white/20" />
+                    </button>
+                  )}
+                  {visibleMessages.map((msg, idx) => {
+                    const globalIdx = showAllMessages || totalMessages <= 4 ? idx : (totalMessages - 3 + idx);
+                    const msgId = msg.id ?? msg.gmailMessageId ?? String(globalIdx);
+                    const isExpanded = expandedIds.has(msgId);
+                    const isLast = globalIdx === totalMessages - 1;
+                    return (
+                      <MessageItem
+                        key={msgId}
+                        message={msg}
+                        isExpanded={isExpanded || isLast}
+                        onToggle={() => toggleExpand(msgId)}
+                      />
+                    );
+                  })}
+                </>
               )}
             </div>
 
@@ -653,7 +675,31 @@ function MessageItem({
   useEffect(() => {
     if (!isExpanded || !hasSafeHtml || !iframeRef.current) return;
     const iframe = iframeRef.current;
-    iframe.srcdoc = safeHtml;
+    iframe.srcdoc = `
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+              font-size: 14px;
+              line-height: 1.5;
+              color: #111;
+              margin: 16px;
+              word-wrap: break-word;
+            }
+            img { max-width: 100%; height: auto; }
+            a { color: #007bff; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            blockquote {
+              margin: 0 0 0 0.8ex;
+              border-left: 1px #ccc solid;
+              padding-left: 1ex;
+            }
+          </style>
+        </head>
+        <body>${safeHtml}</body>
+      </html>
+    `;
     const onLoad = () => {
       if (iframe.contentDocument?.body) {
         iframe.style.height = '0px';

@@ -836,27 +836,36 @@ function ThreadView({
   const [forwardMessage, setForwardMessage] = useState<CommMessage | null>(null);
   const [replyOpen, setReplyOpen] = useState(false);
 
+  const [showAllMessages, setShowAllMessages] = useState(false);
   const messages = messagesRes?.data ?? [];
-  const lastMessage = messages[messages.length - 1];
+  const totalMessages = messages.length;
+  const lastMessage = messages[totalMessages - 1];
+
+  // Logic for Gmail-style folding
+  // 1. If messages <= 4, show all.
+  // 2. If messages > 4, show first, then "Show X earlier", then last 3.
+  // Actually, Gmail usually shows first, then "..." then the last few.
+  // Let's go with: Last one expanded, previous 2 compact, others hidden behind button.
+  const hiddenCount = totalMessages > 4 && !showAllMessages ? totalMessages - 3 : 0;
+  const visibleMessages = showAllMessages || totalMessages <= 4 
+    ? messages 
+    : messages.slice(totalMessages - 3);
 
   // Auto mark read
   useEffect(() => {
     if (thread?.hasUnread) markReadRef.current.mutate(threadId);
   }, [threadId, thread?.hasUnread]);
 
-  // Auto expand last message
+  // Reset state on thread change
   useEffect(() => {
+    setReplyOpen(false);
+    setForwardMessage(null);
+    setShowAllMessages(false);
     if (lastMessage) {
       const id = lastMessage.id ?? lastMessage.gmailMessageId ?? '';
       setExpandedIds(new Set([id]));
     }
-  }, [lastMessage?.id, lastMessage?.gmailMessageId]);
-
-  // Reset reply on thread change
-  useEffect(() => {
-    setReplyOpen(false);
-    setForwardMessage(null);
-  }, [threadId]);
+  }, [threadId, lastMessage?.id, lastMessage?.gmailMessageId]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -931,7 +940,7 @@ function ThreadView({
       </div>
 
       {/* ── Scrollable body: messages + reply ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-[#050507]">
         {/* Messages */}
         <div className="px-4 sm:px-6 py-4 space-y-2">
           {messagesError ? (
@@ -946,24 +955,37 @@ function ThreadView({
             <div className="space-y-3 animate-pulse">
               {[1, 2].map((i) => <div key={i} className="h-24 bg-white/5 rounded-xl" />)}
             </div>
-          ) : messages.length === 0 ? (
+          ) : totalMessages === 0 ? (
             <div className="py-16 text-center">
               <p className="text-sm text-muted-foreground">No messages in this thread.</p>
             </div>
           ) : (
-            messages.map((msg, idx) => {
-              const msgId = msg.id ?? msg.gmailMessageId ?? String(idx);
-              const isLast = idx === messages.length - 1;
-              return (
-                <InlineMessageItem
-                  key={msgId}
-                  message={msg}
-                  isExpanded={expandedIds.has(msgId) || isLast}
-                  onToggle={() => toggleExpand(msgId)}
-                  onForward={() => setForwardMessage(msg)}
-                />
-              );
-            })
+            <>
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowAllMessages(true)}
+                  className="w-full flex items-center justify-center gap-3 py-2 my-2 rounded-lg bg-white/5 border border-white/5 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground transition-all group"
+                >
+                  <div className="h-px flex-1 bg-white/10 group-hover:bg-white/20" />
+                  <span>Show {hiddenCount} earlier messages</span>
+                  <div className="h-px flex-1 bg-white/10 group-hover:bg-white/20" />
+                </button>
+              )}
+              {visibleMessages.map((msg, idx) => {
+                const globalIdx = showAllMessages || totalMessages <= 4 ? idx : (totalMessages - 3 + idx);
+                const msgId = msg.id ?? msg.gmailMessageId ?? String(globalIdx);
+                const isLast = globalIdx === totalMessages - 1;
+                return (
+                  <InlineMessageItem
+                    key={msgId}
+                    message={msg}
+                    isExpanded={expandedIds.has(msgId) || isLast}
+                    onToggle={() => toggleExpand(msgId)}
+                    onForward={() => setForwardMessage(msg)}
+                  />
+                );
+              })}
+            </>
           )}
         </div>
 
@@ -1205,7 +1227,31 @@ export function InlineMessageItem({
   useEffect(() => {
     if (!isExpanded || !hasSafeHtml || !iframeRef.current) return;
     const iframe = iframeRef.current;
-    iframe.srcdoc = safeHtml;
+    iframe.srcdoc = `
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+              font-size: 14px;
+              line-height: 1.5;
+              color: #111;
+              margin: 16px;
+              word-wrap: break-word;
+            }
+            img { max-width: 100%; height: auto; }
+            a { color: #007bff; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            blockquote {
+              margin: 0 0 0 0.8ex;
+              border-left: 1px #ccc solid;
+              padding-left: 1ex;
+            }
+          </style>
+        </head>
+        <body>${safeHtml}</body>
+      </html>
+    `;
     const onLoad = () => {
       if (iframe.contentDocument?.body) {
         iframe.style.height = '0px';
