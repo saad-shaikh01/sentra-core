@@ -927,13 +927,32 @@ function LinkWidget({
   const linkThread = useLinkThread();
   const unlinkThread = useUnlinkThread();
   const [showSearch, setShowSearch] = useState(false);
-  const [searchType, setSearchType] = useState<'lead' | 'client'>('lead');
-  const [searchId, setSearchId] = useState('');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Array<{ id: string; name: string; email: string; entityType: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleLink = () => {
-    if (!searchId.trim()) return;
-    linkThread.mutate({ threadId, entityType: searchType, entityId: searchId.trim() });
-    setSearchId('');
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!value.trim()) { setResults([]); return; }
+    searchTimeout.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await api.searchCommContacts(value.trim());
+        setResults(res.data ?? []);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  };
+
+  const handleSelect = (result: { id: string; entityType: string }) => {
+    linkThread.mutate({ threadId, entityType: result.entityType, entityId: result.id });
+    setQuery('');
+    setResults([]);
     setShowSearch(false);
   };
 
@@ -941,7 +960,7 @@ function LinkWidget({
     <div className="px-4 sm:px-6 py-3 border-t border-white/10 space-y-2 bg-black/20">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Linked to</p>
-        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowSearch((p) => !p)}>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => { setShowSearch((p) => !p); setQuery(''); setResults([]); }}>
           <Link2 className="h-3 w-3 mr-1" /> Link
         </Button>
       </div>
@@ -968,24 +987,37 @@ function LinkWidget({
         ))}
       </div>
       {showSearch && (
-        <div className="flex items-center gap-2 pt-1">
-          <select
-            value={searchType}
-            onChange={(e) => setSearchType(e.target.value as 'lead' | 'client')}
-            className="text-[10px] bg-white/5 border border-white/10 rounded px-2 py-1 text-foreground focus:outline-none"
-          >
-            <option value="lead">Lead</option>
-            <option value="client">Client</option>
-          </select>
-          <input
-            value={searchId}
-            onChange={(e) => setSearchId(e.target.value)}
-            placeholder="Entity ID..."
-            className="flex-1 text-[10px] bg-white/5 border border-white/10 rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-white/30"
-          />
-          <Button size="sm" className="h-7 text-[10px]" onClick={handleLink} disabled={!searchId.trim()}>
-            Link
-          </Button>
+        <div className="relative flex flex-col gap-1 pt-1">
+          <div className="flex items-center gap-2">
+            <input
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder="Search lead or client by name / email…"
+              autoFocus
+              className="flex-1 text-[10px] bg-white/5 border border-white/10 rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-white/30"
+            />
+            {searching && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+          </div>
+          {results.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-white/10 bg-popover shadow-lg overflow-hidden">
+              {results.map((r) => (
+                <button
+                  key={`${r.entityType}:${r.id}`}
+                  onClick={() => handleSelect(r)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                >
+                  <div>
+                    <p className="text-[11px] font-medium text-foreground">{r.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{r.email}</p>
+                  </div>
+                  <span className="text-[10px] capitalize text-muted-foreground border border-white/10 rounded px-1.5 py-0.5">{r.entityType}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {query.trim() && !searching && results.length === 0 && (
+            <p className="text-[10px] text-muted-foreground/50 px-1">No leads or clients found.</p>
+          )}
         </div>
       )}
     </div>
