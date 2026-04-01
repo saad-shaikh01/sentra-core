@@ -358,19 +358,27 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     const sentByUserId = existing?.sentByUserId ?? options.sentByUserId;
     const isNew = !existing;
 
+    const {
+      organizationId: parsedOrgId,
+      gmailMessageId: parsedMsgId,
+      gmailThreadId: parsedThreadId,
+      identityId: parsedIdentityId,
+      ...mutableFields
+    } = parsed;
+
     const message = (await this.messageModel.findOneAndUpdate(
       { organizationId: identity.organizationId, gmailMessageId },
       {
         $set: {
-          ...parsed,
+          ...mutableFields,
           attachments: mergedAttachments,
           ...(sentByUserId ? { sentByUserId } : {}),
         },
         $setOnInsert: {
-          organizationId: identity.organizationId,
-          gmailMessageId,
-          gmailThreadId: parsed.gmailThreadId,
-          identityId: parsed.identityId,
+          organizationId: parsedOrgId,
+          gmailMessageId: parsedMsgId,
+          gmailThreadId: parsedThreadId,
+          identityId: parsedIdentityId,
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
