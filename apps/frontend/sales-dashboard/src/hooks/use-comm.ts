@@ -366,10 +366,12 @@ export function useReplyToMessage() {
   return useMutation({
     mutationFn: async ({ messageId, dto }: { messageId: string; dto: ReplyDto }) => {
       const idempotencyKey = crypto.randomUUID();
-      return api.replyToCommMessage(messageId, dto as unknown as Record<string, unknown>, idempotencyKey);
+      // Strip threadId — it's frontend-only for cache invalidation, not a backend field
+      const { threadId: _threadId, ...apiDto } = dto;
+      return api.replyToCommMessage(messageId, apiDto as unknown as Record<string, unknown>, idempotencyKey);
     },
     onSuccess: (_data, { dto }) => {
-      const threadId = (dto as any).threadId as string | undefined;
+      const threadId = dto.threadId;
       queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'threads'] });
       if (threadId) {
         queryClient.invalidateQueries({ queryKey: commKeys.thread(threadId) });
