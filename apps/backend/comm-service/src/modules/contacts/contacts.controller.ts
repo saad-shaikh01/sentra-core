@@ -1,6 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
-import { OrgContext } from '../../common/decorators/org-context.decorator';
+import { GetOrgContext } from '../../common/decorators/org-context.decorator';
 import { InternalContactsClient } from '../../common/http/internal-contacts.client';
 
 @UseGuards(OrgContextGuard)
@@ -10,7 +10,7 @@ export class ContactsController {
 
   @Get('search')
   async search(
-    @OrgContext('organizationId') organizationId: string,
+    @GetOrgContext() { organizationId }: { organizationId: string },
     @Query('q') q: string,
   ) {
     const results = await this.contactsClient.searchContacts(organizationId, q ?? '');

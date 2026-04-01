@@ -32,7 +32,7 @@ import {
 } from './gmail-message.utils';
 import { TrackingService } from '../tracking/tracking.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
-import { CommSettingsService } from '../settings/comm-settings.service';
+import { CommSettingsService, ResolvedCommSettings, resolveCommSettings } from '../settings/comm-settings.service';
 
 type RateLimitedError = Error & {
   retryAfterSeconds?: number;
@@ -377,11 +377,21 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     ))!;
 
     await this.applyBounceDetection(identity.organizationId, message);
-    const thread = await this.refreshThreadState(
-      identity.organizationId,
-      parsed.gmailThreadId,
-      String(identity._id),
-    );
+    let thread: CommThreadDocument;
+    try {
+      thread = await this.refreshThreadState(
+        identity.organizationId,
+        parsed.gmailThreadId,
+        String(identity._id),
+      );
+    } catch (error) {
+      this.logger.error(
+        `refreshThreadState failed for ${gmailMessageId} (thread ${parsed.gmailThreadId}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw error;
+    }
 
     if (isNew && !parsed.isSentByIdentity && !parsed.isBounceDetected && thread.replyState === 'replied') {
       try {
@@ -440,7 +450,17 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
     gmailThreadId: string,
     identityId: string,
   ): Promise<CommThreadDocument> {
-    const settings = await this.settingsService.getResolvedSettings(organizationId);
+    let settings: ResolvedCommSettings;
+    try {
+      settings = await this.settingsService.getResolvedSettings(organizationId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load comm settings for org ${organizationId}, falling back to defaults: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      settings = resolveCommSettings(null);
+    }
     const runtimeSettings = this.settingsService.getRuntimeSettings(settings);
     const [existingThread, messages] = await Promise.all([
       this.threadModel.findOne({ organizationId, gmailThreadId }).exec(),
@@ -573,7 +593,7 @@ export class SyncService implements OnModuleInit, OnModuleDestroy {
         bounceDetectedAt: message.bounceDetectedAt ?? message.sentAt ?? new Date(),
         bounceReason: message.bounceReason ?? outbound.bounceReason ?? 'Bounce detected from mailbox sync',
       },
-    });
+    }).exec();
 
     const thread = await this.refreshThreadState(organizationId, outbound.gmailThreadId, outbound.identityId);
     try {

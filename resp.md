@@ -1,32 +1,29 @@
-thk ha simple ye karna ha apko k organization ka name sentra core systems rakhna ha brand just ik The Pulp House Publishing wala hi create karna ha that's it 
+> nx run types:build  [existing outputs match the cache, left as is]
 
-5 users jis trha phla create ho rahe thy ab aise nh karne apne is trha create karne hein users 
+Compiling TypeScript files for project "types"...
+Done compiling TypeScript files for project "types".
+Package type is set to "module" but "cjs" format is included. Going to use "esm" format instead. You can change the package type to "commonjs" or remove type in the package.json file.
 
-admin
+> nx run comm-service:build
 
-email: shakirmadcom@gmail.com
-pass : Sh-2212112@@
+ERROR in ./src/modules/contacts/contacts.controller.ts:13:6
+TS2693: 'OrgContext' only refers to a type, but is being used as a value here.
+    11 |   @Get('search')
+    12 |   async search(
+  > 13 |     @OrgContext('organizationId') organizationId: string,
+       |      ^^^^^^^^^^
+    14 |     @Query('q') q: string,
+    15 |   ) {
+    16 |     const results = await this.contactsClient.searchContacts(organizationId, q ?? '');
 
-ye wale sare users create krne hein in sab ka password Ka_Psh@123!!"  ye rakhna ha 
+webpack compiled with 1 error (0a3098e3a2bddf6b)
 
-sales manager
-damian@kapublishingsolutions.com
+———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————— 
 
-upsell
-ethan@kapublishingsolutions.com 
-samantha@kapublishingsolutions.com
+ NX   Ran target build for project comm-service and 1 task(s) they depend on (1m)
 
-frontsell
-jay@kapublishingsolutions.com
-adrian@kapublishingsolutions.com
-jake@kapublishingsolutions.com
-denzil@kapublishingsolutions.com
-becky@kapublishingsolutions.com
-logan@kapublishingsolutions.com
-damian@kapublishingsolutions.com
+   ×  1/2 failed
+   √  1/2 succeeded [1 read from cache]
 
-project managers 
-mikhail@kapublishingsolutions.com
-m.adonis@kapublishingsolutions.com
 
-baqi hrms team types roles usi trha honge product packages add nh karne koi b or lead or sales wagera ka data jis trha comment ha aise hi product package ka data b kardo 
+PS D:\Repositories\new crm\sentra-core> 
