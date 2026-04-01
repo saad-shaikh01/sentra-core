@@ -1,147 +1,127 @@
-I need help with an issue I'm facing after adding a new feature for Gmail integration in the comm-service. Here's the situation:
+Act as a senior backend engineer and system architect.
 
-I initially added the Gmail integration feature where, upon connecting the Gmail account, all previous emails (both sent and received) were syncing perfectly. The backfill for all old emails was working as expected, and emails were being sent successfully. This functionality was live and working fine in the live branch.
-Then, I added tracking features in the main branch, which is the current branch. After implementing these tracking features, I deployed the app in the production environment and updated the .env.production file accordingly.
+I need you to investigate an issue related to email-thread association with leads in our CRM system.
 
-Now, the problem is:
+## Context
 
-Emails are being sent successfully.
-However, incoming emails are not displaying in the inbox.
-Old emails (both sent and received) are not syncing or backfilling at all.
+We have a Gmail integration that syncs emails (both sent and received) into our system. Emails are correctly syncing and visible in the Inbox.
 
-Could you help me identify the issue? It worked perfectly before the tracking feature was added, so I suspect something in the integration with tracking features might have disrupted the sync process. Also, I would appreciate any advice on speeding up the process using sub-agents or optimizations, as this issue is affecting our users.
+We also have a Lead system. Each Lead has a detail view with an **Email tab**, where related conversations should appear.
 
-Please investigate the cause and suggest any possible fixes or debugging steps.
+## Problem
 
+Emails are NOT appearing inside the Lead’s Email tab, even when they clearly exist in the system.
 
-Now I have a complete picture. Let me compile the full diagnosis.                                                                                      
-                                                                                                                                                         
-  ---                                                                                                                                                    
-  Diagnosis: What Broke and Why                                                                                                                                                                                                                                                                                   
-  After reviewing the full codebase, I've identified 3 root causes — all configuration/deployment issues introduced when the tracking feature was        
-  deployed, not code bugs.
+### Example scenario:
 
-  ---
-  Root Cause 1 — COMM_PUBSUB_AUDIENCE Missing from .env.production (Highest Priority)
+1. I had an existing email conversation with `xyz@gmail.com`
+2. That conversation is already synced and visible in the Inbox
+3. Later, I create a new Lead using the same email (`xyz@gmail.com`)
+4. Expected: all past conversations with this email should appear inside the Lead’s Email tab
+5. Actual: no emails are showing inside the Lead
 
-  pubsub.controller.ts lines 68–72:
-  const audience = this.config.get<string>('COMM_PUBSUB_AUDIENCE');
-  if (!audience) {
-    this.logger.warn('COMM_PUBSUB_AUDIENCE not configured — rejecting Pub/Sub push');
-    throw new UnauthorizedException('Pub/Sub audience not configured');
-  }
+## Key Questions to Investigate
 
-  This guard was added with the tracking feature and didn't exist in your live branch. If COMM_PUBSUB_AUDIENCE is not set in your .env.production, every 
-  incoming push notification from Google is rejected with 401 Unauthorized.
+1. **Email-to-Lead Linking Logic**
 
-  Google Pub/Sub responds to repeated 401s with exponential backoff — it retries less and less often, and eventually the subscription can enter a        
-  degraded/suspended state. This is why incoming emails stopped appearing in the inbox entirely.
+   * How are emails supposed to be linked to leads?
+   * Is linking automatic (based on email address), or does it require manual linking?
 
-  Fix: Add COMM_PUBSUB_AUDIENCE to .env.production. Its value is the full URL of your push endpoint (e.g.
-  https://your-production-domain.com/api/comm/sync/webhook). After adding it, also check your Google Cloud Console → Pub/Sub → Subscriptions to confirm  
-  the subscription is still active and not stuck in backoff — you may need to modify or re-create it to reset the delivery state.
+2. **Auto-association behavior**
 
-  ---
-  Root Cause 2 — Gmail Watch Not Being Renewed (Causes Push to Expire in 7 Days)
+   * When a new Lead is created, does the system:
 
-  watch-renewal.service.ts lines 61–64:
-  const topic = process.env.GOOGLE_PUBSUB_TOPIC;
-  if (!topic) {
-    return; // Skip silently — no log, no error
-  }
+     * automatically associate past emails with the same email address?
+     * or only associate emails created AFTER the lead exists?
 
-  If GOOGLE_PUBSUB_TOPIC is missing from .env.production, the WatchRenewalService does nothing on startup and never re-registers Gmail watches. Gmail    
-  watches expire after 7 days max. Once they expire, Google stops sending any push notifications for that inbox.
+3. **Data Model Analysis**
 
-  Even if Pub/Sub itself is working, an expired watch means Google never pushes. The 5-minute polling timer (sync.service.ts line 88) is the fallback —  
-  but see Root Cause 3 for why that may also be failing.
+   * How are emails stored?
+   * Do email records contain:
 
-  Fix: Ensure GOOGLE_PUBSUB_TOPIC is in .env.production. After fixing this, watches will be re-registered on next service startup (10-second delay in    
-  onModuleInit). If watches have already expired, reconnecting identities via OAuth will also re-register them via triggerInitialSync →
-  watchRenewal.registerWatchForIdentity(identity).
+     * leadId?
+     * contactId?
+     * email address fields (from/to)?
+   * What is the expected relationship between:
 
-  ---
-  Root Cause 3 — syncState.initialSyncDone Not Set → 5-Minute Polling Skips Identities
+     * email ↔ contact
+     * contact ↔ lead
+     * email ↔ lead (direct or indirect)
 
-  sync.service.ts line 171:
-  const identities = await this.identityModel
-    .find({ isActive: true, 'syncState.initialSyncDone': true })
-    .exec();
+4. **Missing Backfill / Linking**
 
-  The 5-minute polling fallback only picks up identities where syncState.initialSyncDone is explicitly true. If any identity document in MongoDB has this
-   field missing or as false (e.g. because the initial sync job failed or was never completed), it gets silently skipped on every poll cycle.
+   * If emails existed BEFORE the lead was created, is there any:
 
-  This explains why backfill isn't working for new accounts AND why existing accounts may not get incremental sync if their initial sync state was       
-  somehow reset or never written.
+     * backfill process?
+     * background job?
+     * manual trigger?
 
-  Check your MongoDB comm-identities collection:
-  db.comm_identities.find({ 'syncState.initialSyncDone': { $ne: true }, isActive: true })
+   If not, why not?
 
-  If you find active identities where this is missing, you have two options:
-  - Re-connect them via OAuth (triggers a fresh triggerInitialSync)
-  - One-time patch if you're certain the 90-day backfill actually completed:
-  db.comm_identities.updateMany(
-    { isActive: true, 'syncState.historyId': { $exists: true } },
-    { $set: { 'syncState.initialSyncDone': true } }
-  )
+5. **Manual Linking Capability**
 
-  ---
-  Summary Checklist
+   * Is there any backend support for manually linking emails to a lead?
+   * If yes:
 
-  ┌───────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────┐   
-  │                     Check                     │                                              Action                                              │   
-  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ COMM_PUBSUB_AUDIENCE in .env.production       │ Add it — set to your full webhook URL                                                            │   
-  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ GOOGLE_PUBSUB_TOPIC in .env.production        │ Verify it's present — same value as before                                                       │   
-  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ Google Cloud Pub/Sub subscription status      │ Check console — reset if it's in backoff/suspended state                                         │   
-  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ MongoDB comm_identities                       │ Run the query above — patch or reconnect any that are false/missing                              │   
-  │ syncState.initialSyncDone                     │                                                                                                  │   
-  ├───────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤   
-  │ BullMQ dead-letter queue                      │ Check for failed jobs — initial-sync and process-message jobs in DLQ will explain if initial     │   
-  │                                               │ sync jobs crashed                                                                                │   
-  └───────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────┘   
+     * what API or method is used?
+     * what data is required?
+   * If no:
 
-  The order to fix: .env.production first (restart service) → check Pub/Sub subscription in GCP console → verify Gmail watches re-registered in logs →   
-  patch any stuck identities in MongoDB.
+     * what would be the correct way to implement it?
 
+6. **UI Dependency**
 
+   * Currently, there is no visible UI to manually link emails to a lead
+   * Should there be one?
+   * Or should everything be automatic?
 
+7. **Filtering Logic in Lead Email Tab**
 
-● Based on the code, here are the exact values:                                                                                                          
+   * When opening a Lead → Email tab:
 
-  ---                                                                                                                                                      COMM_PUBSUB_AUDIENCE
-                                                                                                                                                         
-  This must match the push endpoint URL you configured in Google Cloud Console for the Pub/Sub subscription:
-  COMM_PUBSUB_AUDIENCE=https://your-production-domain.com/api/comm/sync/webhook
-  The exact value depends on your domain. Go to Google Cloud Console → Pub/Sub → Subscriptions → your subscription → Edit and check what URL is set as   
-  the push endpoint. That URL is your audience value.
+     * what query is executed?
+     * is it filtering by leadId?
+     * or by email address?
+     * or via contact relation?
 
-  ---
-  GOOGLE_PUBSUB_TOPIC
+   This is critical — identify exactly why emails are not showing.
 
-  Format is always:
-  GOOGLE_PUBSUB_TOPIC=projects/YOUR_GCP_PROJECT_ID/topics/YOUR_TOPIC_NAME
-  Find it in Google Cloud Console → Pub/Sub → Topics — copy the full topic name shown there.
+8. **Root Cause**
 
-  ---
-  COMM_TRACKING_BASE_URL (optional)
+   * Clearly identify why emails are not appearing:
 
-  COMM_TRACKING_BASE_URL=https://your-production-domain.com/api/comm
-  If you skip this, the code derives it automatically from GMAIL_REDIRECT_URI — so it's optional.
+     * missing association?
+     * incorrect query?
+     * missing backfill?
+     * data model limitation?
 
-  ---
-  But honestly — fix the DB first
+9. **Proposed Fix**
+   Provide a clear solution:
 
-  Even if Pub/Sub was perfectly configured, you'd still have the syncState.initialSyncDone problem. The DB fix is guaranteed to restore sync for existing
-   accounts, takes 10 seconds, and requires no redeployment:
+   * Should emails be auto-linked by email address?
+   * Should there be a background job to backfill past emails when a lead is created?
+   * Should we introduce a manual linking feature?
+   * Should the Lead Email tab query be changed?
 
-  db.comm_identities.updateMany(
-    { isActive: true, 'syncState.historyId': { $exists: true } },
-    { $set: { 'syncState.initialSyncDone': true } }
-  )
+10. **Safe Implementation Plan**
 
-  Run this first, wait 5–6 minutes, and check if incoming emails start appearing. If they do, the Pub/Sub env vars are just a bonus for real-time speed. 
-  If they still don't appear after 6 minutes, then we dig deeper.
+* Suggest a fix that does NOT break:
+
+  * existing email sync
+  * Gmail integration
+  * tracking system
+  * existing data
+
+## Expected Output
+
+Please provide:
+
+1. Current system behavior (how it works today)
+2. Root cause of the issue
+3. Data flow explanation (email → contact → lead)
+4. Why emails are missing in the Lead Email tab
+5. Recommended fix (with reasoning)
+6. Any required backend changes (minimal and safe)
+7. Optional: API or schema changes if needed
+
+Be precise and technical. Do not assume — inspect the actual logic and explain it clearly.

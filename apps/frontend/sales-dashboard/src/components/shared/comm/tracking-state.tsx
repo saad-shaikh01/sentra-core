@@ -1,6 +1,8 @@
 'use client';
 
-import { BadgeCheck, AlertTriangle, Clock3, MailOpen, TriangleAlert, CircleDot } from 'lucide-react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BadgeCheck, AlertTriangle, Clock3, MailOpen, TriangleAlert, CircleDot, ChevronUp, ChevronDown } from 'lucide-react';
 import { timeAgo } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 import type {
@@ -485,6 +487,7 @@ export function CommIntelligencePanel({
   title,
   subtitle,
 }: CommIntelligencePanelProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const snapshot = resolveTrackingSnapshot(source);
   const replyState = deriveReplyState(source);
   const openTrackingState = snapshot.openTrackingState?.trim().toLowerCase();
@@ -577,16 +580,31 @@ export function CommIntelligencePanel({
     });
   }
 
+  const hasDetails = secondaryBadges.length > 0 || (snapshot.scoreReasons && snapshot.scoreReasons.length > 0) || metrics.length > 0;
+
   return (
-    <div className={cn('flex flex-col gap-4 p-4 sm:p-6 bg-gradient-to-b from-white/[0.03] to-transparent rounded-2xl border border-white/10 shadow-xl mb-6', className)}>
+    <div className={cn('flex flex-col p-4 sm:p-6 bg-gradient-to-b from-white/[0.03] to-transparent rounded-2xl border border-white/10 shadow-xl mb-6', className)}>
       {/* Header Area */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="flex-1 min-w-0 space-y-1">
-          {title && <div className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">{title}</div>}
-          {subtitle && <div className="text-sm text-muted-foreground font-medium">{subtitle}</div>}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0 space-y-1">
+              {title && <div className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">{title}</div>}
+              {subtitle && <div className="text-sm text-muted-foreground font-medium">{subtitle}</div>}
+            </div>
+            {hasDetails && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="h-8 w-8 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all shrink-0"
+                title={isExpanded ? 'Collapse insights' : 'Expand insights'}
+              >
+                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            )}
+          </div>
           
           {primaryBadges.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex flex-wrap gap-2 pt-2.5">
               {primaryBadges}
             </div>
           )}
@@ -599,68 +617,80 @@ export function CommIntelligencePanel({
         )}
       </div>
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Secondary Signals Row */}
-        <div className="lg:col-span-7 space-y-4">
-          {secondaryBadges.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Engagement Signals</p>
-              <div className="flex flex-wrap gap-2">
-                {secondaryBadges}
+      {/* Content Grid (Collapsible) */}
+      <AnimatePresence>
+        {isExpanded && hasDetails && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pt-6 mt-6 border-t border-white/5">
+              {/* Secondary Signals Row */}
+              <div className="lg:col-span-7 space-y-4">
+                {secondaryBadges.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Engagement Signals</p>
+                    <div className="flex flex-wrap gap-2">
+                      {secondaryBadges}
+                    </div>
+                  </div>
+                )}
+                
+                {snapshot.scoreReasons && snapshot.scoreReasons.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Insights</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {snapshot.scoreReasons.map((reason) => (
+                        <span key={reason} className="text-[10px] bg-white/[0.03] text-muted-foreground/80 border border-white/5 px-2 py-0.5 rounded-full">
+                          {reason}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-          
-          {snapshot.scoreReasons && snapshot.scoreReasons.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Insights</p>
-              <div className="flex flex-wrap gap-1.5">
-                {snapshot.scoreReasons.map((reason) => (
-                  <span key={reason} className="text-[10px] bg-white/[0.03] text-muted-foreground/80 border border-white/5 px-2 py-0.5 rounded-full">
-                    {reason}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Metrics Section */}
-        {metrics.length > 0 && (
-          <div className="lg:col-span-5 grid grid-cols-3 gap-3 bg-black/20 p-3 rounded-2xl border border-white/5">
-            {metrics.map((m) => (
-              <div key={m.label} className="flex flex-col items-center text-center px-1">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">{m.label}</p>
-                <p className={cn('text-sm sm:text-base font-bold tracking-tight', m.color)}>{m.value}</p>
-                {m.sub && <p className="text-[9px] text-muted-foreground/40 mt-0.5 font-medium truncate w-full">{m.sub}</p>}
-              </div>
-            ))}
-          </div>
+              {/* Metrics Section */}
+              {metrics.length > 0 && (
+                <div className="lg:col-span-5 grid grid-cols-3 gap-3 bg-black/20 p-3 rounded-2xl border border-white/5">
+                  {metrics.map((m) => (
+                    <div key={m.label} className="flex flex-col items-center text-center px-1">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">{m.label}</p>
+                      <p className={cn('text-sm sm:text-base font-bold tracking-tight', m.color)}>{m.value}</p>
+                      {m.sub && <p className="text-[9px] text-muted-foreground/40 mt-0.5 font-medium truncate w-full">{m.sub}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Timing Info (Bottom Bar) */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-4 mt-4 border-t border-white/5 text-[10px] text-muted-foreground/50 font-medium">
+              {snapshot.lastOutboundAt && (
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1 w-1 rounded-full bg-sky-500/50" />
+                  <span>Outbound {timeAgo(snapshot.lastOutboundAt)}</span>
+                </div>
+              )}
+              {snapshot.lastInboundAt && (
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1 w-1 rounded-full bg-emerald-500/50" />
+                  <span>Inbound {timeAgo(snapshot.lastInboundAt)}</span>
+                </div>
+              )}
+              {snapshot.repliedAt && (
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1 w-1 rounded-full bg-primary/50" />
+                  <span>Replied {timeAgo(snapshot.repliedAt)}</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
         )}
-      </div>
-      
-      {/* Timing Info (Bottom Bar) */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-4 border-t border-white/5 text-[10px] text-muted-foreground/50 font-medium">
-        {snapshot.lastOutboundAt && (
-          <div className="flex items-center gap-1.5">
-            <div className="h-1 w-1 rounded-full bg-sky-500/50" />
-            <span>Outbound {timeAgo(snapshot.lastOutboundAt)}</span>
-          </div>
-        )}
-        {snapshot.lastInboundAt && (
-          <div className="flex items-center gap-1.5">
-            <div className="h-1 w-1 rounded-full bg-emerald-500/50" />
-            <span>Inbound {timeAgo(snapshot.lastInboundAt)}</span>
-          </div>
-        )}
-        {snapshot.repliedAt && (
-          <div className="flex items-center gap-1.5">
-            <div className="h-1 w-1 rounded-full bg-primary/50" />
-            <span>Replied {timeAgo(snapshot.repliedAt)}</span>
-          </div>
-        )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }
