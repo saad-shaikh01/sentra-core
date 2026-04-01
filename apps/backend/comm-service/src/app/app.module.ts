@@ -39,6 +39,8 @@ import { SettingsModule } from '../modules/settings/settings.module';
 import { AlertsModule } from '../modules/alerts/alerts.module';
 import { MaintenanceModule } from '../modules/maintenance/maintenance.module';
 import { ContactsModule } from '../modules/contacts/contacts.module';
+import { EmailTemplatesModule } from '../modules/email-templates/email-templates.module';
+import { SignaturesModule } from '../modules/signatures/signatures.module';
 
 function resolveEnvFiles(): string[] {
   const explicitEnvFile = process.env.ENV_FILE?.trim();
@@ -121,6 +123,8 @@ function resolveEnvFiles(): string[] {
     MaintenanceModule,
     GSuiteModule,
     ContactsModule,
+    EmailTemplatesModule,
+    SignaturesModule,
   ],
   providers: [
     {

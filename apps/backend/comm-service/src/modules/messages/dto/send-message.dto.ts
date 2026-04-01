@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsEmail, IsOptional, IsNotEmpty, ArrayNotEmpty, ValidateIf, IsBoolean } from 'class-validator';
+import { IsString, IsArray, IsEmail, IsOptional, IsNotEmpty, ArrayNotEmpty, ValidateIf, IsBoolean, IsDateString } from 'class-validator';
 
 export class SendMessageDto {
   @IsString()
@@ -52,6 +52,10 @@ export class SendMessageDto {
   @IsOptional()
   @IsBoolean()
   trackingEnabled?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
 }
 
 export class ReplyDto {

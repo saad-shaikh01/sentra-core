@@ -78,6 +78,7 @@ export const commKeys = {
   maintenanceJob: (jobId?: string) => [...commKeys.all, 'maintenance-job', jobId] as const,
   timeline: (entityType: string, entityId: string, params?: PaginationParams) =>
     [...commKeys.all, 'timeline', entityType, entityId, params] as const,
+  emailTemplates: () => [...commKeys.all, 'email-templates'] as const,
 };
 
 export function useIdentities() {
@@ -590,3 +591,127 @@ export function useInviteUser() {
     onError: (e: Error) => toast.error('Failed to send invitation', e.message),
   });
 }
+
+export interface CommSignature {
+  _id: string;
+  name: string;
+  bodyHtml: string;
+  identityId?: string;
+  isDefault: boolean;
+}
+
+export function useSignatures() {
+  return useQuery({
+    queryKey: [...commKeys.all, 'signatures'] as const,
+    queryFn: async () => {
+      const res = await api.listSignatures();
+      return (res as any)?.data as CommSignature[];
+    },
+  });
+}
+
+export function useDefaultSignature(identityId?: string) {
+  return useQuery({
+    queryKey: [...commKeys.all, 'signatures', 'default', identityId] as const,
+    queryFn: async () => {
+      const res = await api.getDefaultSignature(identityId);
+      return (res as any)?.data as CommSignature | null;
+    },
+    enabled: true,
+  });
+}
+
+export function useCreateSignature() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: { name: string; bodyHtml: string; identityId?: string; isDefault?: boolean }) =>
+      api.createSignature(dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'signatures'] });
+      toast.success('Signature saved');
+    },
+    onError: (e: Error) => toast.error('Failed to save signature', e.message),
+  });
+}
+
+export function useUpdateSignature() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: { name?: string; bodyHtml?: string; isDefault?: boolean } }) =>
+      api.updateSignature(id, dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'signatures'] });
+      toast.success('Signature updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update signature', e.message),
+  });
+}
+
+export function useDeleteSignature() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteSignature(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...commKeys.all, 'signatures'] });
+      toast.success('Signature deleted');
+    },
+    onError: (e: Error) => toast.error('Failed to delete signature', e.message),
+  });
+}
+
+export interface CommEmailTemplate {
+  _id: string;
+  name: string;
+  subject?: string;
+  bodyHtml?: string;
+  bodyText?: string;
+}
+
+export function useEmailTemplates() {
+  return useQuery({
+    queryKey: commKeys.emailTemplates(),
+    queryFn: async () => {
+      const res = await api.listEmailTemplates();
+      return (res as any)?.data as CommEmailTemplate[];
+    },
+  });
+}
+
+export function useCreateEmailTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: { name: string; subject?: string; bodyHtml?: string; bodyText?: string }) =>
+      api.createEmailTemplate(dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.emailTemplates() });
+      toast.success('Template saved');
+    },
+    onError: (e: Error) => toast.error('Failed to save template', e.message),
+  });
+}
+
+export function useUpdateEmailTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: { name?: string; subject?: string; bodyHtml?: string; bodyText?: string } }) =>
+      api.updateEmailTemplate(id, dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.emailTemplates() });
+      toast.success('Template updated');
+    },
+    onError: (e: Error) => toast.error('Failed to update template', e.message),
+  });
+}
+
+export function useDeleteEmailTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteEmailTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: commKeys.emailTemplates() });
+      toast.success('Template deleted');
+    },
+    onError: (e: Error) => toast.error('Failed to delete template', e.message),
+  });
+}
+

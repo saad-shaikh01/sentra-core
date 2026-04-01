@@ -27,6 +27,8 @@ const MailComposerCtor: any = (() => {
 import { CommMessage, CommMessageDocument } from '../../schemas/comm-message.schema';
 import { CommThread, CommThreadDocument } from '../../schemas/comm-thread.schema';
 import { CommIdentity, CommIdentityDocument } from '../../schemas/comm-identity.schema';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { CommEntityLink, CommEntityLinkDocument } from '../../schemas/comm-entity-link.schema';
 import { IdentitiesService } from '../identities/identities.service';
 import { GmailApiService } from '../sync/gmail-api.service';
@@ -41,6 +43,8 @@ import { AttachmentsService } from '../attachments/attachments.service';
 import { EntityLinksService } from '../entity-links/entity-links.service';
 import { CommSettingsService } from '../settings/comm-settings.service';
 import { PreparedOpenTracking, TrackingService } from '../tracking/tracking.service';
+import { COMM_SCHEDULED_SEND_QUEUE } from '../sync/sync.constants';
+import { ScheduledSendJobData } from './scheduled-send.processor';
 
 @Injectable()
 export class MessagesService {
@@ -62,6 +66,8 @@ export class MessagesService {
     private readonly settingsService: CommSettingsService,
     private readonly attachmentsService: AttachmentsService,
     private readonly audit: AuditService,
+    @InjectQueue(COMM_SCHEDULED_SEND_QUEUE)
+    private readonly scheduledSendQueue: Queue<ScheduledSendJobData>,
     @Optional() private readonly gateway?: CommGateway,
     @Optional() private readonly metrics?: MetricsService,
     @Optional() private readonly entityLinksService?: EntityLinksService,
@@ -156,7 +162,20 @@ export class MessagesService {
     organizationId: string,
     userId: string,
     dto: SendMessageDto,
-  ): Promise<CommMessageDocument> {
+  ): Promise<CommMessageDocument | { scheduled: true; jobId: string }> {
+    // If scheduledAt is set, queue a delayed job
+    if (dto.scheduledAt) {
+      const sendAt = new Date(dto.scheduledAt);
+      const delayMs = Math.max(0, sendAt.getTime() - Date.now());
+      const job = await this.scheduledSendQueue.add(
+        'scheduled-send',
+        { organizationId, userId, dto },
+        { delay: delayMs, removeOnComplete: true, removeOnFail: 1000 },
+      );
+      this.logger.log(`Scheduled send job ${job.id} for org ${organizationId} in ${delayMs}ms`);
+      return { scheduled: true, jobId: String(job.id) };
+    }
+
     const identity = await this.getIdentityForSend(organizationId, dto.identityId);
     const fromAddress = this.resolveFromAlias(identity, dto.fromAlias);
     const body = this.resolveMessageBody(dto.bodyHtml, dto.bodyText);

@@ -10,7 +10,7 @@ import DOMPurify from 'dompurify';
 import {
   Search, Mail, Archive, Paperclip, AlertCircle, RefreshCw,
   Bold, Italic, List, Link2, Underline as UnderlineIcon,
-  SquarePen, MailOpen, ArrowLeft, X, Loader2, ChevronDown,
+  SquarePen, MailOpen, ArrowLeft, X, Loader2, ChevronDown, ChevronUp,
   ChevronRight, Reply, CornerUpRight, TriangleAlert, CircleDot, Clock3, BadgeCheck,
   Inbox as InboxIcon, CheckSquare, Square, MailCheck, MailX,
 } from 'lucide-react';
@@ -714,48 +714,74 @@ function InboxSummaryCards({
   commSettings?: CommSettings;
   onSelectThread: (threadId: string | null) => void;
 }) {
+  const [isCollapsed, setIsCollapsed] = useState(true);
+
   const cards = [
     { label: 'Tracked sends', value: summary?.totals.trackedSends ?? 0, tone: 'text-foreground' },
-    { label: 'Replies', value: summary?.totals.replies ?? 0, tone: 'text-emerald-300' },
-    { label: 'Estimated opens', value: summary?.totals.estimatedOpens ?? 0, tone: 'text-cyan-300' },
-    { label: 'Needs follow-up', value: summary?.queues.needsFollowUp ?? 0, tone: 'text-amber-300' },
-    { label: 'Hot leads', value: summary?.queues.hotLeads ?? 0, tone: 'text-emerald-300' },
+    { label: 'Replies', value: summary?.totals.replies ?? 0, tone: 'text-emerald-400' },
+    { label: 'Estimated opens', value: summary?.totals.estimatedOpens ?? 0, tone: 'text-cyan-400' },
+    { label: 'Needs follow-up', value: summary?.queues.needsFollowUp ?? 0, tone: 'text-amber-400' },
+    { label: 'Hot leads', value: summary?.queues.hotLeads ?? 0, tone: 'text-emerald-400' },
   ];
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Intelligence Snapshot
-          </p>
-          <p className="text-[10px] text-muted-foreground/70">
-            Last 30d
-            {commSettings?.trackingEnabled === false && ' · tracking controls are currently off'}
-          </p>
-        </div>
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="flex items-center gap-2 group transition-opacity hover:opacity-80"
+        >
+          <div className="text-left">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/90">
+              Intelligence Snapshot
+            </p>
+            <p className="text-[10px] text-muted-foreground/60 font-medium">
+              Last 30d
+              {commSettings?.trackingEnabled === false && ' · tracking off'}
+            </p>
+          </div>
+          <div className="h-5 w-5 rounded-full flex items-center justify-center bg-white/5 border border-white/5 text-muted-foreground/40 group-hover:text-foreground/60 transition-colors">
+            {isCollapsed ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronUp className="h-3 w-3" />
+            )}
+          </div>
+        </button>
         <CommAlertsPanel onSelectThread={(threadId) => onSelectThread(threadId)} />
       </div>
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-5">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-          >
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{card.label}</p>
-            <p className={cn('mt-1 text-lg font-semibold', card.tone)}>{card.value}</p>
+
+      {!isCollapsed && (
+        <>
+          <div className="grid grid-cols-2 gap-1.5 xl:grid-cols-5">
+            {cards.map((card) => (
+              <div
+                key={card.label}
+                className="rounded-lg border border-white/5 bg-white/[0.03] px-2.5 py-2 transition-colors hover:bg-white/[0.05]"
+              >
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 font-medium leading-none mb-1.5">
+                  {card.label}
+                </p>
+                <p className={cn('text-base font-bold tracking-tight leading-none', card.tone)}>
+                  {card.value}
+                </p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      {summary?.responseTimes && (
-        <p className="text-[10px] text-muted-foreground/70">
-          Typical response window {summary.responseTimes.humanWindow ?? 'not enough history'}.
-          {summary.responseTimes.signalQuality !== 'usable' && ' Signal quality is still building.'}
-        </p>
+
+          <div className="space-y-1">
+            {summary?.responseTimes && (
+              <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
+                Typical response window <span className="text-foreground/70 font-medium">{summary.responseTimes.humanWindow ?? 'not enough history'}</span>.
+                {summary.responseTimes.signalQuality !== 'usable' && ' Signal quality is building.'}
+              </p>
+            )}
+            <p className="text-[10px] text-muted-foreground/40 leading-relaxed italic">
+              Open signals are estimated. Gmail image proxying and security scanners can create noise.
+            </p>
+          </div>
+        </>
       )}
-      <p className="text-[10px] text-muted-foreground/60">
-        Open signals are estimated. Gmail image proxying and security scanners can create noise.
-      </p>
     </div>
   );
 }

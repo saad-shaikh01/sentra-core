@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import InboxPage from './page';
 
 const mockMarkRead = jest.fn();
 const mockReplyMutateAsync = jest.fn();
@@ -87,6 +86,7 @@ jest.mock('@/hooks/use-comm', () => ({
         email: 'agent@example.com',
         displayName: 'Agent',
         isDefault: true,
+        userId: 'user-1',
         sendAsAliases: [],
         syncState: { status: 'active', lastSyncAt: null, lastError: null },
       },
@@ -139,6 +139,41 @@ jest.mock('@/hooks/use-comm', () => ({
     mutateAsync: jest.fn(),
     isPending: false,
   }),
+  useBatchThreadAction: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+  useEmailTemplates: () => ({
+    data: [],
+    isLoading: false,
+  }),
+  useDefaultSignature: () => ({
+    data: null,
+    isLoading: false,
+  }),
+  useUnreadCount: () => ({
+    data: { total: 0, byIdentity: {} },
+  }),
+  useSignatures: () => ({
+    data: [],
+  }),
+  useEntityTimeline: () => ({
+    data: { data: [], meta: {} },
+  }),
+}));
+
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({
+    user: { id: 'user-1' },
+    isLoading: false,
+    isAuthenticated: true,
+  }),
+}));
+
+jest.mock('@/hooks/use-permissions', () => ({
+  usePermissions: () => ({
+    hasPermission: jest.fn((perm) => perm !== 'sales:settings:view'),
+  }),
 }));
 
 jest.mock('@/hooks/use-debounce', () => ({
@@ -161,6 +196,10 @@ jest.mock('@/lib/feature-flags', () => ({
 jest.mock('@/lib/api', () => ({
   api: {
     fetch: jest.fn(),
+    listIdentities: jest.fn(),
+    getCommIntelligenceSummary: jest.fn(),
+    getCommSettings: jest.fn(),
+    listThreads: jest.fn(),
   },
 }));
 
@@ -195,6 +234,9 @@ jest.mock('dompurify', () => ({
   sanitize: (value: string) => value,
 }));
 
+// Import after mocks
+import InboxPage from './page';
+
 describe('InboxPage forward flow', () => {
   beforeEach(() => {
     mockReplyMutateAsync.mockReset();
@@ -202,12 +244,14 @@ describe('InboxPage forward flow', () => {
     mockEditor.getText.mockReturnValue('Reply all');
   });
 
-  it('renders a Forward button and opens compose with a prefilled forward subject', () => {
+  it('renders a Forward button and opens compose with a prefilled forward subject', async () => {
     render(<InboxPage />);
 
-    fireEvent.click(screen.getByText('Pipeline update'));
+    // Wait for threads to render
+    const thread = await screen.findByText('Pipeline update');
+    fireEvent.click(thread);
 
-    const forwardButton = screen.getByRole('button', { name: 'Forward' });
+    const forwardButton = await screen.findByRole('button', { name: 'Forward' });
     expect(forwardButton).not.toBeNull();
 
     fireEvent.click(forwardButton);
@@ -220,8 +264,10 @@ describe('InboxPage forward flow', () => {
   it('renders Reply All and sends the reply mutation with replyAll=true', async () => {
     render(<InboxPage />);
 
-    fireEvent.click(screen.getByText('Pipeline update'));
-    const replyAllButton = screen.getByRole('button', { name: 'Reply All' });
+    const thread = await screen.findByText('Pipeline update');
+    fireEvent.click(thread);
+
+    const replyAllButton = await screen.findByRole('button', { name: 'Reply All' });
     await waitFor(() => expect(replyAllButton.hasAttribute('disabled')).toBe(false));
     await act(async () => {
       fireEvent.click(replyAllButton);
@@ -236,12 +282,16 @@ describe('InboxPage forward flow', () => {
     });
   });
 
-  it('shows the Phase 3 intelligence snapshot and queue filters', () => {
+  it('shows the Phase 3 intelligence snapshot and queue filters', async () => {
     render(<InboxPage />);
 
-    expect(screen.getByText('Intelligence Snapshot')).not.toBeNull();
-    expect(screen.getByText('Tracked sends')).not.toBeNull();
-    expect(screen.getByText('Hot Leads')).not.toBeNull();
-    expect(screen.getByText('Needs Follow-up')).not.toBeNull();
+    expect(await screen.findByText('Intelligence Snapshot')).not.toBeNull();
+    // Expand snapshot
+    fireEvent.click(screen.getByText('Intelligence Snapshot'));
+
+    expect(await screen.findByText('Tracked sends')).not.toBeNull();
+    // Multiple elements might match if we have queue filters with same text
+    expect((await screen.findAllByText('Hot Leads')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Needs Follow-up')).length).toBeGreaterThan(0);
   });
 });

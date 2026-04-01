@@ -22,16 +22,18 @@ import {
   Underline as UnderlineIcon,
   X,
   ChevronDown,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useSendMessage, useIdentities, useForwardMessage, useCommSettings } from '@/hooks/use-comm';
+import { useSendMessage, useIdentities, useForwardMessage, useCommSettings, useDefaultSignature } from '@/hooks/use-comm';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import type { CommIdentity } from '@/types/comm.types';
 import { cn } from '@/lib/utils';
 import { TrackingSendControl } from './tracking-send-control';
 import { RecipientInput } from './recipient-input';
+import { TemplatePicker, SaveAsTemplateButton } from './template-picker';
 
 interface AliasOption {
   value: string;
@@ -297,6 +299,13 @@ export function ComposeDrawer({
   const [trackingEnabled, setTrackingEnabled] = useState(
     (commSettings?.trackingEnabled ?? true) && (commSettings?.openTrackingEnabled ?? true),
   );
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [signatureAppended, setSignatureAppended] = useState(false);
+
+  // Derive current identityId from selectedFrom
+  const currentIdentityId = selectedFrom ? selectedFrom.split('||')[0] : undefined;
+  const { data: defaultSignature } = useDefaultSignature(currentIdentityId);
 
   const draftKey = user?.id ? `comm:draft:${user.id}` : null;
 
@@ -449,6 +458,20 @@ export function ComposeDrawer({
     }
   }, [draftKey, open]);
 
+  // Auto-append default signature when identity changes (once per open session)
+  useEffect(() => {
+    if (!open || !defaultSignature || signatureAppended || defaultBodyHtml) return;
+    if (!editor) return;
+    const sigHtml = `<br/><br/><div class="comm-signature">${defaultSignature.bodyHtml}</div>`;
+    editor.commands.setContent(sigHtml, { emitUpdate: true });
+    setSignatureAppended(true);
+  }, [defaultSignature, editor, open, signatureAppended, defaultBodyHtml]);
+
+  // Reset signature flag on close/reopen
+  useEffect(() => {
+    if (!open) setSignatureAppended(false);
+  }, [open]);
+
   useEffect(() => {
     if (!identities || identities.length === 0 || selectedFrom) return;
     const options = buildAliasOptions(identities);
@@ -537,6 +560,7 @@ export function ComposeDrawer({
           entityType: resolvedEntityType,
           entityId: resolvedEntityId,
           trackingEnabled,
+          scheduledAt: scheduledAt || undefined,
         });
       }
       setToRecipients([]);
@@ -775,6 +799,12 @@ export function ComposeDrawer({
                     <ToolbarButton label="Attach Files" active={false} onClick={triggerAttachmentPicker}>
                       {isUploadingAttachment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
                     </ToolbarButton>
+                    <TemplatePicker
+                      onApply={(t) => {
+                        if (t.subject) setSubject(t.subject);
+                        editor?.commands.setContent(t.bodyHtml ?? t.bodyText ?? '', { emitUpdate: true });
+                      }}
+                    />
                   </div>
                   <div className="flex-1 overflow-y-auto">
                     <EditorContent editor={editor} />
@@ -841,8 +871,42 @@ export function ComposeDrawer({
             </div>
 
             <div className="flex items-center justify-between border-t border-white/10 px-4 py-4 shrink-0 bg-black/40 backdrop-blur-md">
-              {error && <p className="text-xs text-red-400 line-clamp-1 flex-1 mr-2">{error}</p>}
-              <div className="ml-auto flex items-center gap-3">
+              {error ? (
+                <p className="text-xs text-red-400 line-clamp-1 flex-1 mr-2">{error}</p>
+              ) : (
+                <SaveAsTemplateButton
+                  name={subject || 'Untitled'}
+                  subject={subject}
+                  bodyHtml={editorHtml}
+                  disabled={!editorHtml && !subject}
+                />
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                {showScheduler && (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:border-white/30"
+                    />
+                    <button type="button" onClick={() => { setScheduledAt(''); setShowScheduler(false); }} className="text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  title="Schedule send"
+                  onClick={() => setShowScheduler((p) => !p)}
+                  className={cn(
+                    'h-10 w-10 flex items-center justify-center rounded-xl border transition-colors',
+                    showScheduler ? 'border-primary/40 bg-primary/10 text-primary' : 'border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5',
+                  )}
+                >
+                  <Clock className="h-4 w-4" />
+                </button>
                 <Button
                   size="sm"
                   onClick={handleSend}
@@ -850,13 +914,11 @@ export function ComposeDrawer({
                   className="shadow-lg shadow-primary/20 h-10 px-6 font-bold"
                 >
                   <Send className="mr-2 h-4 w-4" />
-                  {mode === 'forward'
-                    ? forwardMessage.isPending
-                      ? 'Forwarding...'
-                      : 'Forward'
-                    : sendMessage.isPending
-                      ? 'Sending...'
-                      : 'Send'}
+                  {scheduledAt
+                    ? 'Schedule'
+                    : mode === 'forward'
+                      ? forwardMessage.isPending ? 'Forwarding...' : 'Forward'
+                      : sendMessage.isPending ? 'Sending...' : 'Send'}
                 </Button>
               </div>
             </div>

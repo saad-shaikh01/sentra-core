@@ -55,8 +55,9 @@ export class MessagesController {
     @GetOrgContext() ctx: OrgContext,
     @Body() dto: SendMessageDto,
   ) {
-    const message = await this.service.sendMessage(ctx.organizationId, ctx.userId, dto);
-    return wrapSingle(message);
+    const result = await this.service.sendMessage(ctx.organizationId, ctx.userId, dto);
+    if ('scheduled' in result) return { data: result };
+    return wrapSingle(result);
   }
 
   @Post(':id/reply')

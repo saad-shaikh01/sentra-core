@@ -434,6 +434,7 @@ export interface SendMessageDto {
   entityType?: string;
   entityId?: string;
   trackingEnabled?: boolean;
+  scheduledAt?: string;
 }
 
 export interface ReplyDto {

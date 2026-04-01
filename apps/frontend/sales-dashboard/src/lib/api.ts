@@ -991,6 +991,59 @@ class ApiClient {
     return this.fetch<{ url: string; filename: string }>(`/messages/${messageId}/attachments/${attachmentIndex}`, { service: 'comm' });
   }
 
+  async listSignatures() {
+    return this.fetch<{ data: Array<{ _id: string; name: string; bodyHtml: string; identityId?: string; isDefault: boolean }> }>('/signatures', { service: 'comm' });
+  }
+
+  async getDefaultSignature(identityId?: string) {
+    const qs = identityId ? `?identityId=${encodeURIComponent(identityId)}` : '';
+    return this.fetch<{ data: { _id: string; name: string; bodyHtml: string } | null }>(`/signatures/default${qs}`, { service: 'comm' });
+  }
+
+  async createSignature(dto: { name: string; bodyHtml: string; identityId?: string; isDefault?: boolean }) {
+    return this.fetch<{ data: { _id: string; name: string; bodyHtml: string; isDefault: boolean } }>('/signatures', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async updateSignature(id: string, dto: { name?: string; bodyHtml?: string; isDefault?: boolean }) {
+    return this.fetch<{ data: { _id: string } }>(`/signatures/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async deleteSignature(id: string) {
+    return this.fetch<void>(`/signatures/${id}`, { method: 'DELETE', service: 'comm' });
+  }
+
+  async listEmailTemplates() {
+    return this.fetch<{ data: Array<{ _id: string; name: string; subject?: string; bodyHtml?: string; bodyText?: string }> }>('/email-templates', { service: 'comm' });
+  }
+
+  async createEmailTemplate(dto: { name: string; subject?: string; bodyHtml?: string; bodyText?: string }) {
+    return this.fetch<{ data: { _id: string; name: string; subject?: string; bodyHtml?: string; bodyText?: string } }>('/email-templates', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async updateEmailTemplate(id: string, dto: { name?: string; subject?: string; bodyHtml?: string; bodyText?: string }) {
+    return this.fetch<{ data: { _id: string; name: string } }>(`/email-templates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+      service: 'comm',
+    });
+  }
+
+  async deleteEmailTemplate(id: string) {
+    return this.fetch<void>(`/email-templates/${id}`, { method: 'DELETE', service: 'comm' });
+  }
+
   async batchThreadAction(threadIds: string[], action: 'archive' | 'mark_read' | 'mark_unread') {
     return this.fetch<{ data: { processed: number; failed: number } }>('/threads/batch', {
       method: 'POST',
