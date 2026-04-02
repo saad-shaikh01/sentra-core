@@ -62,6 +62,9 @@ export class ScopeService {
 
     if (has('*:*:*') || has('sales:*:*')) return 'full';
     if (has('sales:leads:view_all') || has('sales:clients:view_all')) return 'manager';
+    // Upsell check before frontsell: if JWT role is UPSELL_AGENT, leads permissions should not
+    // override their primary upsell scope (a combined RBAC role may grant both).
+    if (role === UserRole.UPSELL_AGENT && (has('sales:sales:view_own') || has('sales:clients:view_own'))) return 'upsell';
     if (has('sales:leads:create') || has('sales:leads:view_own')) return 'frontsell';
     if (has('sales:sales:create') || has('sales:sales:view_own') || has('sales:clients:view_own')) return 'upsell';
 

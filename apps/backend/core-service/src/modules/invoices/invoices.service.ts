@@ -67,15 +67,20 @@ export class InvoicesService {
     return this.mapToIInvoice(invoice);
   }
 
-  async getSummary(orgId: string, brandId?: string) {
+  async getSummary(orgId: string, userId: string, role: UserRole, brandId?: string) {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
+    const scope = await this.scopeService.getUserScope(userId, orgId, role);
+    const invoiceScope = scope.toInvoiceFilter();
+    const scopedSaleFilter = invoiceScope.sale?.is ?? {};
+
     const saleWhere = {
       organizationId: orgId,
       deletedAt: null,
+      ...scopedSaleFilter,
       ...(brandId ? { brandId } : {}),
     };
 

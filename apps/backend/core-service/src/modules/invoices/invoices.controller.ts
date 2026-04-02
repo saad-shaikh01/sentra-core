@@ -15,19 +15,19 @@ import { InvoicesService } from './invoices.service';
 import { CurrentUser, Public } from '../auth/decorators';
 import { Permissions } from '../../common';
 import { CreateInvoiceDto, UpdateInvoiceDto, QueryInvoicesDto } from './dto';
-import { UserRole, IInvoice, IPaginatedResponse } from '@sentra-core/types';
+import { UserRole, IInvoice, IPaginatedResponse, JwtPayload } from '@sentra-core/types';
 
 @Controller('invoices')
 export class InvoicesController {
   constructor(private invoicesService: InvoicesService) {}
 
   @Get('summary')
-  @Permissions('sales:reports:view')
+  @Permissions('sales:invoices:view')
   getSummary(
-    @CurrentUser('orgId') orgId: string,
+    @CurrentUser() user: JwtPayload,
     @Query('brandId') brandId?: string,
   ) {
-    return this.invoicesService.getSummary(orgId, brandId);
+    return this.invoicesService.getSummary(user.orgId, user.sub, user.role, brandId);
   }
 
   @Get('public/:id')
