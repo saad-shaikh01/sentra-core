@@ -66,6 +66,22 @@ async function refreshSocketAccessToken(): Promise<string | null> {
   }
 }
 
+let notificationAudio: HTMLAudioElement | null = null;
+
+function playNotificationSound() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!notificationAudio) {
+      notificationAudio = new Audio('/new-msg-ring.wav');
+      notificationAudio.volume = 0.6;
+    }
+    notificationAudio.currentTime = 0;
+    void notificationAudio.play();
+  } catch {
+    // ignore — browser may block autoplay before user interaction
+  }
+}
+
 /**
  * App-level hook that connects to the /comm Socket.io namespace.
  * Mount once in the dashboard layout via CommEventsWatcher.
@@ -179,6 +195,7 @@ export function useCommSocket() {
         const incomingIdentityId: string | undefined = data?.message?.identityId ?? data?.identityId;
         if (incomingIdentityId && userIdentityIds.has(incomingIdentityId)) {
           useUIStore.getState().incrementCommUnread(1);
+          playNotificationSound();
         }
       });
 
@@ -275,7 +292,10 @@ export function useCommSocket() {
         queryClient.invalidateQueries({ queryKey: commKeys.alerts() });
       };
 
-      socket.on('alert:new', invalidateAlerts);
+      socket.on('alert:new', (data: any) => {
+        invalidateAlerts(data);
+        playNotificationSound();
+      });
       socket.on('alert:updated', invalidateAlerts);
       socket.on('alert:all-read', invalidateAlerts);
     };

@@ -31,6 +31,7 @@ import {
   IClientActivity,
   IOrganizationMember,
   ISale,
+  UserRole,
 } from '@sentra-core/types';
 import {
   AlertCircle,
@@ -145,7 +146,7 @@ export function ClientDetailSheet({ clientId, onClose }: ClientDetailSheetProps)
   const { hasPermission } = usePermissions();
   const { data: allMembers } = useMembers();
   const { data: upsellAgents } = useMembers({ permission: 'sales:clients:view_own' });
-  const { data: projectManagers } = useMembers({ permission: 'sales:invoices:create' });
+  const { data: projectManagers } = useMembers({ role: UserRole.PROJECT_MANAGER });
   const assignClient = useAssignClient();
   const addClientNote = useAddClientNote();
   const grantPortalAccess = useGrantPortalAccess();
