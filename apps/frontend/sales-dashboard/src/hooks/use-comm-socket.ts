@@ -292,8 +292,8 @@ export function useCommSocket() {
         queryClient.invalidateQueries({ queryKey: commKeys.alerts() });
       };
 
-      socket.on('alert:new', (data: any) => {
-        invalidateAlerts(data);
+      socket.on('alert:new', () => {
+        invalidateAlerts();
         playNotificationSound();
       });
       socket.on('alert:updated', invalidateAlerts);
