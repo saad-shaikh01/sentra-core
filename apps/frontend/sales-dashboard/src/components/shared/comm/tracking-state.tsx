@@ -56,6 +56,7 @@ export interface CommTrackingBadgesProps {
   className?: string;
   compact?: boolean;
   showTiming?: boolean;
+  visibleSignals?: Set<string>;
 }
 
 export interface CommIntelligenceBadgesProps {
@@ -64,6 +65,7 @@ export interface CommIntelligenceBadgesProps {
   compact?: boolean;
   showReasons?: boolean;
   showMetrics?: boolean;
+  visibleSignals?: Set<string>;
 }
 
 function resolveTrackingSnapshot(source?: CommTrackingLike | null): CommTrackingSummary {
@@ -207,13 +209,16 @@ function engagementClassName(band?: CommEngagementBand | string): string {
   return 'border-white/10 bg-white/5 text-muted-foreground';
 }
 
-export function CommTrackingBadges({ source, className, compact = false, showTiming = true }: CommTrackingBadgesProps) {
+export function CommTrackingBadges({ source, className, compact = false, showTiming = true, visibleSignals }: CommTrackingBadgesProps) {
   const snapshot = resolveTrackingSnapshot(source);
   const replyState = deriveReplyState(source);
   const badges = [];
   const openTrackingState = snapshot.openTrackingState?.trim().toLowerCase();
+  // If visibleSignals is provided, only render badges whose key is in the set.
+  // If not provided (undefined), render all — preserves backward-compat for other call sites.
+  const show = (key: string) => !visibleSignals || visibleSignals.has(key);
 
-  if (replyState && replyState !== 'none') {
+  if (show('reply_state') && replyState && replyState !== 'none') {
     const styles: Record<Exclude<CommReplyState, 'none'>, { className: string; icon: typeof MailOpen }> = {
       fresh: { className: 'border-sky-500/20 bg-sky-500/10 text-sky-300', icon: CircleDot },
       waiting: { className: 'border-amber-500/20 bg-amber-500/10 text-amber-300', icon: Clock3 },
@@ -232,7 +237,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     );
   }
 
-  if (snapshot.deliveryState && snapshot.deliveryState !== 'none') {
+  if (show('delivery') && snapshot.deliveryState && snapshot.deliveryState !== 'none') {
     const state = snapshot.deliveryState.trim();
     badges.push(
       <TrackingBadge
@@ -244,7 +249,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     );
   }
 
-  if (snapshot.bounceState && snapshot.bounceState !== 'none') {
+  if (show('delivery') && snapshot.bounceState && snapshot.bounceState !== 'none') {
     const state = snapshot.bounceState.trim();
     badges.push(
       <TrackingBadge
@@ -271,7 +276,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     openTrackingState === 'suspicious_signal_detected' ||
     openTrackingState === 'suspicious';
 
-  if (suspiciousOpenCount > 0 || openTrackingState === 'suspicious_signal_detected' || openTrackingState === 'suspicious') {
+  if (show('open_tracking') && (suspiciousOpenCount > 0 || openTrackingState === 'suspicious_signal_detected' || openTrackingState === 'suspicious')) {
     badges.push(
       <TrackingBadge
         key="suspicious-opens"
@@ -282,7 +287,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     );
   }
 
-  if (hasOpenSignal) {
+  if (show('open_tracking') && hasOpenSignal) {
     const strongestOpenCount = Math.max(totalOpenCount, estimatedHumanOpenCount);
     const openLabel =
       strongestOpenCount > 1
@@ -301,7 +306,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     );
   }
 
-  if (snapshot.trackingEnabled && !hasOpenSignal) {
+  if (show('open_tracking') && snapshot.trackingEnabled && !hasOpenSignal) {
     badges.push(
       <TrackingBadge
         key="tracking-on"
@@ -312,7 +317,7 @@ export function CommTrackingBadges({ source, className, compact = false, showTim
     );
   }
 
-  if (snapshot.trackingEnabled && hasOpenSignal) {
+  if (show('open_tracking') && snapshot.trackingEnabled && hasOpenSignal) {
     badges.push(
       <TrackingBadge
         key="tracking-estimated"
@@ -354,11 +359,13 @@ export function CommIntelligenceBadges({
   compact = false,
   showReasons = true,
   showMetrics = true,
+  visibleSignals,
 }: CommIntelligenceBadgesProps) {
   const snapshot = resolveTrackingSnapshot(source);
   const badges = [];
+  const show = (key: string) => !visibleSignals || visibleSignals.has(key);
 
-  if (typeof snapshot.engagementScore === 'number') {
+  if (show('engagement') && typeof snapshot.engagementScore === 'number') {
     badges.push(
       <TrackingBadge
         key="engagement-score"
@@ -369,7 +376,7 @@ export function CommIntelligenceBadges({
     );
   }
 
-  if (snapshot.hotLead) {
+  if (show('hot_lead') && snapshot.hotLead) {
     badges.push(
       <TrackingBadge
         key="hot-lead"
@@ -380,7 +387,7 @@ export function CommIntelligenceBadges({
     );
   }
 
-  if (snapshot.needsFollowUpNow) {
+  if (show('needs_follow_up') && snapshot.needsFollowUpNow) {
     badges.push(
       <TrackingBadge
         key="needs-follow-up"
@@ -391,7 +398,7 @@ export function CommIntelligenceBadges({
     );
   }
 
-  if (snapshot.openedButNotReplied) {
+  if (show('opened_no_reply') && snapshot.openedButNotReplied) {
     badges.push(
       <TrackingBadge
         key="opened-no-reply"
@@ -402,7 +409,7 @@ export function CommIntelligenceBadges({
     );
   }
 
-  if (snapshot.suspiciousTrackingOnly) {
+  if (show('open_tracking') && snapshot.suspiciousTrackingOnly) {
     badges.push(
       <TrackingBadge
         key="suspicious-only"
@@ -413,7 +420,7 @@ export function CommIntelligenceBadges({
     );
   }
 
-  if (snapshot.silenceState && snapshot.silenceState !== 'none' && snapshot.silenceState !== 'watch') {
+  if (show('silence') && snapshot.silenceState && snapshot.silenceState !== 'none' && snapshot.silenceState !== 'watch') {
     badges.push(
       <TrackingBadge
         key="silence"

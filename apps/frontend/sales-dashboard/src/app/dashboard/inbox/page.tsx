@@ -12,7 +12,7 @@ import {
   Bold, Italic, List, Link2, Underline as UnderlineIcon,
   SquarePen, MailOpen, ArrowLeft, X, Loader2, ChevronDown, ChevronUp,
   ChevronRight, Reply, CornerUpRight, TriangleAlert, CircleDot, Clock3, BadgeCheck,
-  Inbox as InboxIcon, CheckSquare, Square, MailCheck, MailX,
+  Inbox as InboxIcon, CheckSquare, Square, MailCheck, MailX, SlidersHorizontal,
 } from 'lucide-react';
 import {
   useThreads, useThread, useMessages, useReplyToMessage,
@@ -53,6 +53,23 @@ type Filter =
   | 'overdue'
   | 'opened_no_reply'
   | 'suspicious_only';
+
+// ─── Signal visibility ───────────────────────────────────────────────────────
+
+export const SIGNAL_OPTIONS = [
+  { key: 'hot_lead',        label: 'Hot Lead',         color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  { key: 'needs_follow_up', label: 'Needs Follow-up',  color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  { key: 'reply_state',     label: 'Reply State',      color: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
+  { key: 'open_tracking',   label: 'Open Tracking',    color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
+  { key: 'opened_no_reply', label: 'Opened, No Reply', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
+  { key: 'silence',         label: 'Overdue / Silence',color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+  { key: 'engagement',      label: 'Engagement Score', color: 'bg-white/10 text-foreground/70 border-white/20' },
+  { key: 'delivery',        label: 'Delivery / Bounce',color: 'bg-white/10 text-foreground/70 border-white/20' },
+] as const;
+
+export type SignalKey = (typeof SIGNAL_OPTIONS)[number]['key'];
+
+const DEFAULT_VISIBLE_SIGNALS: SignalKey[] = ['hot_lead', 'needs_follow_up'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -234,6 +251,7 @@ function InboxContent() {
 
   const [openTrackingCollapsed, setOpenTrackingCollapsed] = useState(true);
   const [priorityQueuesCollapsed, setPriorityQueuesCollapsed] = useState(true);
+  const [visibleSignals, setVisibleSignals] = useState<Set<SignalKey>>(new Set(DEFAULT_VISIBLE_SIGNALS));
 
   const filters: { label: string; value: Filter; icon: typeof InboxIcon }[] = [
     { label: 'All Mail', value: 'all', icon: InboxIcon },
@@ -419,9 +437,9 @@ function InboxContent() {
         'w-full sm:w-[320px] lg:w-[360px] shrink-0 flex flex-col border-r border-white/10',
         selectedThreadId ? 'hidden sm:flex' : 'flex',
       )}>
-        {/* Search */}
-        <div className="px-3 py-2.5 border-b border-white/10">
-          <div className="relative">
+        {/* Search + Signals toggle */}
+        <div className="px-3 py-2.5 border-b border-white/10 flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
             <input
               value={search}
@@ -430,6 +448,7 @@ function InboxContent() {
               className="w-full pl-9 pr-3 h-9 text-sm bg-white/5 border border-white/10 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-white/30 transition-colors"
             />
           </div>
+          <SignalsDropdown visibleSignals={visibleSignals} onChange={setVisibleSignals} />
         </div>
 
         <div className="px-3 py-3 border-b border-white/10 bg-white/[0.02]">
@@ -583,6 +602,7 @@ function InboxContent() {
                         : undefined
                     }
                     isChecked={checkedThreadIds.has(tid)}
+                    visibleSignals={visibleSignals}
                     onCheck={(checked) => {
                       setCheckedThreadIds((prev) => {
                         const next = new Set(prev);
@@ -641,10 +661,11 @@ function InboxContent() {
 // ─── Thread row (Gmail-style) ─────────────────────────────────────────────────
 
 function ThreadRow({
-  thread, tid, isSelected, hasUnread, senderName, identityEmail, isChecked, onCheck, onClick,
+  thread, tid, isSelected, hasUnread, senderName, identityEmail, isChecked, visibleSignals, onCheck, onClick,
 }: {
   thread: CommThread; tid: string; isSelected: boolean; hasUnread: boolean;
   senderName: string; identityEmail?: string; isChecked?: boolean;
+  visibleSignals?: Set<SignalKey>;
   onCheck?: (checked: boolean) => void; onClick: () => void;
 }) {
   const archiveMutation = useArchiveThread();
@@ -717,6 +738,7 @@ function ThreadRow({
           source={thread}
           compact
           showTiming={false}
+          visibleSignals={visibleSignals}
           className="mt-1"
         />
         <CommIntelligenceBadges
@@ -724,6 +746,7 @@ function ThreadRow({
           compact
           showReasons={false}
           showMetrics={false}
+          visibleSignals={visibleSignals}
           className="mt-1"
         />
         {identityEmail && (
@@ -731,6 +754,125 @@ function ThreadRow({
         )}
       </div>
       </button>
+    </div>
+  );
+}
+
+// ─── Signals dropdown ─────────────────────────────────────────────────────────
+
+function SignalsDropdown({
+  visibleSignals,
+  onChange,
+}: {
+  visibleSignals: Set<SignalKey>;
+  onChange: (next: Set<SignalKey>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (key: SignalKey) => {
+    const next = new Set(visibleSignals);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onChange(next);
+  };
+
+  const count = visibleSignals.size;
+  const total = SIGNAL_OPTIONS.length;
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen((p) => !p)}
+        title="Toggle signal badges"
+        className={cn(
+          'h-9 w-9 flex items-center justify-center rounded-lg border transition-colors relative',
+          open
+            ? 'bg-primary/20 border-primary/40 text-primary'
+            : 'bg-white/5 border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10 hover:border-white/20',
+        )}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        {count > 0 && (
+          <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-white flex items-center justify-center leading-none">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-xl border border-white/10 bg-[#0d0d14] shadow-2xl shadow-black/50 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Signal Badges
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onChange(new Set(SIGNAL_OPTIONS.map((o) => o.key)))}
+                className="text-[10px] text-primary/70 hover:text-primary transition-colors"
+              >
+                All
+              </button>
+              <span className="text-white/10">|</span>
+              <button
+                onClick={() => onChange(new Set())}
+                className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                None
+              </button>
+            </div>
+          </div>
+
+          {/* Options */}
+          <div className="py-1">
+            {SIGNAL_OPTIONS.map(({ key, label, color }) => {
+              const checked = visibleSignals.has(key);
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggle(key)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors group"
+                >
+                  {/* Checkbox */}
+                  <span className={cn(
+                    'h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors',
+                    checked ? 'bg-primary border-primary' : 'border-white/20 bg-transparent group-hover:border-white/30',
+                  )}>
+                    {checked && (
+                      <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  {/* Label with color pip */}
+                  <span className="flex-1 text-xs text-left text-foreground/80 group-hover:text-foreground transition-colors">
+                    {label}
+                  </span>
+                  <span className={cn('h-1.5 w-1.5 rounded-full border shrink-0', color)} />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Footer count */}
+          <div className="px-3 py-2 border-t border-white/[0.06]">
+            <p className="text-[10px] text-muted-foreground/40 text-center">
+              {count === 0 ? 'No badges shown' : count === total ? 'All badges shown' : `${count} of ${total} shown`}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
