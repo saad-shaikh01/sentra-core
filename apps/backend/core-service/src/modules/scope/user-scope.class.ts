@@ -45,7 +45,12 @@ export class UserScope {
       return { ...base, OR: orConditions };
     }
 
-    // upsell, pm, restricted: no lead access
+    // Upsell agent with explicit lead permission — show only their assigned leads
+    if (this.data.scopeBehavior === 'upsell' && this.data.viewOwnLeads) {
+      return { ...base, assignedToId: this.data.userId };
+    }
+
+    // upsell (no lead permission), pm, restricted: no lead access
     return { ...base, assignedToId: '__none__' };
   }
 

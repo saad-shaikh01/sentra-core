@@ -18,6 +18,8 @@ export interface ScopeData {
   brandIds: string[];
   memberVisibleTeamIds: string[];
   teamLeadVisibility: TeamLeadVisibility[];
+  /** True when a non-frontsell agent (e.g. upsell) has been explicitly granted lead view permission */
+  viewOwnLeads?: boolean;
 }
 
 export interface LeadScopeFilter {

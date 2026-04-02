@@ -158,6 +158,11 @@ export class ScopeService {
       }
     }
 
+    const viewOwnLeads =
+      scopeBehavior === 'upsell' &&
+      (this.permissionsService.matchesAnyPermission(permissions, 'sales:leads:view_own') ||
+        this.permissionsService.matchesAnyPermission(permissions, 'sales:leads:create'));
+
     return {
       userId,
       orgId,
@@ -168,6 +173,7 @@ export class ScopeService {
       brandIds: [...brandIds],
       memberVisibleTeamIds: [...memberVisibleTeamIds],
       teamLeadVisibility: [...teamLeadVisibilityMap.entries()].map(([teamId, mode]) => ({ teamId, mode })),
+      viewOwnLeads: viewOwnLeads || undefined,
     };
   }
 }
