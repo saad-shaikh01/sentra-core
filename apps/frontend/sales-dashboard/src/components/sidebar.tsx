@@ -130,7 +130,7 @@ export function Sidebar() {
         }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          "flex h-full flex-col bg-black/40 backdrop-blur-3xl border-r border-white/10 z-50",
+          "flex h-full flex-col bg-card/40 backdrop-blur-3xl border-r border-border z-50",
           isMobile ? "fixed inset-y-0 left-0 shadow-2xl" : "relative"
         )}
       >
@@ -138,7 +138,7 @@ export function Sidebar() {
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
 
         {/* Logo */}
-        <div className="flex h-20 items-center justify-between px-6 border-b border-white/5 shrink-0">
+        <div className="flex h-20 items-center justify-between px-6 border-b border-border shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3 group">
             <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:bg-primary/20 transition-all duration-300">
               <Zap className="h-5 w-5 text-primary animate-pulse-slow" />
@@ -158,7 +158,7 @@ export function Sidebar() {
             variant="ghost"
             size="icon"
             onClick={toggleSidebar}
-            className="h-8 w-8 hover:bg-white/10"
+            className="h-8 w-8 hover:bg-accent/10"
           >
             <ChevronLeft
               className={cn(
@@ -184,7 +184,7 @@ export function Sidebar() {
                     'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 relative group',
                     isActive
                       ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
-                      : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/5 hover:text-foreground'
                   )}
                 >
                   <item.icon className={cn('h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110', isActive && 'text-primary')} />
@@ -244,7 +244,7 @@ export function Sidebar() {
                       'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 group relative',
                       isActive
                         ? 'bg-primary/10 text-primary border border-primary/20 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
-                        : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                        : 'text-muted-foreground hover:bg-accent/5 hover:text-foreground'
                     )}
                   >
                     <item.icon className={cn('h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110', isActive && 'text-primary')} />
@@ -281,7 +281,7 @@ export function Sidebar() {
         </nav>
 
         {/* User Profile */}
-        <div className="border-t border-white/5 p-6 bg-white/[0.02] shrink-0">
+        <div className="border-t border-border p-6 bg-card/20 shrink-0">
           <div className={cn('flex items-center', (sidebarOpen || isMobile) ? 'gap-4' : 'justify-center')}>
             <div className="relative group cursor-pointer">
               <Avatar className="h-11 w-11 ring-2 ring-primary/10 group-hover:ring-primary/40 transition-all duration-300 shadow-lg">
@@ -290,7 +290,7 @@ export function Sidebar() {
                   {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-green-500 border-2 border-black rounded-full shadow-lg" />
+              <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-green-500 border-2 border-background rounded-full shadow-lg" />
             </div>
             {(sidebarOpen || isMobile) && (
               <motion.div

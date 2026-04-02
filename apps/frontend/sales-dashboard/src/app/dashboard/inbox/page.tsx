@@ -57,14 +57,14 @@ type Filter =
 // ─── Signal visibility ───────────────────────────────────────────────────────
 
 export const SIGNAL_OPTIONS = [
-  { key: 'hot_lead',        label: 'Hot Lead',         color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  { key: 'needs_follow_up', label: 'Needs Follow-up',  color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-  { key: 'reply_state',     label: 'Reply State',      color: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-  { key: 'open_tracking',   label: 'Open Tracking',    color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-  { key: 'opened_no_reply', label: 'Opened, No Reply', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-  { key: 'silence',         label: 'Overdue / Silence',color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
-  { key: 'engagement',      label: 'Engagement Score', color: 'bg-white/10 text-foreground/70 border-white/20' },
-  { key: 'delivery',        label: 'Delivery / Bounce',color: 'bg-white/10 text-foreground/70 border-white/20' },
+  { key: 'hot_lead',        label: 'Hot Lead',         color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/20 dark:border-emerald-500/30' },
+  { key: 'needs_follow_up', label: 'Needs Follow-up',  color: 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/20 dark:border-amber-500/30' },
+  { key: 'reply_state',     label: 'Reply State',      color: 'bg-sky-500/10 text-sky-600 dark:text-sky-300 border-sky-500/20 dark:border-sky-500/30' },
+  { key: 'open_tracking',   label: 'Open Tracking',    color: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/20 dark:border-cyan-500/30' },
+  { key: 'opened_no_reply', label: 'Opened, No Reply', color: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border-cyan-500/20 dark:border-cyan-500/30' },
+  { key: 'silence',         label: 'Overdue / Silence',color: 'bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/20 dark:border-rose-500/30' },
+  { key: 'engagement',      label: 'Engagement Score', color: 'bg-muted/30 text-muted-foreground border-border' },
+  { key: 'delivery',        label: 'Delivery / Bounce',color: 'bg-muted/30 text-muted-foreground border-border' },
 ] as const;
 
 export type SignalKey = (typeof SIGNAL_OPTIONS)[number]['key'];
@@ -279,11 +279,11 @@ function InboxContent() {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-80px)] overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0f]">
+    <div className="flex h-[calc(100vh-80px)] overflow-hidden rounded-xl border border-border bg-background shadow-2xl shadow-black/20">
 
       {/* ── Left sidebar (Gmail-style nav) ── */}
       <div className={cn(
-        'w-[220px] shrink-0 flex flex-col border-r border-white/10 bg-black/30',
+        'w-[220px] shrink-0 flex flex-col border-r border-border bg-card/30',
         selectedThreadId ? 'hidden lg:flex' : 'hidden sm:flex',
       )}>
         {/* Compose (Pinned) */}
@@ -309,7 +309,7 @@ function InboxContent() {
                   'w-full flex items-center gap-3 px-3 py-2 rounded-full text-sm transition-colors',
                   filter === value
                     ? 'bg-primary/20 text-primary font-semibold'
-                    : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -319,7 +319,7 @@ function InboxContent() {
           </nav>
 
           {/* Open tracking collapsible */}
-          <div className="pb-2 pt-3 border-t border-white/10">
+          <div className="pb-2 pt-3 border-t border-border">
             <button
               onClick={() => setOpenTrackingCollapsed(!openTrackingCollapsed)}
               className="w-full flex items-center justify-between px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors group"
@@ -340,8 +340,8 @@ function InboxContent() {
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 rounded-full text-sm transition-colors',
                       filter === value
-                        ? 'bg-cyan-500/15 text-cyan-300 font-semibold'
-                        : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                        ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 font-semibold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
@@ -353,7 +353,7 @@ function InboxContent() {
           </div>
 
           {/* Priority queues collapsible */}
-          <div className="pb-2 pt-3 border-t border-white/10">
+          <div className="pb-2 pt-3 border-t border-border">
             <button
               onClick={() => setPriorityQueuesCollapsed(!priorityQueuesCollapsed)}
               className="w-full flex items-center justify-between px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors group"
@@ -374,8 +374,8 @@ function InboxContent() {
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 rounded-full text-sm transition-colors',
                       filter === value
-                        ? 'bg-emerald-500/15 text-emerald-300 font-semibold'
-                        : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-semibold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
@@ -389,10 +389,10 @@ function InboxContent() {
 
         {/* Account selector (Pinned at bottom) */}
         {identities && identities.length > 0 && (
-          <div className="p-3 border-t border-white/10 space-y-1.5 shrink-0 bg-black/40">
+          <div className="p-3 border-t border-border space-y-1.5 shrink-0 bg-card/40">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Account</p>
             <Select value={identityFilter} onValueChange={setIdentityFilter}>
-              <SelectTrigger className="h-8 text-xs bg-white/5 border-white/10 w-full">
+              <SelectTrigger className="h-8 text-xs bg-background/5 border-border w-full">
                 <SelectValue placeholder={isPrivileged ? 'Select account' : 'All accounts'} />
               </SelectTrigger>
               <SelectContent>
@@ -434,24 +434,24 @@ function InboxContent() {
 
       {/* ── Thread list ── */}
       <div className={cn(
-        'w-full sm:w-[320px] lg:w-[360px] shrink-0 flex flex-col border-r border-white/10',
+        'w-full sm:w-[320px] lg:w-[360px] shrink-0 flex flex-col border-r border-border',
         selectedThreadId ? 'hidden sm:flex' : 'flex',
       )}>
         {/* Search + Signals toggle */}
-        <div className="px-3 py-2.5 border-b border-white/10 flex items-center gap-2">
+        <div className="px-3 py-2.5 border-b border-border flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search mail…"
-              className="w-full pl-9 pr-3 h-9 text-sm bg-white/5 border border-white/10 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-white/30 transition-colors"
+              className="w-full pl-9 pr-3 h-9 text-sm bg-muted/20 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/30 transition-colors"
             />
           </div>
           <SignalsDropdown visibleSignals={visibleSignals} onChange={setVisibleSignals} />
         </div>
 
-        <div className="px-3 py-3 border-b border-white/10 bg-white/[0.02]">
+        <div className="px-3 py-3 border-b border-border bg-muted/5">
           <InboxSummaryCards
             summary={intelligenceSummary}
             commSettings={commSettings}
@@ -460,7 +460,7 @@ function InboxContent() {
         </div>
 
         {/* Mobile: filter chips + compose */}
-        <div className="sm:hidden flex items-center gap-2 px-3 py-2 border-b border-white/10">
+        <div className="sm:hidden flex items-center gap-2 px-3 py-2 border-b border-border">
           <Button size="sm" onClick={() => setComposeOpen(true)} className="gap-1.5 h-7 text-xs">
             <SquarePen className="h-3 w-3" /> Compose
           </Button>
@@ -479,28 +479,28 @@ function InboxContent() {
             ))}
           </div>
         </div>
-        <div className="sm:hidden flex items-center gap-1 px-3 pb-2 border-b border-white/10 overflow-x-auto no-scrollbar">
+        <div className="sm:hidden flex items-center gap-1 px-3 pb-2 border-b border-border overflow-x-auto no-scrollbar">
           {trackingFilters.map((f) => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
               className={cn(
                 'px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all',
-                filter === f.value ? 'bg-cyan-500/15 text-cyan-300' : 'text-muted-foreground hover:text-foreground',
+                filter === f.value ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {f.label}
             </button>
           ))}
         </div>
-        <div className="sm:hidden flex items-center gap-1 px-3 pb-2 border-b border-white/10 overflow-x-auto no-scrollbar">
+        <div className="sm:hidden flex items-center gap-1 px-3 pb-2 border-b border-border overflow-x-auto no-scrollbar">
           {queueFilters.map((f) => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
               className={cn(
                 'px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all',
-                filter === f.value ? 'bg-emerald-500/15 text-emerald-300' : 'text-muted-foreground hover:text-foreground',
+                filter === f.value ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {f.label}
@@ -556,14 +556,14 @@ function InboxContent() {
               <p className="text-xs text-muted-foreground/50">Choose from the sidebar</p>
             </div>
           ) : isLoading ? (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-border/50">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="flex items-start gap-3 px-4 py-3 animate-pulse">
-                  <div className="h-9 w-9 rounded-full bg-white/5 shrink-0" />
+                  <div className="h-9 w-9 rounded-full bg-muted/20 shrink-0" />
                   <div className="flex-1 space-y-1.5">
-                    <div className="h-3.5 bg-white/5 rounded w-2/3" />
-                    <div className="h-3 bg-white/5 rounded w-full" />
-                    <div className="h-3 bg-white/5 rounded w-4/5" />
+                    <div className="h-3.5 bg-muted/20 rounded w-2/3" />
+                    <div className="h-3 bg-muted/20 rounded w-full" />
+                    <div className="h-3 bg-muted/20 rounded w-4/5" />
                   </div>
                 </div>
               ))}
@@ -631,7 +631,7 @@ function InboxContent() {
 
       {/* ── Thread detail ── */}
       <div className={cn(
-        'flex-1 flex flex-col overflow-hidden bg-[#0a0a0f]',
+        'flex-1 flex flex-col overflow-hidden bg-background',
         !selectedThreadId ? 'hidden sm:flex' : 'flex',
       )}>
         {selectedThreadId ? (
@@ -647,7 +647,7 @@ function InboxContent() {
             <Mail className="h-16 w-16 mx-auto text-muted-foreground/10" />
             <p className="text-sm text-muted-foreground">Select an email to read</p>
             <p className="text-xs text-muted-foreground/40">
-              Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono">c</kbd> to compose
+              Press <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-xs font-mono">c</kbd> to compose
             </p>
           </div>
         )}

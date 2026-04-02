@@ -67,9 +67,15 @@ node deploy/scripts/run-with-env.cjs \
   npx nx run-many -t build -p core-service,comm-service,pm-service,hrms-service --configuration=production
 
 # Build frontends (Next.js → dist/apps/frontend/*)
+# sales-dashboard is built alone with extra heap — it's the largest app and will OOM
+# if run concurrently with the others on a memory-constrained server.
+NODE_OPTIONS="--max-old-space-size=4096" node deploy/scripts/run-with-env.cjs \
+  "${BACKEND_ENV_FILE}" \
+  npx nx run sales-dashboard:build:production
+
 node deploy/scripts/run-with-env.cjs \
   "${BACKEND_ENV_FILE}" \
-  npx nx run-many -t build -p sales-dashboard,pm-dashboard,hrms-dashboard --configuration=production
+  npx nx run-many -t build -p pm-dashboard,hrms-dashboard --configuration=production
 
 pm2 startOrReload "${PM2_CONFIG}" --update-env
 pm2 save

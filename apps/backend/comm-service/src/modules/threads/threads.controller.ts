@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { UserRole } from '@sentra-core/types';
 import { OrgContextGuard } from '../../common/guards/org-context.guard';
 import { GetOrgContext, OrgContext } from '../../common/decorators/org-context.decorator';
@@ -17,6 +18,7 @@ import { wrapSingle, COMM_MUTATION_OK } from '../../common/response/comm-api-res
 import { ThreadsService } from './threads.service';
 import { ListThreadsQueryDto, ListMessagesQueryDto, BatchThreadActionDto } from './dto/threads.dto';
 
+@SkipThrottle()
 @UseGuards(OrgContextGuard)
 @Controller('threads')
 export class ThreadsController {
