@@ -659,6 +659,10 @@ class ApiClient {
     return this.fetch<any>(`/sales/${id}/charge`, { method: 'POST', body: JSON.stringify(dto) });
   }
 
+  async getSalesCyberSourceCaptureContext() {
+    return this.fetch<{ captureContext: string }>('/sales/cybersource/capture-context');
+  }
+
   async createSubscription(id: string, dto: Record<string, unknown>) {
     return this.fetch<any>(`/sales/${id}/subscribe`, { method: 'POST', body: JSON.stringify(dto) });
   }
@@ -1083,6 +1087,12 @@ class ApiClient {
     return this.fetch<any>(`/public/invoice/${token}/pay`, {
       method: 'POST',
       body: JSON.stringify(dto),
+      skipAuth: true,
+    });
+  }
+
+  async getCaptureContext(token: string) {
+    return this.fetch<{ captureContext: string }>(`/public/invoice/${token}/capture-context`, {
       skipAuth: true,
     });
   }

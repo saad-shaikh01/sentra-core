@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators';
 import { PublicInvoiceDto } from './dto/public-invoice.dto';
@@ -23,6 +23,24 @@ export class PublicPaymentsController {
     @Body() dto: PublicPaymentDto,
   ) {
     return this.publicPaymentsService.payInvoice(token, dto);
+  }
+
+  /**
+   * CyberSource-only: Returns a short-lived Microform v2 capture context JWT.
+   * The frontend uses this JWT to initialize the hosted card iframe.
+   */
+  @Get('invoice/:token/capture-context')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  getCaptureContext(
+    @Param('token') token: string,
+    @Headers('origin') origin: string,
+    @Headers('referer') referer: string,
+  ) {
+    // Use the Origin header; fall back to extracting origin from Referer
+    const pageOrigin = origin || (referer ? new URL(referer).origin : 'http://localhost:3000');
+    return this.publicPaymentsService.getCaptureContext(token, pageOrigin);
   }
 
   /**

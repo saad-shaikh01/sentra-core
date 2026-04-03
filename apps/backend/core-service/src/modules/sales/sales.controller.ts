@@ -7,6 +7,7 @@ import {
   Param,
   Body,
   Query,
+  Headers,
   UploadedFile,
   UseInterceptors,
   BadRequestException,
@@ -105,6 +106,16 @@ export class SalesController {
       orgId,
     );
     return { url: key };
+  }
+
+  @Get('cybersource/capture-context')
+  @Permissions('sales:sales:charge')
+  getCyberSourceCaptureContext(
+    @Headers('origin') origin: string,
+    @Headers('referer') referer: string,
+  ) {
+    const pageOrigin = origin || (referer ? new URL(referer).origin : 'http://localhost:3000');
+    return this.salesService.getCyberSourceCaptureContext(pageOrigin);
   }
 
   @Post(':id/charge')

@@ -179,6 +179,7 @@ export enum GatewayType {
   AUTHORIZE_NET = 'AUTHORIZE_NET',
   STRIPE = 'STRIPE',
   MANUAL = 'MANUAL',
+  CYBERSOURCE = 'CYBERSOURCE',
 }
 
 export const OrganizationOnboardingMode = {

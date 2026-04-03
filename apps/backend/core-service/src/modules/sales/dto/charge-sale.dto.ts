@@ -1,5 +1,6 @@
-import { IsNumber, IsOptional, IsString, IsUUID, IsObject, ValidateNested, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, IsObject, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { GatewayType } from '@sentra-core/types';
 
 export class OpaqueDataDto {
   @IsString()
@@ -32,4 +33,9 @@ export class ChargeSaleDto {
   @IsOptional()
   @IsString()
   stripePaymentMethodId?: string;
+
+  // Explicit gateway override — if omitted, inferred from payload / sale record
+  @IsOptional()
+  @IsEnum(GatewayType)
+  gateway?: GatewayType;
 }

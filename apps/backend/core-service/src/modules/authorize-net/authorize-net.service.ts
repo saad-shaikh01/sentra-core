@@ -63,7 +63,6 @@ export class AuthorizeNetService {
           merchantAuthentication: this.getMerchantAuth(),
           profile: {
             email: params.email,
-            description: params.description ?? '',
           },
           validationMode: 'none',
         },

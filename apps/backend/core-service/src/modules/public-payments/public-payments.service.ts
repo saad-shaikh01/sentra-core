@@ -8,6 +8,7 @@ import { PrismaService } from '@sentra-core/prisma-client';
 import { GatewayType } from '@sentra-core/types';
 import { StorageService } from '../../common';
 import { PaymentGatewayFactory } from '../payment-gateway';
+import { CyberSourceService } from '../cybersource/cybersource.service';
 import { PublicInvoiceDto } from './dto/public-invoice.dto';
 import { PublicPaymentDto } from './dto/public-payment.dto';
 
@@ -17,6 +18,7 @@ export class PublicPaymentsService {
     private readonly prisma: PrismaService,
     private readonly gatewayFactory: PaymentGatewayFactory,
     private readonly storage: StorageService,
+    private readonly cyberSourceService: CyberSourceService,
   ) {}
 
   async getInvoiceByToken(token: string): Promise<PublicInvoiceDto> {
@@ -65,9 +67,25 @@ export class PublicPaymentsService {
         ),
       },
       paymentToken: token,
-      gateway: (invoice.sale.gateway ?? 'AUTHORIZE_NET') as 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL',
+      gateway: (invoice.sale.gateway ?? 'AUTHORIZE_NET') as 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL' | 'CYBERSOURCE',
       saleId: invoice.sale.id,
     };
+  }
+
+  /**
+   * Generate a CyberSource Microform v2 capture context JWT.
+   * The frontend passes its page origin so CyberSource can scope the token.
+   */
+  async getCaptureContext(token: string, pageOrigin: string): Promise<{ captureContext: string }> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { paymentToken: token },
+      select: { status: true, id: true },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === 'PAID') throw new BadRequestException('Invoice is already paid');
+
+    const captureContext = await this.cyberSourceService.generateCaptureContext([pageOrigin]);
+    return { captureContext };
   }
 
   /**
@@ -209,55 +227,52 @@ export class PublicPaymentsService {
       throw new BadRequestException('Manual payments cannot be processed via public payment links.');
     }
 
-    // Authorize.Net flow (existing logic adapted to gateway factory)
+    // Authorize.Net or CyberSource: both use opaqueData.dataValue as the card token
     if (!dto.opaqueData) {
       throw new BadRequestException('opaqueData is required for card payment');
     }
 
-    const gateway = this.gatewayFactory.resolve(GatewayType.AUTHORIZE_NET);
+    const isCyberSource = gatewayType === GatewayType.CYBERSOURCE;
+    const gateway = this.gatewayFactory.resolve(isCyberSource ? GatewayType.CYBERSOURCE : GatewayType.AUTHORIZE_NET);
+    const gatewayLabel = isCyberSource ? 'CYBERSOURCE' : 'AUTHORIZE_NET';
     const amount = Number(invoice.amount);
     const payerEmail = dto.payer?.email ?? sale.client.email ?? 'noreply@placeholder.com';
 
-    // Resolve customer profile ID — support both legacy and new fields
-    let gatewayCustomerId = sale.customerProfileId ?? sale.gatewayCustomerId ?? null;
-    let gatewayPaymentMethodId = sale.paymentProfileId ?? sale.gatewayPaymentMethodId ?? null;
+    let gatewayCustomerId: string = sale.customerProfileId ?? sale.gatewayCustomerId ?? 'cs-direct';
+    let gatewayPaymentMethodId: string = sale.paymentProfileId ?? sale.gatewayPaymentMethodId ?? 'cs-direct';
 
-    if (!gatewayCustomerId) {
-      const profileResult = await gateway.createCustomer({
-        email: payerEmail,
-        description: `Public payment for sale ${sale.id}`,
-      });
-      if (!profileResult.success || !profileResult.gatewayCustomerId) {
-        return {
-          success: false,
-          message: 'Unable to process payment. Please try again.',
-          retryable: true,
-        };
+    // CyberSource: charge directly with the transient token — no TMS customer/instrument needed.
+    // Authorize.Net: create/reuse customer profile + payment profile as before.
+    if (!isCyberSource) {
+      if (!gatewayCustomerId || gatewayCustomerId === 'cs-direct') {
+        const profileResult = await gateway.createCustomer({
+          email: payerEmail,
+          description: `Public payment for sale ${sale.id}`,
+        });
+        if (!profileResult.success || !profileResult.gatewayCustomerId) {
+          return { success: false, message: 'Unable to process payment. Please try again.', retryable: true };
+        }
+        gatewayCustomerId = profileResult.gatewayCustomerId;
+        await this.prisma.sale.update({
+          where: { id: sale.id },
+          data: { customerProfileId: gatewayCustomerId, gatewayCustomerId },
+        });
       }
-      gatewayCustomerId = profileResult.gatewayCustomerId;
-      await this.prisma.sale.update({
-        where: { id: sale.id },
-        data: { customerProfileId: gatewayCustomerId, gatewayCustomerId },
-      });
-    }
 
-    if (!gatewayPaymentMethodId) {
-      const pmResult = await gateway.createPaymentMethod({
-        gatewayCustomerId,
-        opaqueData: dto.opaqueData,
-      });
-      if (!pmResult.success || !pmResult.gatewayPaymentMethodId) {
-        return {
-          success: false,
-          message: 'Unable to process payment. Please check your card details.',
-          retryable: true,
-        };
+      if (!gatewayPaymentMethodId || gatewayPaymentMethodId === 'cs-direct') {
+        const pmResult = await gateway.createPaymentMethod({
+          gatewayCustomerId,
+          opaqueData: dto.opaqueData,
+        });
+        if (!pmResult.success || !pmResult.gatewayPaymentMethodId) {
+          return { success: false, message: 'Unable to process payment. Please check your card details.', retryable: true };
+        }
+        gatewayPaymentMethodId = pmResult.gatewayPaymentMethodId;
+        await this.prisma.sale.update({
+          where: { id: sale.id },
+          data: { paymentProfileId: gatewayPaymentMethodId, gatewayPaymentMethodId },
+        });
       }
-      gatewayPaymentMethodId = pmResult.gatewayPaymentMethodId;
-      await this.prisma.sale.update({
-        where: { id: sale.id },
-        data: { paymentProfileId: gatewayPaymentMethodId, gatewayPaymentMethodId },
-      });
     }
 
     const chargeResult = await gateway.chargeOnce({
@@ -265,6 +280,8 @@ export class PublicPaymentsService {
       gatewayPaymentMethodId,
       amount,
       invoiceNumber: invoice.invoiceNumber,
+      // CyberSource: pass transient token so gateway uses direct charge path
+      opaqueData: isCyberSource ? dto.opaqueData : undefined,
     });
 
     if (chargeResult.success) {
@@ -281,7 +298,7 @@ export class PublicPaymentsService {
             type: 'ONE_TIME',
             amount,
             status: 'SUCCESS',
-            gateway: 'AUTHORIZE_NET',
+            gateway: gatewayLabel,
             transactionId: chargeResult.gatewayTransactionId ?? null,
             responseCode: chargeResult.responseCode ?? null,
             saleId: sale.id,
@@ -306,7 +323,7 @@ export class PublicPaymentsService {
               invoiceId: invoice.id,
               invoiceNumber: invoice.invoiceNumber,
               source: 'public_payment_link',
-              gateway: 'AUTHORIZE_NET',
+              gateway: gatewayLabel,
               transactionId: chargeResult.gatewayTransactionId,
             },
           },
@@ -339,7 +356,7 @@ export class PublicPaymentsService {
         type: 'ONE_TIME',
         amount,
         status: 'FAILED',
-        gateway: 'AUTHORIZE_NET',
+        gateway: gatewayLabel,
         responseCode: chargeResult.responseCode ?? null,
         responseMessage: sanitizedMessage,
         saleId: sale.id,

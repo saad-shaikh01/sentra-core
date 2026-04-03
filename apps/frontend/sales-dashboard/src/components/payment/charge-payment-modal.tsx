@@ -1,8 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import {
   Dialog,
   DialogContent,
@@ -16,13 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useChargeSale, useRecordPayment } from '@/hooks/use-sales';
 import { GatewayType, ISaleWithRelations, InvoiceStatus } from '@sentra-core/types';
-import { StripeCardInput, StripeCardInputHandle } from './stripe-card-input';
-import { AuthNetCardInput, AuthNetCardInputHandle } from './authnet-card-input';
-import { CreditCard, CheckCircle2, Landmark, FileText } from 'lucide-react';
-
-const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null;
+import { CyberSourceCardInput, CyberSourceCardInputHandle } from './cybersource-card-input';
+import { CreditCard, FileText, Building2 } from 'lucide-react';
 
 interface ChargePaymentModalProps {
   open: boolean;
@@ -32,7 +25,7 @@ interface ChargePaymentModalProps {
   prefillInvoice?: { id: string; invoiceNumber: string; amount: number };
 }
 
-type SelectedGateway = GatewayType.STRIPE | GatewayType.AUTHORIZE_NET | 'MANUAL';
+type SelectedGateway = GatewayType.CYBERSOURCE | 'MANUAL';
 
 function ChargeForm({
   sale,
@@ -57,14 +50,12 @@ function ChargeForm({
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
 
-  const stripeRef = useRef<StripeCardInputHandle>(null);
-  const authNetRef = useRef<AuthNetCardInputHandle>(null);
+  const cyberSourceRef = useRef<CyberSourceCardInputHandle>(null);
 
   const chargeSale = useChargeSale();
   const recordPayment = useRecordPayment();
 
   const selectedInvoice = unpaidInvoices.find((inv) => inv.id === invoiceId);
-  const gatewayLabel = selectedGateway === GatewayType.STRIPE ? 'Stripe' : selectedGateway === GatewayType.AUTHORIZE_NET ? 'Authorize.Net' : 'Manual';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,24 +86,18 @@ function ChargeForm({
         return;
       }
 
-      const payload: Record<string, unknown> = {
+      // CyberSource
+      const opaqueData = await cyberSourceRef.current?.tokenize();
+      if (!opaqueData) throw new Error('Card tokenization failed');
+
+      await chargeSale.mutateAsync({
         id: sale.id,
         amount: parsedAmount,
         invoiceId: invoiceId || undefined,
         invoiceNumber: selectedInvoice?.invoiceNumber,
-      };
-
-      if (selectedGateway === GatewayType.STRIPE) {
-        const pmId = await stripeRef.current?.tokenize();
-        if (!pmId) throw new Error('Card tokenization failed');
-        payload.stripePaymentMethodId = pmId;
-      } else if (selectedGateway === GatewayType.AUTHORIZE_NET) {
-        const opaqueData = await authNetRef.current?.tokenize();
-        if (!opaqueData) throw new Error('Card tokenization failed');
-        payload.opaqueData = opaqueData;
-      }
-
-      await chargeSale.mutateAsync(payload as any);
+        gateway: GatewayType.CYBERSOURCE,
+        opaqueData,
+      } as any);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Payment failed');
@@ -126,7 +111,7 @@ function ChargeForm({
       <div className="flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2">
         <CreditCard className="h-4 w-4 text-sky-400 shrink-0" />
         <p className="text-xs text-sky-300">
-          {isManual ? 'Recording a payment made outside the system.' : `Card will be charged via ${gatewayLabel}`}
+          {isManual ? 'Recording a payment made outside the system.' : 'Card will be charged via CyberSource'}
         </p>
       </div>
 
@@ -174,17 +159,8 @@ function ChargeForm({
         </div>
       ) : null}
 
-      {/* Card input */}
-      {selectedGateway === GatewayType.STRIPE ? (
-        <div className="space-y-1.5">
-          <Label>Card Details</Label>
-          <StripeCardInput ref={stripeRef} />
-        </div>
-      ) : null}
-
-      {selectedGateway === GatewayType.AUTHORIZE_NET ? (
-        <AuthNetCardInput ref={authNetRef} />
-      ) : null}
+      {/* CyberSource card input */}
+      {!isManual ? <CyberSourceCardInput ref={cyberSourceRef} /> : null}
 
       {/* Manual-only fields */}
       {isManual ? (
@@ -224,114 +200,6 @@ function ChargeForm({
   );
 }
 
-function SavedProfileForm({
-  sale,
-  prefillInvoice,
-  onClose,
-}: {
-  sale: ISaleWithRelations;
-  prefillInvoice?: { id: string; invoiceNumber: string; amount: number };
-  onClose: () => void;
-}) {
-  const unpaidInvoices = (sale.invoices ?? []).filter((inv) => inv.status !== InvoiceStatus.PAID);
-  const gateway = sale.gateway as GatewayType;
-  const gatewayLabel = gateway === GatewayType.STRIPE ? 'Stripe' : 'Authorize.Net';
-
-  const [amount, setAmount] = useState(() =>
-    prefillInvoice ? String(prefillInvoice.amount) : '',
-  );
-  const [invoiceId, setInvoiceId] = useState(() => prefillInvoice?.id ?? '');
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
-
-  const chargeSale = useChargeSale();
-  const selectedInvoice = unpaidInvoices.find((inv) => inv.id === invoiceId);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      setError('Enter a valid amount');
-      return;
-    }
-    setIsPending(true);
-    try {
-      await chargeSale.mutateAsync({
-        id: sale.id,
-        amount: parsedAmount,
-        invoiceId: invoiceId || undefined,
-        invoiceNumber: selectedInvoice?.invoiceNumber,
-      } as any);
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Charge failed');
-    } finally {
-      setIsPending(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 mt-1">
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-        <p className="text-xs text-emerald-300">Saved {gatewayLabel} payment profile will be charged</p>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label>Amount *</Label>
-        <Input
-          type="number"
-          step="0.01"
-          min="0.01"
-          placeholder="0.00"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          required
-        />
-      </div>
-
-      {unpaidInvoices.length > 0 ? (
-        <div className="space-y-1.5">
-          <Label>Apply to Invoice (optional)</Label>
-          <Select
-            value={invoiceId}
-            onValueChange={(v) => {
-              const id = v === 'none' ? '' : v;
-              setInvoiceId(id);
-              if (id) {
-                const inv = unpaidInvoices.find((i) => i.id === id);
-                if (inv) setAmount(String(inv.amount));
-              }
-            }}
-          >
-            <SelectTrigger className="border-white/10 bg-white/5">
-              <SelectValue placeholder="— None —" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">— None —</SelectItem>
-              {unpaidInvoices.map((inv) => (
-                <SelectItem key={inv.id} value={inv.id}>
-                  {inv.invoiceNumber} — ${inv.amount}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
-
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-        <Button type="submit" disabled={isPending}>
-          {isPending ? 'Processing…' : 'Charge Now'}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 function GatewaySelector({
   onSelect,
   onClose,
@@ -345,25 +213,13 @@ function GatewaySelector({
       <div className="grid grid-cols-1 gap-2">
         <button
           type="button"
-          onClick={() => onSelect(GatewayType.STRIPE)}
-          className="flex items-center gap-3 rounded-xl border border-violet-500/25 bg-violet-500/5 px-4 py-3 text-left hover:bg-violet-500/10 transition-colors"
+          onClick={() => onSelect(GatewayType.CYBERSOURCE)}
+          className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors"
         >
-          <CreditCard className="h-5 w-5 text-violet-400 shrink-0" />
+          <Building2 className="h-5 w-5 text-emerald-400 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-violet-300">Stripe</p>
-            <p className="text-xs text-muted-foreground">Credit/debit card via Stripe</p>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onSelect(GatewayType.AUTHORIZE_NET)}
-          className="flex items-center gap-3 rounded-xl border border-blue-500/25 bg-blue-500/5 px-4 py-3 text-left hover:bg-blue-500/10 transition-colors"
-        >
-          <Landmark className="h-5 w-5 text-blue-400 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-blue-300">Authorize.Net</p>
-            <p className="text-xs text-muted-foreground">Credit/debit card via Authorize.Net</p>
+            <p className="text-sm font-medium text-emerald-300">CyberSource</p>
+            <p className="text-xs text-muted-foreground">Credit/debit card via CyberSource (Bank of America)</p>
           </div>
         </button>
 
@@ -388,11 +244,6 @@ function GatewaySelector({
 }
 
 export function ChargePaymentModal({ open, onOpenChange, sale, prefillInvoice }: ChargePaymentModalProps) {
-  const hasSavedProfile = !!(
-    (sale.gatewayCustomerId || (sale as any).customerProfileId) &&
-    (sale.gatewayPaymentMethodId || (sale as any).paymentProfileId)
-  );
-
   const [selectedGateway, setSelectedGateway] = useState<SelectedGateway | null>(null);
 
   const handleClose = () => {
@@ -401,43 +252,15 @@ export function ChargePaymentModal({ open, onOpenChange, sale, prefillInvoice }:
   };
 
   const getTitle = () => {
-    if (hasSavedProfile) return 'Charge Saved Card';
     if (!selectedGateway) return 'Process Payment';
     if (selectedGateway === 'MANUAL') return 'Record Manual Payment';
-    if (selectedGateway === GatewayType.STRIPE) return 'Charge via Stripe';
-    return 'Charge via Authorize.Net';
+    return 'Charge via CyberSource';
   };
 
   const getDescription = () => {
-    if (hasSavedProfile) return 'Process a charge using the saved payment method on file.';
     if (!selectedGateway) return 'Choose a payment method to continue.';
     if (selectedGateway === 'MANUAL') return 'Record a payment received outside the system.';
     return 'Enter card details to process the payment.';
-  };
-
-  const renderContent = () => {
-    if (hasSavedProfile) {
-      return <SavedProfileForm sale={sale} prefillInvoice={prefillInvoice} onClose={handleClose} />;
-    }
-
-    if (!selectedGateway) {
-      return <GatewaySelector onSelect={setSelectedGateway} onClose={handleClose} />;
-    }
-
-    const form = (
-      <ChargeForm
-        sale={sale}
-        prefillInvoice={prefillInvoice}
-        onClose={handleClose}
-        selectedGateway={selectedGateway}
-      />
-    );
-
-    if (selectedGateway === GatewayType.STRIPE && stripePromise) {
-      return <Elements stripe={stripePromise}>{form}</Elements>;
-    }
-
-    return form;
   };
 
   return (
@@ -447,7 +270,17 @@ export function ChargePaymentModal({ open, onOpenChange, sale, prefillInvoice }:
           <DialogTitle>{getTitle()}</DialogTitle>
           <DialogDescription>{getDescription()}</DialogDescription>
         </DialogHeader>
-        {renderContent()}
+
+        {!selectedGateway ? (
+          <GatewaySelector onSelect={setSelectedGateway} onClose={handleClose} />
+        ) : (
+          <ChargeForm
+            sale={sale}
+            prefillInvoice={prefillInvoice}
+            onClose={handleClose}
+            selectedGateway={selectedGateway}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -178,6 +178,7 @@ enum GatewayType {
   AUTHORIZE_NET
   STRIPE
   MANUAL
+  CYBERSOURCE
 }
 
 enum PlanType {

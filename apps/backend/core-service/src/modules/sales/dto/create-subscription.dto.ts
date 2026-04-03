@@ -1,5 +1,6 @@
 import { IsString, IsNumber, IsEnum, Min, IsOptional, IsObject, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { GatewayType } from '@sentra-core/types';
 import { OpaqueDataDto } from './charge-sale.dto';
 
 export class CreateSubscriptionDto {
@@ -33,4 +34,8 @@ export class CreateSubscriptionDto {
   @IsOptional()
   @IsString()
   stripePaymentMethodId?: string;
+
+  @IsOptional()
+  @IsEnum(GatewayType)
+  gateway?: GatewayType;
 }

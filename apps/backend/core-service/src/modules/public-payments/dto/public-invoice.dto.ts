@@ -14,6 +14,6 @@ export interface PublicInvoiceDto {
   installmentNote?: string;
   brand: BrandDto;
   paymentToken: string;
-  gateway: 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL';
+  gateway: 'AUTHORIZE_NET' | 'STRIPE' | 'MANUAL' | 'CYBERSOURCE';
   saleId: string; // needed for Stripe PaymentIntent creation on frontend
 }

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "GatewayType" ADD VALUE 'CYBERSOURCE';

@@ -18,6 +18,8 @@ export interface IGatewayChargeParams {
   currency?: string;
   invoiceNumber?: string;
   idempotencyKey?: string;
+  // CyberSource: transient token JWT from Microform (for direct charge, skips TMS)
+  opaqueData?: { dataDescriptor: string; dataValue: string };
 }
 
 export interface IGatewayPaymentIntentParams {
