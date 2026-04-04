@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { Eye, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,10 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useRemoveTeamMember, useUpdateTeamMember, type TeamDetail } from '@/hooks/use-teams';
+import { useRemoveTeamMember, useUpdateTeamMember, type TeamDetail, type TeamMemberRecord } from '@/hooks/use-teams';
 import { useUIStore } from '@/stores/ui-store';
-import { MemberDetailModal } from './member-detail-modal';
-import { type TeamMemberRecord } from '@/hooks/use-teams';
 
 function getInitials(name: string) {
   return name
@@ -32,13 +30,13 @@ export function TeamMembersTable({
   team: TeamDetail;
   canManage: boolean;
 }) {
+  const router = useRouter();
   const updateTeamMember = useUpdateTeamMember(team.id);
   const removeTeamMember = useRemoveTeamMember(team.id);
   const openConfirmDialog = useUIStore((state) => state.openConfirmDialog);
-  const [selectedMember, setSelectedMember] = useState<TeamMemberRecord | null>(null);
 
   function openMemberDetail(member: TeamMemberRecord) {
-    setSelectedMember(member);
+    router.push(`/dashboard/teams/${team.id}/members/${member.userId}`);
   }
 
   if (team.members.length === 0) {
@@ -223,16 +221,6 @@ export function TeamMembersTable({
         </div>
       </div>
 
-      {selectedMember && (
-        <MemberDetailModal
-          member={selectedMember}
-          teamName={team.name}
-          open={selectedMember !== null}
-          onOpenChange={(open) => {
-            if (!open) setSelectedMember(null);
-          }}
-        />
-      )}
     </>
   );
 }

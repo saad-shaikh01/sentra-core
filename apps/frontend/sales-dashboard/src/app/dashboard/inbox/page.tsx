@@ -208,7 +208,9 @@ function InboxContent() {
   const [checkedThreadIds, setCheckedThreadIds] = useState<Set<string>>(new Set());
   const batchAction = useBatchThreadAction();
   const [composeOpen, setComposeOpen] = useState(false);
-  const [identityFilter, setIdentityFilter] = useState('');
+  const [identityFilter, setIdentityFilter] = useState<string>(
+    () => (typeof window !== 'undefined' ? (localStorage.getItem('inbox:identityFilter') ?? '') : ''),
+  );
   const [summaryRange] = useState(() => {
     const dateTo = new Date();
     const dateFrom = new Date(dateTo.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -227,6 +229,31 @@ function InboxContent() {
   const isPrivileged = hasPermission('sales:settings:view');
   const ownIdentities = identities?.filter((id) => id.userId === user?.id) ?? [];
   const teamIdentities = identities?.filter((id) => id.userId !== user?.id) ?? [];
+
+  // Persist selection + auto-select when identities load
+  useEffect(() => {
+    if (!identities || identities.length === 0) return;
+    if (identityFilter !== '') {
+      // Already have a selection — just persist it
+      localStorage.setItem('inbox:identityFilter', identityFilter);
+      return;
+    }
+    // Nothing selected yet — pick a smart default
+    if (!isPrivileged) {
+      // Non-privileged: if exactly 1 account, auto-select it; otherwise leave empty (shows all)
+      if (ownIdentities.length === 1) {
+        setIdentityFilter(ownIdentities[0].id);
+      }
+    } else {
+      // Privileged (manager/admin): auto-select "All Accounts" so threads load immediately
+      setIdentityFilter('__all__');
+    }
+  }, [identities, isPrivileged]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleIdentityFilterChange = (value: string) => {
+    setIdentityFilter(value);
+    localStorage.setItem('inbox:identityFilter', value);
+  };
 
   const threadsEnabled = !isPrivileged || identityFilter !== '';
   const threadsParams = (() => {
@@ -387,11 +414,11 @@ function InboxContent() {
           </div>
         </div>
 
-        {/* Account selector (Pinned at bottom) */}
-        {identities && identities.length > 0 && (
+        {/* Account selector (Pinned at bottom) — hidden when user has exactly 1 account */}
+        {identities && identities.length > 0 && (isPrivileged || identities.length > 1) && (
           <div className="p-3 border-t border-border space-y-1.5 shrink-0 bg-card/40">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Account</p>
-            <Select value={identityFilter} onValueChange={setIdentityFilter}>
+            <Select value={identityFilter} onValueChange={handleIdentityFilterChange}>
               <SelectTrigger className="h-8 text-xs bg-background/5 border-border w-full">
                 <SelectValue placeholder={isPrivileged ? 'Select account' : 'All accounts'} />
               </SelectTrigger>

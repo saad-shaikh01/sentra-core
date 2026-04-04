@@ -10,7 +10,7 @@ const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
   OWNER:  ['*:*:*'],
   ADMIN:  ['*:*:*'],
   SALES_MANAGER: [
-    'sales:leads:view_own', 'sales:leads:view_all', 'sales:leads:create', 'sales:leads:edit_all',
+    'sales:leads:view_own', 'sales:leads:view_all', 'sales:leads:create', 'sales:leads:edit_own', 'sales:leads:edit_all',
     'sales:leads:delete', 'sales:leads:assign', 'sales:leads:export',
     'sales:leads:claim', 'sales:leads:collaborate', 'sales:leads:convert', 'sales:leads:import',
     'sales:sales:view_own', 'sales:sales:view_all', 'sales:sales:create', 'sales:sales:edit_all',
@@ -131,7 +131,19 @@ export class PermissionsService {
     }
 
     const [requiredApp] = requiredPermission.split(':', 1);
-    return grantedPermission === `${requiredApp}:*:*`;
+    if (grantedPermission === `${requiredApp}:*:*`) {
+      return true;
+    }
+
+    // _all implies _own (e.g. edit_all satisfies edit_own requirement)
+    if (requiredPermission.endsWith('_own')) {
+      const allVariant = requiredPermission.slice(0, -'_own'.length) + '_all';
+      if (grantedPermission === allVariant) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private getCacheKey(userId: string, orgId: string): string {

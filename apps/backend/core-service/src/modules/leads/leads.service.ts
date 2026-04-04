@@ -1393,9 +1393,9 @@ export class LeadsService {
     if (lead.organizationId !== orgId) throw new ForbiddenException('Lead belongs to another organization');
     if (!lead.assignedToId) throw new BadRequestException('Lead is not currently assigned');
 
-    const canUnclaimOthers = await this.permissionsService.userHasPermission(userId, orgId, 'sales:leads:assign');
-    if (!canUnclaimOthers && lead.assignedToId !== userId) {
-      throw new ForbiddenException('You can only unclaim leads assigned to you');
+    const canUnclaim = await this.permissionsService.userHasPermission(userId, orgId, 'sales:leads:assign');
+    if (!canUnclaim) {
+      throw new ForbiddenException('Only managers and admins can unclaim leads');
     }
 
     const updated = await this.prisma.lead.update({

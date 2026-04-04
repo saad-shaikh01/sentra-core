@@ -251,7 +251,7 @@ export function LeadDetailSheet({ leadId, onClose, onEdit }: LeadDetailSheetProp
   const isOwner = !!user && lead?.assignedToId === user.id;
   const isCollaborator = !!user && (lead as any)?.collaborators?.some((c: { userId: string }) => c.userId === user.id);
   const canClaim = hasPermission('sales:leads:claim') && !lead?.assignedToId && !isLeadClosed;
-  const canUnclaim = (isOwner || canAssign) && !!lead?.assignedToId && !isLeadClosed;
+  const canUnclaim = canAssign && !!lead?.assignedToId && !isLeadClosed;
   const canManageCollaborators = isOwner || canAssign;
 
   const existingCollabIds = new Set(
